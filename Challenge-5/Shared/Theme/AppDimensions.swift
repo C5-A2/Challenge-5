@@ -5,7 +5,7 @@
 //  Created by Team Challenge-5 on 23/10/26.
 //
 
-import Foundation
+import SwiftUI
 
 enum AppDimensions {
     // MARK: - Corner Radii

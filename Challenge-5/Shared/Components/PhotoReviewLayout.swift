@@ -7,6 +7,10 @@
 
 import SwiftUI
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 public struct PhotoReviewLayout: View {
     
     // MARK: - Types
@@ -22,28 +26,43 @@ public struct PhotoReviewLayout: View {
     }
     
     // MARK: - Properties
-    public let capturedImage: UIImage
+    public let capturedImage: Image
     public let checklistItems: [ChecklistItem]
     public let onRetake: () -> Void
     public let onUsePhoto: () -> Void
     
-    // MARK: - Initializer
+    // MARK: - Native SwiftUI Initializer
+    public init(
+        image: Image,
+        checklistItems: [ChecklistItem],
+        onRetake: @escaping () -> Void,
+        onUsePhoto: @escaping () -> Void
+    ) {
+        self.capturedImage = image
+        self.checklistItems = checklistItems
+        self.onRetake = onRetake
+        self.onUsePhoto = onUsePhoto
+    }
+    
+    #if canImport(UIKit)
+    // MARK: - Convenience Initializer for UIKit UIImage
     public init(
         capturedImage: UIImage,
         checklistItems: [ChecklistItem],
         onRetake: @escaping () -> Void,
         onUsePhoto: @escaping () -> Void
     ) {
-        self.capturedImage = capturedImage
+        self.capturedImage = Image(uiImage: capturedImage)
         self.checklistItems = checklistItems
         self.onRetake = onRetake
         self.onUsePhoto = onUsePhoto
     }
+    #endif
     
     // MARK: - Body
     public var body: some View {
         VStack(spacing: AppDimensions.sectionSpacing) {
-            Image(uiImage: capturedImage)
+            capturedImage
                 .resizable()
                 .scaledToFit()
                 .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
@@ -95,7 +114,7 @@ public struct PhotoReviewLayout: View {
 // MARK: - Preview
 #Preview {
     PhotoReviewLayout(
-        capturedImage: UIImage(systemName: "person.crop.rectangle") ?? UIImage(),
+        image: Image(systemName: "person.crop.rectangle"),
         checklistItems: [
             .init(iconSystemName: "face.smiling", isPassing: true),
             .init(iconSystemName: "sun.max", isPassing: true),
