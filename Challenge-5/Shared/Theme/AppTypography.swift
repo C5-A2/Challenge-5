@@ -38,14 +38,6 @@ public enum AppTypography {
     /// Tag atau badge tanggal pada header jadwal
     public static let scheduleBadge = Font.system(size: 15, weight: .semibold, design: .default)
         .width(.expanded)
-    public static let displayTitle = Font.system(.largeTitle, design: .serif).weight(.bold)
-    public static let screenHeader = Font.system(size: 28, weight: .bold, design: .serif)
-    public static let sectionHeader = Font.system(size: 20, weight: .semibold)
-    public static let cardHeadline = Font.system(size: 17, weight: .semibold)
-    public static let bodyRegular = Font.system(size: 15, weight: .regular)
-    public static let caption = Font.system(size: 13, weight: .regular)
-    public static let buttonLabel = Font.system(size: 16, weight: .semibold)
-    public static let chipLabel = Font.system(size: 14, weight: .medium)
     
     // MARK: - SF Pro Extended Typography
     public static let modalTitle = Font.system(size: 18, weight: .semibold, design: .default).width(.expanded)
