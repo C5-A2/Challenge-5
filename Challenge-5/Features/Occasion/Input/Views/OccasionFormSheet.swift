@@ -82,16 +82,17 @@ public struct OccasionFormSheet: View {
                     // Form Content
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: AppDimensions.elementSpacing + 4) {
-                            // 1. Occasion Title Field
+                            // 1. Occasion Title Field (Required)
                             PillTextField(
-                                placeholder: "Occasion",
+                                placeholder: "Occasion Title",
                                 text: $viewModel.title
                             )
                             
-                            // 2. Date Picker Row
+                            // 2. Date Picker Row (Defaults to tomorrow, past dates disabled)
                             DatePicker(
                                 "Date",
                                 selection: $viewModel.date,
+                                in: Calendar.current.startOfDay(for: Date())...,
                                 displayedComponents: [.date]
                             )
                             .font(AppTypography.bodyRegular)
@@ -99,10 +100,10 @@ public struct OccasionFormSheet: View {
                             .tint(AppColors.espressoTitle)
                             .pillInputContainer()
                             
-                            // 3. Dresscode Section
+                            // 3. Dresscode Section (Optional)
                             dresscodeSection
                             
-                            // 4. "I want to look more" Style Vision Chips Section
+                            // 4. "I want to look more" Style Vision Chips Section (Min 0, Max 3)
                             VisionChipsGridView(viewModel: viewModel)
                         }
                         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
@@ -125,17 +126,23 @@ public struct OccasionFormSheet: View {
     
     // MARK: - Subviews
     
-    /// Section displaying the "Dresscode" header and its pill input field.
+    /// Section displaying the "Dresscode" header and its optional pill input field.
     private var dresscodeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Dresscode")
-                .font(AppTypography.cardHeadline)
-                .foregroundStyle(AppColors.espressoTitle)
-                .padding(.leading, 4)
-                .padding(.top, 4)
+            HStack(spacing: 6) {
+                Text("Dresscode")
+                    .font(AppTypography.cardHeadline)
+                    .foregroundStyle(AppColors.espressoTitle)
+                
+                Text("(Optional)")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.bodyText.opacity(0.6))
+            }
+            .padding(.leading, 4)
+            .padding(.top, 4)
             
             PillTextField(
-                placeholder: "Occasion",
+                placeholder: "e.g. Cocktail, Black Tie (Optional)",
                 text: $viewModel.dresscode
             )
         }

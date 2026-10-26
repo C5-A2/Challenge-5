@@ -15,18 +15,25 @@ import Observation
 @Observable @MainActor
 public final class OccasionInputViewModel {
     
+    // MARK: - Date Helpers
+    
+    /// Default date representing tomorrow.
+    public nonisolated static var defaultTomorrowDate: Date {
+        Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+    }
+    
     // MARK: - Properties
     
-    /// The user-defined title for the occasion (e.g., "Gala Dinner", "Wedding Reception").
+    /// The user-defined title for the occasion (e.g., "Gala Dinner", "Wedding Reception"). Required.
     public var title: String = ""
     
-    /// The scheduled date for the occasion.
-    public var date: Date = Date()
+    /// The scheduled date for the occasion. Defaults to tomorrow and cannot be in the past.
+    public var date: Date = OccasionInputViewModel.defaultTomorrowDate
     
-    /// The specified dress code (e.g., "Formal", "Black Tie", "Smart Casual").
+    /// The specified dress code (e.g., "Formal", "Black Tie", "Smart Casual"). Optional.
     public var dresscode: String = ""
     
-    /// Desired emotional style impressions selected by the user.
+    /// Desired emotional style impressions selected by the user. Min 0, Max 3.
     public var selectedVisions: Set<StyleVision> = []
     
     /// Controls presentation of the discard confirmation alert when canceling with unsaved changes.
@@ -36,7 +43,7 @@ public final class OccasionInputViewModel {
     
     public init(
         title: String = "",
-        date: Date = Date(),
+        date: Date = OccasionInputViewModel.defaultTomorrowDate,
         dresscode: String = "",
         selectedVisions: Set<StyleVision> = []
     ) {
@@ -55,17 +62,28 @@ public final class OccasionInputViewModel {
     
     // MARK: - Computed Properties
     
-    /// Checks whether the required occasion fields are non-empty and valid.
-    public var isValid: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !dresscode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    /// Checks whether the occasion date is in the past (prior to today; today is allowed).
+    public var isDateInPast: Bool {
+        Calendar.current.startOfDay(for: date) < Calendar.current.startOfDay(for: Date())
     }
     
-    /// Indicates whether the user has typed anything or made selections.
+    /// Checks whether the required occasion fields are valid:
+    /// - Occasion `title` must be non-empty (required).
+    /// - `date` cannot be in the past.
+    /// - `selectedVisions` count must be between 0 and 3 (min 0, max 3).
+    /// - `dresscode` is optional.
+    public var isValid: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !isDateInPast &&
+        selectedVisions.count <= 3
+    }
+    
+    /// Indicates whether the user has typed anything, selected visions, or modified the default date.
     public var hasUnsavedChanges: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
         !dresscode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        !selectedVisions.isEmpty
+        !selectedVisions.isEmpty ||
+        !Calendar.current.isDate(date, inSameDayAs: Self.defaultTomorrowDate)
     }
     
     /// Formatted date string for accessibility and display purposes.
@@ -73,13 +91,20 @@ public final class OccasionInputViewModel {
         date.formatted(date: .abbreviated, time: .omitted)
     }
     
+    /// Whether additional visions can be selected before reaching the maximum limit of 3.
+    public var canSelectMoreVisions: Bool {
+        selectedVisions.count < 3
+    }
+    
     // MARK: - Actions
     
     /// Toggles selection state of a given `StyleVision`.
+    /// Caps selection at a maximum of 3 items (minimum 0).
     public func toggleVision(_ vision: StyleVision) {
         if selectedVisions.contains(vision) {
             selectedVisions.remove(vision)
         } else {
+            guard selectedVisions.count < 3 else { return }
             selectedVisions.insert(vision)
         }
     }
@@ -87,6 +112,11 @@ public final class OccasionInputViewModel {
     /// Checks if a vision is currently selected.
     public func isVisionSelected(_ vision: StyleVision) -> Bool {
         selectedVisions.contains(vision)
+    }
+    
+    /// Checks whether a vision chip can be tapped (either selected or limit not yet reached).
+    public func canSelectVision(_ vision: StyleVision) -> Bool {
+        selectedVisions.contains(vision) || selectedVisions.count < 3
     }
     
     /// Builds an `OccasionDetail` model populated with the current form values.
@@ -99,10 +129,10 @@ public final class OccasionInputViewModel {
         )
     }
     
-    /// Resets all input fields back to their empty initial state.
+    /// Resets all input fields back to their initial state with tomorrow's date.
     public func reset() {
         title = ""
-        date = Date()
+        date = Self.defaultTomorrowDate
         dresscode = ""
         selectedVisions = []
         isShowingDiscardAlert = false
