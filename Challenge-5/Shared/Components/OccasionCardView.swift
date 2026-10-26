@@ -52,7 +52,8 @@ public struct OccasionCardView: View {
         self.monthText = occasion.monthText
         self.title = occasion.title
         self.subtitle = occasion.dresscode
-        self.tags = occasion.visionKeywords
+        // Chips are omitted for now; reserved for tags from recommended styling results in the future
+        self.tags = []
         self.backgroundImage = nil
         self.isPlaceholder = false
         self.action = action
@@ -116,7 +117,7 @@ public struct OccasionCardView: View {
             // Folder shape fill with metallic silver gradient
             FolderTabShape(
                 tabPosition: .leading,
-                tabWidthFraction: 0.48,
+                tabWidthFraction: 0.62,
                 tabHeight: 26,
                 cornerRadius: AppDimensions.cardCornerRadius
             )
@@ -133,7 +134,7 @@ public struct OccasionCardView: View {
             .overlay(
                 FolderTabShape(
                     tabPosition: .leading,
-                    tabWidthFraction: 0.48,
+                    tabWidthFraction: 0.62,
                     tabHeight: 26,
                     cornerRadius: AppDimensions.cardCornerRadius
                 )
@@ -234,7 +235,7 @@ public struct OccasionCardView: View {
             monthText: "Oct",
             title: "Cousin's Wedding",
             subtitle: "Clean look, elegant, classy",
-            tags: ["white dress", "satin"]
+            tags: []
         ) { }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
     }
