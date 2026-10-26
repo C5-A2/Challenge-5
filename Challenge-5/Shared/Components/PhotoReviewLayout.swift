@@ -103,7 +103,8 @@ public struct PhotoReviewLayout: View {
                 
                 Button("Use Photo", action: onUsePhoto)
                     .font(AppTypography.buttonLabel)
-                    .foregroundStyle(AppColors.primaryBlue)
+                    .fontWeight(.bold)
+                    .foregroundStyle(AppColors.primaryBlack)
             }
             .padding(.horizontal, AppDimensions.screenHorizontalPadding)
             .padding(.bottom, 16)

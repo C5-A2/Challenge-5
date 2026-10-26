@@ -42,7 +42,7 @@ public struct MultiSelectChip: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .foregroundStyle(isSelected ? .white : AppColors.bodyText)
-            .background(isSelected ? AppColors.primaryBlue : Color.clear)
+            .background(isSelected ? AppColors.primaryBlack : Color.clear)
             .overlay(
                 Capsule()
                     .strokeBorder(

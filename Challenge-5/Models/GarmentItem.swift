@@ -36,14 +36,14 @@ final class GarmentItem {
         material: String,
         colorName: String,
         hexColor: String,
-        purchaseURLString: String? = nil
+//        purchaseURLString: String? = nil
     ) {
         self.category = category
         self.name = name
         self.material = material
         self.colorName = colorName
         self.hexColor = hexColor
-        self.purchaseURLString = purchaseURLString
+        //self.purchaseURLString = purchaseURLString
     }
 }
 
