@@ -1,17 +1,18 @@
+//
+//  ContentView.swift
+//  Challenge-5
+//
+//  Created by Team Challenge-5 on 22/10/26.
+//
+
 import SwiftUI
-import Playgrounds
 
 struct ContentView: View {
     var body: some View {
-        Text("Hello, world!")
-            .padding()
+        CameraDemoView()
     }
 }
 
 #Preview {
     ContentView()
-}
-
-#Playground {
-    _ = 1 + 2
 }

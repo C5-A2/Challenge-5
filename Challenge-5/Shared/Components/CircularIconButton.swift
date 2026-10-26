@@ -30,7 +30,7 @@ public struct CircularIconButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(isFilled ? AppColors.primaryBlue : AppColors.bodyText)
+                .foregroundStyle(isFilled ? AppColors.primaryBlack : AppColors.bodyText)
                 .frame(
                     width: AppDimensions.circularIconSize,
                     height: AppDimensions.circularIconSize
