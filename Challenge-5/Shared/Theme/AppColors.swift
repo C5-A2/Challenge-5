@@ -10,10 +10,15 @@ import SwiftUI
 public enum AppColors {
     // MARK: - Canvas & Backgrounds
     public static let canvasBackground = Color(hex: "#FAF8F5")
+    public static let sheetBackground = Color.white
     public static let cardBackground = Color.white
+    public static let inputBackground = Color.white
+    public static let inputBorder = Color(hex: "#E5E5EA")
+    public static let circularButtonBackground = Color(hex: "#F2F2F7")
     public static let glassmorphicFill = Color.white.opacity(0.85)
     public static let frostedGlass = Color.white.opacity(0.70)
     public static let subtleBorder = Color.black.opacity(0.08)
+    public static let dragHandle = Color(hex: "#D6D1CA")
     
     // MARK: - Brand & Typography
     public static let espressoTitle = Color(hex: "#2C1E18")

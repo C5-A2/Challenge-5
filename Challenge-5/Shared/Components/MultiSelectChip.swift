@@ -31,26 +31,27 @@ public struct MultiSelectChip: View {
     // MARK: - Body
     public var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
+            HStack(spacing: 8) {
                 Text(label)
-                if showsPlusIcon && !isSelected {
+                if showsPlusIcon {
                     Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                 }
             }
             .font(AppTypography.chipLabel)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
             .foregroundStyle(isSelected ? .white : AppColors.bodyText)
-            .background(isSelected ? AppColors.primaryBlack : Color.clear)
+            .background(isSelected ? AppColors.primaryBlack : AppColors.inputBackground)
             .overlay(
                 Capsule()
                     .strokeBorder(
-                        isSelected ? Color.clear : AppColors.mutedCaption.opacity(0.5),
+                        isSelected ? Color.clear : AppColors.inputBorder,
                         lineWidth: 1
                     )
             )
             .clipShape(Capsule())
+            .shadow(color: Color.black.opacity(isSelected ? 0.08 : 0.02), radius: 3, y: 1)
         }
         .buttonStyle(.plain)
     }

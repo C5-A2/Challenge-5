@@ -38,4 +38,12 @@ public enum AppTypography {
     /// Tag atau badge tanggal pada header jadwal
     public static let scheduleBadge = Font.system(size: 15, weight: .semibold, design: .default)
         .width(.expanded)
+    
+    // MARK: - SF Pro Extended Typography
+    public static let modalTitle = Font.system(size: 18, weight: .semibold, design: .default).width(.expanded)
+    public static let sfProSemiboldExtended = Font.system(size: 18, weight: .semibold, design: .default).width(.expanded)
+    
+    public static func sfProSemiboldExtended(size: CGFloat) -> Font {
+        Font.system(size: size, weight: .semibold, design: .default).width(.expanded)
+    }
 }
