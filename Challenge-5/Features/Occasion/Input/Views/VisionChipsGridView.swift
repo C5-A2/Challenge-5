@@ -8,6 +8,7 @@
 import SwiftUI
 
 /// Section displaying the "I want to look more" header and predefined `StyleVision` chips.
+@MainActor
 public struct VisionChipsGridView: View {
     
     // MARK: - Properties
