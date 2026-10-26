@@ -101,6 +101,9 @@ public struct OccasionFormSheet: View {
                             
                             // 3. Dresscode Section
                             dresscodeSection
+                            
+                            // 4. "I want to look more" Style Vision Chips Section
+                            VisionChipsGridView(viewModel: viewModel)
                         }
                         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
                         .padding(.bottom, 32)

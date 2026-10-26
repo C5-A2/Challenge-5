@@ -26,6 +26,9 @@ public final class OccasionInputViewModel {
     /// The specified dress code (e.g., "Formal", "Black Tie", "Smart Casual").
     public var dresscode: String = ""
     
+    /// Desired emotional style impressions selected by the user.
+    public var selectedVisions: Set<StyleVision> = []
+    
     /// Controls presentation of the discard confirmation alert when canceling with unsaved changes.
     public var isShowingDiscardAlert: Bool = false
     
@@ -34,17 +37,20 @@ public final class OccasionInputViewModel {
     public init(
         title: String = "",
         date: Date = Date(),
-        dresscode: String = ""
+        dresscode: String = "",
+        selectedVisions: Set<StyleVision> = []
     ) {
         self.title = title
         self.date = date
         self.dresscode = dresscode
+        self.selectedVisions = selectedVisions
     }
     
     public init(from occasion: OccasionDetail) {
         self.title = occasion.title
         self.date = occasion.date
         self.dresscode = occasion.dresscode
+        self.selectedVisions = Set(occasion.visions)
     }
     
     // MARK: - Computed Properties
@@ -55,10 +61,11 @@ public final class OccasionInputViewModel {
         !dresscode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     
-    /// Indicates whether the user has typed anything into the title or dresscode fields.
+    /// Indicates whether the user has typed anything or made selections.
     public var hasUnsavedChanges: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        !dresscode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !dresscode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !selectedVisions.isEmpty
     }
     
     /// Formatted date string for accessibility and display purposes.
@@ -68,12 +75,27 @@ public final class OccasionInputViewModel {
     
     // MARK: - Actions
     
+    /// Toggles selection state of a given `StyleVision`.
+    public func toggleVision(_ vision: StyleVision) {
+        if selectedVisions.contains(vision) {
+            selectedVisions.remove(vision)
+        } else {
+            selectedVisions.insert(vision)
+        }
+    }
+    
+    /// Checks if a vision is currently selected.
+    public func isVisionSelected(_ vision: StyleVision) -> Bool {
+        selectedVisions.contains(vision)
+    }
+    
     /// Builds an `OccasionDetail` model populated with the current form values.
     public func createOccasionDetail() -> OccasionDetail {
         OccasionDetail(
             date: date,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            dresscode: dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
+            dresscode: dresscode.trimmingCharacters(in: .whitespacesAndNewlines),
+            visions: Array(selectedVisions)
         )
     }
     
@@ -82,6 +104,7 @@ public final class OccasionInputViewModel {
         title = ""
         date = Date()
         dresscode = ""
+        selectedVisions = []
         isShowingDiscardAlert = false
     }
 }

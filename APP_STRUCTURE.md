@@ -271,7 +271,7 @@ struct FrontBodyGuideView: View {
 | Team Member | Jira Story | Owned Directories | Responsibilities |
 | :--- | :--- | :--- | :--- |
 | **Ricky Jonathan** | `C5-2` | `Features/SkinScan/`<br>`Features/BodyScan/`<br>`Services/Camera/`<br>`Services/Vision/` | Face scan (lighting check, color season extraction).<br>Front & side body scan (camera guides, pose estimation).<br>Physical metrics input form.<br>Body type & torso balance calculation. |
-| **Bryan Samuel** | `C5-3` | `Features/Occasion/Input/`<br>`Services/AI/Prompts/` | Occasion form (title, date, dresscode, reference).<br>Vision chips grid (16 preset + "Other").<br>Data processing pipeline.<br>LLM prompt engineering & fine-tuning. |
+| **Bryan Samuel** | `C5-3` | `Features/Occasion/Input/`<br>`Services/AI/Prompts/` | Occasion form (title, date, dresscode, reference).<br>Vision chips grid (12 predefined StyleVision enum chips; no "Other").<br>Data processing pipeline.<br>LLM prompt engineering & fine-tuning. |
 | **Michael David Sin** | `C5-1`<br>`C5-4`<br>`C5-31–46` | `Features/Home/`<br>`Features/Library/`<br>`Features/Occasion/Result/`<br>`Features/Profile/`<br>`Services/AI/Engine/`<br>`Shared/Components/` | App shell (Home, Library, Profile Hub tabs).<br>Interactive avatar result stage.<br>Flanking garment cards & 5-look carousel.<br>3-Fits compliance badges & rationale drawer.<br>On-device LLaMA engine integration. |
 | **Natalie Grace** | `C5-5`<br>`C5-11`<br>`C5-16–18` | `Features/Store/`<br>`Shared/Pickers/` | Image source action sheet (Camera, Photos, Saved).<br>In-app image retrieval from local storage.<br>"Where to Buy" e-commerce store links. |
 | **Nicole Clarence** | `C5-20`<br>`C5-44` | `Shared/Theme/`<br>`Resources/` | Global color palette, typography, spacing tokens.<br>Glassmorphism effects, shadows, corner radii.<br>Final Hi-Fi polish to match Sketch designs. |
@@ -348,7 +348,7 @@ Challenge-5/
 │   │   │   ├── Views/
 │   │   │   │   ├── OccasionFormSheet.swift        # Modal: title, date, dresscode, ref, chips
 │   │   │   │   ├── DatePickerModalView.swift      # Calendar popover
-│   │   │   │   └── VisionChipsGridView.swift      # 16 preset chips + "Other"
+│   │   │   │   └── VisionChipsGridView.swift      # 12 predefined StyleVision chips (no "Other")
 │   │   │   └── ViewModels/
 │   │   │       └── OccasionInputViewModel.swift
 │   │   └── Result/                                # (Michael)
