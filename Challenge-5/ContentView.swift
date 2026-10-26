@@ -22,10 +22,6 @@ struct ContentView: View {
             case .occasions:
                 OccasionsHomeView(
                     selectedTab: $selectedTab,
-                    onHistoryTap: {
-                        // History view destination (empty objective for now)
-                        print("History view tapped")
-                    },
                     onProfileTap: {
                         // Profile view destination (empty objective for now)
                         print("Profile view tapped")

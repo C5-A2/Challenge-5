@@ -53,6 +53,13 @@ struct OccasionsHomeView: View {
         self.onSelectOccasion = onSelectOccasion
     }
     
+    // MARK: - Computed Properties
+    
+    /// Filtered list of upcoming or active occasions for the main home feed.
+    private var activeOccasions: [OccasionItem] {
+        occasions.filter { !$0.isPast }
+    }
+    
     // MARK: - Body
     
     public var body: some View {
@@ -69,7 +76,7 @@ struct OccasionsHomeView: View {
                         .padding(.top, 8)
                     
                     // Occasion Cards List or Empty State (no card)
-                    if occasions.isEmpty {
+                    if activeOccasions.isEmpty {
                         emptyStateView
                     } else {
                         occasionsList
@@ -89,6 +96,9 @@ struct OccasionsHomeView: View {
                 .padding(.bottom, 16)
                 .padding(.horizontal, 40)
         }
+        .sheet(isPresented: $viewModel.isShowingHistorySheet) {
+            OccasionsHistoryView()
+        }
     }
     
     // MARK: - Subviews
@@ -100,12 +110,12 @@ struct OccasionsHomeView: View {
             HStack(spacing: 12) {
                 Spacer()
                 
-                // History Button (Empty objective for now)
+                // History Button (Opens OccasionsHistoryView)
                 CircularIconButton(systemName: "clock.arrow.circlepath") {
                     if let onHistoryTap {
                         onHistoryTap()
                     } else {
-                        print("History button tapped (empty action)")
+                        viewModel.isShowingHistorySheet = true
                     }
                 }
                 
@@ -139,7 +149,7 @@ struct OccasionsHomeView: View {
     /// Populated list of occasions stored in SwiftData.
     private var occasionsList: some View {
         LazyVStack(spacing: 16) {
-            ForEach(occasions) { occasion in
+            ForEach(activeOccasions) { occasion in
                 OccasionCardView(occasion: occasion) {
                     if let onSelectOccasion {
                         onSelectOccasion(occasion)
@@ -162,7 +172,7 @@ struct OccasionsHomeView: View {
                 }
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: occasions)
+        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: activeOccasions)
         .sheet(item: $viewModel.editingOccasion) { occasion in
             OccasionFormSheet(
                 viewModel: OccasionInputViewModel(from: occasion),

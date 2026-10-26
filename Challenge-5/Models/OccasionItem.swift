@@ -33,8 +33,12 @@ final class OccasionItem {
     
     // MARK: - Computed Properties
     
+    var isPast: Bool {
+        Calendar.current.startOfDay(for: date) < Calendar.current.startOfDay(for: Date())
+    }
+    
     var isUpcoming: Bool {
-        date > Date()
+        !isPast
     }
     
     var visions: [StyleVision] {
@@ -112,6 +116,42 @@ extension OccasionItem {
                 date: Calendar.current.date(byAdding: .day, value: 12, to: Date()) ?? Date(),
                 dresscode: "Resort Casual",
                 visionKeywords: ["Playful", "Energetic"]
+            ),
+            OccasionItem(
+                title: "Graduation Ceremony",
+                date: Calendar.current.date(byAdding: .day, value: -10, to: Date()) ?? Date(),
+                dresscode: "Smart Formal",
+                visionKeywords: ["Confident", "Calm"]
+            )
+        ]
+    }
+    
+    /// Sample occasions with dates in the past, designed specifically for testing History View.
+    static var pastSamples: [OccasionItem] {
+        [
+            OccasionItem(
+                title: "Graduation Ceremony",
+                date: Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date(),
+                dresscode: "Smart Formal",
+                visionKeywords: ["Confident", "Calm"]
+            ),
+            OccasionItem(
+                title: "Tech Conference Keynote",
+                date: Calendar.current.date(byAdding: .day, value: -18, to: Date()) ?? Date(),
+                dresscode: "Business Casual",
+                visionKeywords: ["Competent", "Powerful"]
+            ),
+            OccasionItem(
+                title: "Friend's Birthday Dinner",
+                date: Calendar.current.date(byAdding: .day, value: -32, to: Date()) ?? Date(),
+                dresscode: "Cocktail Chic",
+                visionKeywords: ["Romantic", "Playful"]
+            ),
+            OccasionItem(
+                title: "Art Gallery Vernissage",
+                date: Calendar.current.date(byAdding: .day, value: -54, to: Date()) ?? Date(),
+                dresscode: "Creative Modern",
+                visionKeywords: ["Mysterious", "Elegant"]
             )
         ]
     }
