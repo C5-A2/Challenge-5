@@ -36,7 +36,7 @@ final class GarmentItem {
         material: String,
         colorName: String,
         hexColor: String,
-        purchaseURLString: String? = nil
+//        purchaseURLString: String? = nil
     ) {
         self.category = category
         self.name = name
