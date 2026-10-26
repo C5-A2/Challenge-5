@@ -361,10 +361,29 @@ Challenge-5/
 │   │           └── ResultStageViewModel.swift
 │   │
 │   └── Store/                                     # ── Stack 14 ── (Natalie)
+│       ├── StoreConstants.swift                   # Named store values (crop ratios, upload, search)
 │       ├── Views/
-│       │   └── WhereToBuySheet.swift              # E-commerce store links bottom sheet
-│       └── ViewModels/
-│           └── StoreViewModel.swift
+│       │   ├── WhereToBuySheet.swift              # Google Lens + marketplace search bottom sheet
+│       │   ├── SafariView.swift                   # SFSafariViewController wrapper (iOS)
+│       │   ├── LensWebView.swift                  # WKWebView for direct Google Lens upload (iOS)
+│       │   └── LensWebPageView.swift              # Full-screen Google Lens results page (iOS)
+│       ├── ViewModels/
+│       │   └── StoreViewModel.swift               # Crop → consent → upload → Google Lens flow
+│       ├── Services/
+│       │   ├── VisionGarmentCropper.swift         # Crops outer / top / bottom from the look image
+│       │   ├── ImgbbImageUploader.swift           # Temporary public image URL for Google Lens
+│       │   ├── GoogleLensURLBuilder.swift         # Google Lens upload-by-URL page
+│       │   ├── LensDirectUploadRequestBuilder.swift # Direct Lens upload request (no imgbb)
+│       │   ├── GarmentImageEncoder.swift          # JPEG + multipart encoding for uploads
+│       │   ├── MarketplaceSearchLinkBuilder.swift # Tokopedia, Shopee, Zalora keyword links
+│       │   ├── StoreSearchKeyword.swift           # Keyword from name + material + color
+│       │   ├── GarmentCropCache.swift             # In-memory crops by GarmentItem.id
+│       │   ├── LookImageDecoder.swift             # lookImageData → CGImage
+│       │   ├── StoreError.swift                   # Store domain errors
+│       │   └── StoreServiceMocks.swift            # Mock cropper + uploader for previews
+│       └── PreviewContent/
+│           ├── StoreSampleData.swift              # Dummy looks for testing (replace images later)
+│           └── StoreSandboxView.swift             # Test screen: tap a garment → WhereToBuySheet
 │
 ├── Models/                                        # CANONICAL SHARED DATA CONTRACTS (9 models)
 │   ├── UserProfile.swift                          # SwiftData @Model — root user profile
@@ -383,7 +402,9 @@ Challenge-5/
 │   │   ├── LightingAnalyzerProtocol.swift
 │   │   ├── BodyPoseEstimatorProtocol.swift
 │   │   ├── SkinColorAnalyzerProtocol.swift
-│   │   └── RecommendationEngineProtocol.swift
+│   │   ├── RecommendationEngineProtocol.swift
+│   │   ├── GarmentCroppingProtocol.swift         # (Natalie) Store garment crop
+│   │   └── ImageUploadingProtocol.swift          # (Natalie) Store image upload
 │   ├── Camera/
 │   │   ├── CameraService.swift                    # AVFoundation session management
 │   │   └── LightingAnalyzer.swift                 # Real-time luminance / EV analysis
@@ -1389,7 +1410,11 @@ final class OutfitLook {
     var torsoBalanceScore: Double
     var fitRationale: String
     
-    @Relationship(deleteRule: .cascade)
+    /// Image of the user wearing this look, shown on the result stage.
+    /// The store flow (Natalie) crops garments from this image for visual search.
+    @Attribute(.externalStorage) var lookImageData: Data?
+    
+    @Relationship(deleteRule: .cascade, inverse: \GarmentItem.outfitLook)
     var garments: [GarmentItem] = []
     
     init(
@@ -1398,7 +1423,8 @@ final class OutfitLook {
         colorHarmonyScore: Double = 0.0,
         torsoBalanceScore: Double = 0.0,
         fitRationale: String = "",
-        isBookmarked: Bool = false
+        isBookmarked: Bool = false,
+        lookImageData: Data? = nil
     ) {
         self.lookIndex = lookIndex
         self.bodyShapeScore = bodyShapeScore
@@ -1406,6 +1432,7 @@ final class OutfitLook {
         self.torsoBalanceScore = torsoBalanceScore
         self.fitRationale = fitRationale
         self.isBookmarked = isBookmarked
+        self.lookImageData = lookImageData
     }
 }
 ```
@@ -1425,6 +1452,9 @@ final class GarmentItem {
     var hexColor: String                    // e.g. "#800020"
     var purchaseURLString: String?          // deep link to e-commerce store
     
+    /// The look this garment belongs to. Lets the store flow read the look image for cropping.
+    var outfitLook: OutfitLook?
+    
     init(
         category: GarmentCategory,
         name: String,
@@ -1442,7 +1472,8 @@ final class GarmentItem {
     }
 }
 
-enum GarmentCategory: String, Codable, CaseIterable, Identifiable {
+/// Where a garment is worn on the body. `top` is the inner top layer under an `outer` piece.
+nonisolated enum GarmentCategory: String, Codable, CaseIterable, Identifiable, Sendable {
     case outer = "Outer"
     case top = "Top"
     case bottom = "Bottom"
@@ -1689,6 +1720,32 @@ protocol RecommendationEngineProtocol: Sendable {
         for payload: RecommendationPayload,
         lookCount: Int
     ) async throws -> [OutfitLook]
+}
+```
+
+```swift
+// Services/Protocols/GarmentCroppingProtocol.swift (Natalie — Store)
+import CoreGraphics
+
+nonisolated struct GarmentCropRequest: Sendable {
+    let category: GarmentCategory
+    let lookImage: CGImage          // OutfitLook.lookImageData decoded
+    let hasOuterLayer: Bool         // .top targets the inner layer when an outer piece exists
+}
+
+nonisolated protocol GarmentCroppingProtocol: Sendable {
+    func makeGarmentCrop(for request: GarmentCropRequest) async throws -> CGImage
+}
+```
+
+```swift
+// Services/Protocols/ImageUploadingProtocol.swift (Natalie — Store)
+import CoreGraphics
+import Foundation
+
+nonisolated protocol ImageUploadingProtocol: Sendable {
+    var isConfigured: Bool { get }
+    func uploadImage(_ image: CGImage) async throws -> URL   // temporary public URL
 }
 ```
 
