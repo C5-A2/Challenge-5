@@ -87,14 +87,13 @@ public struct OccasionCardView: View {
                     
                     // Card contents
                     HStack(alignment: .top, spacing: 16) {
-                        // Date badge column
+                        // Date badge column (Jadwal/Schedule SF Pro Expanded)
                         VStack(spacing: 0) {
                             Text(dayText)
-                                .font(.system(size: 26, weight: .bold))
+                                .font(AppTypography.scheduleDayNumber)
                                 .foregroundStyle(AppColors.espressoTitle)
-                            Text(monthText)
-                                .font(AppTypography.caption)
-                                .fontWeight(.semibold)
+                            Text(monthText.uppercased())
+                                .font(AppTypography.scheduleMonth)
                                 .foregroundStyle(AppColors.espressoTitle)
                         }
                         .frame(width: 48)
