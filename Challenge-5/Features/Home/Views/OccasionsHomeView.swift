@@ -89,11 +89,6 @@ struct OccasionsHomeView: View {
                 .padding(.bottom, 16)
                 .padding(.horizontal, 40)
         }
-        .sheet(isPresented: $viewModel.isShowingNewOccasionSheet) {
-            OccasionFormSheet { occasionDetail in
-                viewModel.saveOccasion(from: occasionDetail, in: modelContext)
-            }
-        }
     }
     
     // MARK: - Subviews
@@ -149,10 +144,16 @@ struct OccasionsHomeView: View {
                     if let onSelectOccasion {
                         onSelectOccasion(occasion)
                     } else {
-                        print("Selected occasion: \(occasion.title)")
+                        viewModel.editingOccasion = occasion
                     }
                 }
                 .contextMenu {
+                    Button {
+                        viewModel.editingOccasion = occasion
+                    } label: {
+                        Label("Edit Occasion", systemImage: "pencil")
+                    }
+                    
                     Button(role: .destructive) {
                         deleteOccasion(occasion)
                     } label: {
@@ -162,6 +163,14 @@ struct OccasionsHomeView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: occasions)
+        .sheet(item: $viewModel.editingOccasion) { occasion in
+            OccasionFormSheet(
+                viewModel: OccasionInputViewModel(from: occasion),
+                onSave: { updatedDetail in
+                    viewModel.updateOccasion(occasion, with: updatedDetail, in: modelContext)
+                }
+            )
+        }
     }
     
     /// Circular floating "+" action button positioned at bottom right.
@@ -187,6 +196,11 @@ struct OccasionsHomeView: View {
             .padding(.trailing, AppDimensions.screenHorizontalPadding)
         }
         .padding(.bottom, AppDimensions.tabBarHeight + 28)
+        .sheet(isPresented: $viewModel.isShowingNewOccasionSheet) {
+            OccasionFormSheet { occasionDetail in
+                viewModel.saveOccasion(from: occasionDetail, in: modelContext)
+            }
+        }
     }
     
     // MARK: - Actions

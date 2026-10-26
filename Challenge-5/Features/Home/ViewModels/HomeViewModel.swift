@@ -19,6 +19,7 @@ final class HomeViewModel {
     var isShowingHistorySheet: Bool = false
     var isShowingProfileSheet: Bool = false
     var selectedOccasion: OccasionItem? = nil
+    var editingOccasion: OccasionItem? = nil
     
     // MARK: - SwiftData Operations
     
@@ -29,6 +30,22 @@ final class HomeViewModel {
             try context.save()
         } catch {
             print("HomeViewModel: Failed to save occasion: \(error.localizedDescription)")
+        }
+    }
+    
+    func updateOccasion(_ occasion: OccasionItem, with detail: OccasionDetail, in context: ModelContext) {
+        occasion.title = detail.title
+        occasion.date = detail.date
+        occasion.dresscode = detail.dresscode
+        occasion.visionKeywords = detail.visions.map(\.rawValue)
+        if !detail.referenceImages.isEmpty {
+            occasion.referenceImagesData = detail.referenceImages
+            occasion.referenceImageData = detail.referenceImages.first
+        }
+        do {
+            try context.save()
+        } catch {
+            print("HomeViewModel: Failed to update occasion: \(error.localizedDescription)")
         }
     }
     
