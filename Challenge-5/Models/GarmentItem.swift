@@ -23,7 +23,7 @@ final class GarmentItem {
     var material: String                    // e.g. "French Terry Cotton"
     var colorName: String                   // e.g. "Burgundy red"
     var hexColor: String                    // e.g. "#800020"
-    //var purchaseURLString: String?          // deep link to e-commerce store
+    var purchaseURLString: String?          // deep link to e-commerce store
 
     /// The look this garment belongs to. Lets the store flow read the look image for cropping.
     var outfitLook: OutfitLook?
