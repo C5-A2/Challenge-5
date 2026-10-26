@@ -68,9 +68,9 @@ struct OccasionsHomeView: View {
                     headerBar
                         .padding(.top, 8)
                     
-                    // Occasion Cards List or Empty Placeholder
+                    // Occasion Cards List or Empty State (no card)
                     if occasions.isEmpty {
-                        emptyStateCard
+                        emptyStateView
                     } else {
                         occasionsList
                     }
@@ -131,11 +131,13 @@ struct OccasionsHomeView: View {
         }
     }
     
-    /// Empty state folder card matching the initial Figma mockup.
-    private var emptyStateCard: some View {
-        OccasionCardView.placeholder {
-            viewModel.isShowingNewOccasionSheet = true
-        }
+    /// Empty state view presented when no occasions are scheduled yet (no card).
+    private var emptyStateView: some View {
+        OccasionsEmptyStateView(
+            onAddOccasion: {
+                viewModel.isShowingNewOccasionSheet = true
+            }
+        )
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }
     
