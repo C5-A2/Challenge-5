@@ -12,18 +12,18 @@ import Foundation
 /// Each vision defines color palettes, pattern details, materials & silhouettes, and recommended outfit items
 /// used by the AI recommendation engine and UI styling.
 public enum StyleVision: String, Codable, CaseIterable, Identifiable, Sendable {
-    case happy = "Happy"
-    case confident = "Confident"
-    case calm = "Calm"
     case approachable = "Approachable"
-    case powerful = "Powerful"
+    case calm = "Calm"
     case competent = "Competent"
-    case elegant = "Elegant"
-    case playful = "Playful"
+    case confident = "Confident"
     case creative = "Creative"
-    case romantic = "Romantic"
+    case elegant = "Elegant"
     case energetic = "Energetic"
+    case happy = "Happy"
     case mysterious = "Mysterious"
+    case playful = "Playful"
+    case powerful = "Powerful"
+    case romantic = "Romantic"
 
     public var id: String { rawValue }
 
@@ -70,24 +70,14 @@ public enum StyleVision: String, Codable, CaseIterable, Identifiable, Sendable {
     /// Full metadata bundle for the vision.
     public var details: VisionDetails {
         switch self {
-        case .happy:
+        case .approachable:
             return VisionDetails(
-                adjective: "Happy / Joyful",
-                visionDescription: "Aims to appear cheerful, optimistic, delightful, and radiate positive energy.",
-                colors: "Yellow, orange, coral, pink, bright colors.",
-                patternsAndDetails: "Cheerful florals, playful patterns, color-blocking.",
-                materialsAndSilhouettes: "Cotton, lightweight linen; relaxed or flared silhouettes.",
-                recommendedOutfitItems: "Yellow blouse, bright shirt, white trousers, A-line skirt, sneakers or flats in contrasting colors."
-            )
-
-        case .confident:
-            return VisionDetails(
-                adjective: "Confident",
-                visionDescription: "Aims to look self-assured, poised, composed, and decisive.",
-                colors: "Red, navy, black, contrasting colors.",
-                patternsAndDetails: "Minimal or sharp patterns; controlled details.",
-                materialsAndSilhouettes: "Tailoring, structured silhouettes, well-fitted cuts.",
-                recommendedOutfitItems: "Blazer, structured shirt, tailored trousers, jumpsuit, structured shoes, structured bag."
+                adjective: "Approachable / Friendly",
+                visionDescription: "Aims to look welcoming, accessible, warm, and easy to interact with.",
+                colors: "Beige, cream, light blue, peach, soft warm tones.",
+                patternsAndDetails: "Simple patterns, fine stripes, semi-formal details.",
+                materialsAndSilhouettes: "Cotton, lightweight knits; relaxed or semi-structured silhouettes.",
+                recommendedOutfitItems: "Simple blouse, cardigan, polo shirt, straight-leg jeans, chinos, clean loafers or sneakers."
             )
 
         case .calm:
@@ -100,26 +90,6 @@ public enum StyleVision: String, Codable, CaseIterable, Identifiable, Sendable {
                 recommendedOutfitItems: "Light blue shirt, white blouse, straight-cut trousers, soft cardigan, simple flats or loafers."
             )
 
-        case .approachable:
-            return VisionDetails(
-                adjective: "Approachable / Friendly",
-                visionDescription: "Aims to look welcoming, accessible, warm, and easy to interact with.",
-                colors: "Beige, cream, light blue, peach, soft warm tones.",
-                patternsAndDetails: "Simple patterns, fine stripes, semi-formal details.",
-                materialsAndSilhouettes: "Cotton, lightweight knits; relaxed or semi-structured silhouettes.",
-                recommendedOutfitItems: "Simple blouse, cardigan, polo shirt, straight-leg jeans, chinos, clean loafers or sneakers."
-            )
-
-        case .powerful:
-            return VisionDetails(
-                adjective: "Powerful / Authoritative",
-                visionDescription: "Aims to project decisiveness, authority, influence, and leadership presence.",
-                colors: "Navy, black, burgundy, red accents.",
-                patternsAndDetails: "Solid colors, sharp lines, minimal details.",
-                materialsAndSilhouettes: "Structured tailoring, defined shoulders, clean silhouettes.",
-                recommendedOutfitItems: "Sharp blazer, monochrome suit, tailored trousers, collared shirt, formal shoes, structured bag."
-            )
-
         case .competent:
             return VisionDetails(
                 adjective: "Competent / Professional",
@@ -130,24 +100,14 @@ public enum StyleVision: String, Codable, CaseIterable, Identifiable, Sendable {
                 recommendedOutfitItems: "Blazer, button-up shirt, tailored trousers, formal skirt, loafers, structured work bag."
             )
 
-        case .elegant:
+        case .confident:
             return VisionDetails(
-                adjective: "Elegant / Refined",
-                visionDescription: "Aims to appear graceful, sophisticated, polished, and composed.",
-                colors: "Black, ivory, navy, champagne, jewel tones.",
-                patternsAndDetails: "Solid colors, delicate motifs, minimal details.",
-                materialsAndSilhouettes: "Satin, crepe, drapey fabrics; clean and proportional cuts.",
-                recommendedOutfitItems: "Midi dress, understated blouse, tailored trousers, pointed-toe shoes, clutch, minimalist jewelry."
-            )
-
-        case .playful:
-            return VisionDetails(
-                adjective: "Playful / Fun",
-                visionDescription: "Aims to appear expressive, spontaneous, entertaining, and lighthearted.",
-                colors: "Orange, yellow, pink, contrasting color combinations.",
-                patternsAndDetails: "Polka dots, graphic prints, geometric motifs, color-blocking.",
-                materialsAndSilhouettes: "Cotton, denim, knitwear; casual silhouettes with engaging details.",
-                recommendedOutfitItems: "Graphic tee, colorful blouse, patterned skirt, jeans, sneakers, contrast-colored bag."
+                adjective: "Confident",
+                visionDescription: "Aims to look self-assured, poised, composed, and decisive.",
+                colors: "Red, navy, black, contrasting colors.",
+                patternsAndDetails: "Minimal or sharp patterns; controlled details.",
+                materialsAndSilhouettes: "Tailoring, structured silhouettes, well-fitted cuts.",
+                recommendedOutfitItems: "Blazer, structured shirt, tailored trousers, jumpsuit, structured shoes, structured bag."
             )
 
         case .creative:
@@ -160,14 +120,14 @@ public enum StyleVision: String, Codable, CaseIterable, Identifiable, Sendable {
                 recommendedOutfitItems: "Statement blouse, printed trousers, unique outerwear, asymmetrical skirt, statement shoes, artistic accessories."
             )
 
-        case .romantic:
+        case .elegant:
             return VisionDetails(
-                adjective: "Romantic / Gentle",
-                visionDescription: "Aims to appear delicate, sweet, emotionally warm, or romantic.",
-                colors: "Pink, rose, cream, lavender, pastels.",
-                patternsAndDetails: "Florals, lace, ditsy prints, soft decorative details.",
-                materialsAndSilhouettes: "Chiffon, lace, lightweight satin; draped fabrics and A-line silhouettes.",
-                recommendedOutfitItems: "Soft blouse, wrap dress, midi skirt, cardigan, ballet flats, compact handbag."
+                adjective: "Elegant / Refined",
+                visionDescription: "Aims to appear graceful, sophisticated, polished, and composed.",
+                colors: "Black, ivory, navy, champagne, jewel tones.",
+                patternsAndDetails: "Solid colors, delicate motifs, minimal details.",
+                materialsAndSilhouettes: "Satin, crepe, drapey fabrics; clean and proportional cuts.",
+                recommendedOutfitItems: "Midi dress, understated blouse, tailored trousers, pointed-toe shoes, clutch, minimalist jewelry."
             )
 
         case .energetic:
@@ -180,6 +140,16 @@ public enum StyleVision: String, Codable, CaseIterable, Identifiable, Sendable {
                 recommendedOutfitItems: "Track jacket, polo shirt, joggers, tapered pants, sneakers, utilitarian bag."
             )
 
+        case .happy:
+            return VisionDetails(
+                adjective: "Happy / Joyful",
+                visionDescription: "Aims to appear cheerful, optimistic, delightful, and radiate positive energy.",
+                colors: "Yellow, orange, coral, pink, bright colors.",
+                patternsAndDetails: "Cheerful florals, playful patterns, color-blocking.",
+                materialsAndSilhouettes: "Cotton, lightweight linen; relaxed or flared silhouettes.",
+                recommendedOutfitItems: "Yellow blouse, bright shirt, white trousers, A-line skirt, sneakers or flats in contrasting colors."
+            )
+
         case .mysterious:
             return VisionDetails(
                 adjective: "Mysterious / Dramatic",
@@ -188,6 +158,36 @@ public enum StyleVision: String, Codable, CaseIterable, Identifiable, Sendable {
                 patternsAndDetails: "High contrast, prominent textures, dramatic accents.",
                 materialsAndSilhouettes: "Velvet, satin, textured fabrics; sharp or dramatically flowing silhouettes.",
                 recommendedOutfitItems: "Black blouse, dark tailored trousers, dramatic dress, boots, structured bag, metallic accessories."
+            )
+
+        case .playful:
+            return VisionDetails(
+                adjective: "Playful / Fun",
+                visionDescription: "Aims to appear expressive, spontaneous, entertaining, and lighthearted.",
+                colors: "Orange, yellow, pink, contrasting color combinations.",
+                patternsAndDetails: "Polka dots, graphic prints, geometric motifs, color-blocking.",
+                materialsAndSilhouettes: "Cotton, denim, knitwear; casual silhouettes with engaging details.",
+                recommendedOutfitItems: "Graphic tee, colorful blouse, patterned skirt, jeans, sneakers, contrast-colored bag."
+            )
+
+        case .powerful:
+            return VisionDetails(
+                adjective: "Powerful / Authoritative",
+                visionDescription: "Aims to project decisiveness, authority, influence, and leadership presence.",
+                colors: "Navy, black, burgundy, red accents.",
+                patternsAndDetails: "Solid colors, sharp lines, minimal details.",
+                materialsAndSilhouettes: "Structured tailoring, defined shoulders, clean silhouettes.",
+                recommendedOutfitItems: "Sharp blazer, monochrome suit, tailored trousers, collared shirt, formal shoes, structured bag."
+            )
+
+        case .romantic:
+            return VisionDetails(
+                adjective: "Romantic / Gentle",
+                visionDescription: "Aims to appear delicate, sweet, emotionally warm, or romantic.",
+                colors: "Pink, rose, cream, lavender, pastels.",
+                patternsAndDetails: "Florals, lace, ditsy prints, soft decorative details.",
+                materialsAndSilhouettes: "Chiffon, lace, lightweight satin; draped fabrics and A-line silhouettes.",
+                recommendedOutfitItems: "Soft blouse, wrap dress, midi skirt, cardigan, ballet flats, compact handbag."
             )
         }
     }

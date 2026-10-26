@@ -564,18 +564,18 @@ enum ColorSeason: String, Codable, CaseIterable, Identifiable {
 
 // Models/StyleVision.swift
 enum StyleVision: String, Codable, CaseIterable, Identifiable {
-    case happy = "Happy"
-    case confident = "Confident"
-    case calm = "Calm"
     case approachable = "Approachable"
-    case powerful = "Powerful"
+    case calm = "Calm"
     case competent = "Competent"
-    case elegant = "Elegant"
-    case playful = "Playful"
+    case confident = "Confident"
     case creative = "Creative"
-    case romantic = "Romantic"
+    case elegant = "Elegant"
     case energetic = "Energetic"
+    case happy = "Happy"
     case mysterious = "Mysterious"
+    case playful = "Playful"
+    case powerful = "Powerful"
+    case romantic = "Romantic"
     
     var id: String { rawValue }
 }
@@ -1248,7 +1248,7 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - `Pirate Black (19-4305 TCX): #343636`
   - `Anthracite (19-4007 TCX): #26262B`
 
-#### 5.1.4 Style Vision — 12 Outfit Mood / Vibe Reference
+#### 5.1.4 Style Vision — 12 Outfit Mood / Vibe Reference (Alphabetical Order A–Z)
 
 > [!NOTE]
 > Style Visions represent the user's desired **emotional impression and presence** for an occasion.
