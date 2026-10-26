@@ -43,7 +43,7 @@ final class GarmentItem {
         self.material = material
         self.colorName = colorName
         self.hexColor = hexColor
-        self.purchaseURLString = purchaseURLString
+       // self.purchaseURLString = purchaseURLString
     }
 }
 
