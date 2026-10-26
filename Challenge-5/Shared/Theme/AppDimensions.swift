@@ -24,4 +24,10 @@ public enum AppDimensions {
     public static let tabBarHeight: CGFloat = 48
     public static let floatingButtonSize: CGFloat = 56
     public static let circularIconSize: CGFloat = 36
+    
+    // MARK: - Input & Modal Dimensions
+    public static let inputFieldHeight: CGFloat = 52
+    public static let inputCornerRadius: CGFloat = 24
+    public static let sheetDragHandleWidth: CGFloat = 36
+    public static let sheetDragHandleHeight: CGFloat = 5
 }

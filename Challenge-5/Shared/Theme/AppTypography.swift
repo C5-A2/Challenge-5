@@ -16,4 +16,12 @@ public enum AppTypography {
     public static let caption = Font.system(size: 13, weight: .regular)
     public static let buttonLabel = Font.system(size: 16, weight: .semibold)
     public static let chipLabel = Font.system(size: 14, weight: .medium)
+    
+    // MARK: - SF Pro Extended Typography
+    public static let modalTitle = Font.system(size: 18, weight: .semibold, design: .default).width(.expanded)
+    public static let sfProSemiboldExtended = Font.system(size: 18, weight: .semibold, design: .default).width(.expanded)
+    
+    public static func sfProSemiboldExtended(size: CGFloat) -> Font {
+        Font.system(size: size, weight: .semibold, design: .default).width(.expanded)
+    }
 }
