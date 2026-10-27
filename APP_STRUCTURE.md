@@ -361,29 +361,28 @@ Challenge-5/
 │   │           └── ResultStageViewModel.swift
 │   │
 │   └── Store/                                     # ── Stack 14 ── (Natalie)
-│       ├── StoreConstants.swift                   # Named store values (crop ratios, upload, search)
+│       ├── StoreConstants.swift                   # Named store values (crop ratios, encoding, search)
 │       ├── Views/
-│       │   ├── WhereToBuySheet.swift              # Google Lens + marketplace search bottom sheet
-│       │   ├── SafariView.swift                   # SFSafariViewController wrapper (iOS)
-│       │   ├── LensWebView.swift                  # WKWebView for direct Google Lens upload (iOS)
-│       │   └── LensWebPageView.swift              # Full-screen Google Lens results page (iOS)
+│       │   ├── WhereToBuySheet.swift              # Google Lens results for the selected garment
+│       │   ├── OutfitGarmentStrip.swift           # "On this outfit" cropped garment thumbnails
+│       │   └── LensWebView.swift                  # WKWebView that posts the crop to Google Lens (iOS)
 │       ├── ViewModels/
-│       │   └── StoreViewModel.swift               # Crop → consent → upload → Google Lens flow
+│       │   ├── StoreViewModel.swift               # Crop → consent → Google Lens flow
+│       │   └── OutfitGarmentStripViewModel.swift  # Crops all garments of a look for thumbnails
 │       ├── Services/
 │       │   ├── VisionGarmentCropper.swift         # Crops outer / top / bottom from the look image
-│       │   ├── ImgbbImageUploader.swift           # Temporary public image URL for Google Lens
-│       │   ├── GoogleLensURLBuilder.swift         # Google Lens upload-by-URL page
-│       │   ├── LensDirectUploadRequestBuilder.swift # Direct Lens upload request (no imgbb)
-│       │   ├── GarmentImageEncoder.swift          # JPEG + multipart encoding for uploads
-│       │   ├── MarketplaceSearchLinkBuilder.swift # Tokopedia, Shopee, Zalora keyword links
-│       │   ├── StoreSearchKeyword.swift           # Keyword from name + material + color
+│       │   ├── GarmentCropProvider.swift          # Shared crop source (cache + cropper)
 │       │   ├── GarmentCropCache.swift             # In-memory crops by GarmentItem.id
+│       │   ├── LensUploadRequestBuilder.swift     # Google Lens upload request (encoded_image)
+│       │   ├── GarmentImageEncoder.swift          # JPEG + multipart encoding
+│       │   ├── GarmentPhotoSaver.swift            # "Save to Photos" for a garment crop (iOS)
 │       │   ├── LookImageDecoder.swift             # lookImageData → CGImage
+│       │   ├── GarmentTitleBuilder.swift          # Garment title from color + name + material
 │       │   ├── StoreError.swift                   # Store domain errors
-│       │   └── StoreServiceMocks.swift            # Mock cropper + uploader for previews
+│       │   └── StoreServiceMocks.swift            # Mock cropper for previews
 │       └── PreviewContent/
-│           ├── StoreSampleData.swift              # Dummy looks for testing (replace images later)
-│           └── StoreSandboxView.swift             # Test screen: tap a garment → WhereToBuySheet
+│           ├── StoreSampleData.swift              # Dummy look for testing (replace image later)
+│           └── StoreSandboxView.swift             # Test screen: look + "On this outfit" → WhereToBuySheet
 │
 ├── Models/                                        # CANONICAL SHARED DATA CONTRACTS (9 models)
 │   ├── UserProfile.swift                          # SwiftData @Model — root user profile
@@ -403,8 +402,7 @@ Challenge-5/
 │   │   ├── BodyPoseEstimatorProtocol.swift
 │   │   ├── SkinColorAnalyzerProtocol.swift
 │   │   ├── RecommendationEngineProtocol.swift
-│   │   ├── GarmentCroppingProtocol.swift         # (Natalie) Store garment crop
-│   │   └── ImageUploadingProtocol.swift          # (Natalie) Store image upload
+│   │   └── GarmentCroppingProtocol.swift         # (Natalie) Store garment crop
 │   ├── Camera/
 │   │   ├── CameraService.swift                    # AVFoundation session management
 │   │   └── LightingAnalyzer.swift                 # Real-time luminance / EV analysis
@@ -1450,7 +1448,6 @@ final class GarmentItem {
     var material: String                    // e.g. "French Terry Cotton"
     var colorName: String                   // e.g. "Burgundy red"
     var hexColor: String                    // e.g. "#800020"
-    var purchaseURLString: String?          // deep link to e-commerce store
     
     /// The look this garment belongs to. Lets the store flow read the look image for cropping.
     var outfitLook: OutfitLook?
@@ -1460,15 +1457,13 @@ final class GarmentItem {
         name: String,
         material: String,
         colorName: String,
-        hexColor: String,
-        purchaseURLString: String? = nil
+        hexColor: String
     ) {
         self.category = category
         self.name = name
         self.material = material
         self.colorName = colorName
         self.hexColor = hexColor
-        self.purchaseURLString = purchaseURLString
     }
 }
 
@@ -1753,19 +1748,12 @@ nonisolated struct GarmentCropRequest: Sendable {
     let hasOuterLayer: Bool         // .top targets the inner layer when an outer piece exists
 }
 
-nonisolated protocol GarmentCroppingProtocol: Sendable {
-    func makeGarmentCrop(for request: GarmentCropRequest) async throws -> CGImage
+nonisolated struct GarmentCrop: Sendable {
+    let image: CGImage              // sent to Google Lens and shown as the thumbnail
 }
-```
 
-```swift
-// Services/Protocols/ImageUploadingProtocol.swift (Natalie — Store)
-import CoreGraphics
-import Foundation
-
-nonisolated protocol ImageUploadingProtocol: Sendable {
-    var isConfigured: Bool { get }
-    func uploadImage(_ image: CGImage) async throws -> URL   // temporary public URL
+nonisolated protocol GarmentCroppingProtocol: Sendable {
+    func makeGarmentCrop(for request: GarmentCropRequest) async throws -> GarmentCrop
 }
 ```
 
