@@ -12,16 +12,22 @@ public struct CircularIconButton: View {
     // MARK: - Properties
     public let systemName: String
     public var isFilled: Bool = false
+    public var isEnabled: Bool = true
+    public var backgroundColor: Color? = nil
     public let action: () -> Void
     
     // MARK: - Initializer
     public init(
         systemName: String,
         isFilled: Bool = false,
+        isEnabled: Bool = true,
+        backgroundColor: Color? = nil,
         action: @escaping () -> Void
     ) {
         self.systemName = systemName
         self.isFilled = isFilled
+        self.isEnabled = isEnabled
+        self.backgroundColor = backgroundColor
         self.action = action
     }
     
@@ -30,15 +36,17 @@ public struct CircularIconButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(isFilled ? AppColors.primaryBlue : AppColors.bodyText)
+                .foregroundStyle(isFilled ? AppColors.primaryBlack : AppColors.bodyText)
                 .frame(
                     width: AppDimensions.circularIconSize,
                     height: AppDimensions.circularIconSize
                 )
-                .background(AppColors.cardBackground)
+                .background(backgroundColor ?? AppColors.circularButtonBackground)
                 .clipShape(Circle())
-                .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
+                .shadow(color: .black.opacity(isEnabled ? 0.04 : 0.01), radius: 3, y: 1)
         }
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1.0 : 0.45)
     }
 }
 
