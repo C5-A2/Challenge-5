@@ -1653,7 +1653,8 @@ To enable SwiftUI `#Preview` without live camera sessions or heavy ML models, al
 import UIKit
 import AVFoundation
 
-protocol CameraServiceProtocol: AnyObject, Sendable {
+@MainActor
+protocol CameraServiceProtocol: AnyObject {
     var isRunning: Bool { get }
     var isFlashEnabled: Bool { get set }
     var cameraPosition: AVCaptureDevice.Position { get }
@@ -1692,6 +1693,7 @@ struct RealTimeFaceAnalysisResult: Sendable {
     let isReadyForOptimalCapture: Bool
 }
 
+@MainActor
 protocol LightingAnalyzerProtocol: Sendable {
     func evaluateLuminance(from sampleBuffer: CMSampleBuffer) -> LightingStatus
     func analyzeFrame(_ sampleBuffer: CMSampleBuffer) async -> RealTimeFaceAnalysisResult?

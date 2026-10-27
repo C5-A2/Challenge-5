@@ -77,6 +77,7 @@ public struct RealTimeFaceAnalysisResult: Sendable {
 }
 
 /// Contract for evaluating video sample buffers in real-time.
+@MainActor
 public protocol LightingAnalyzerProtocol: Sendable {
     func evaluateLuminance(from sampleBuffer: CMSampleBuffer) -> LightingStatus
     func analyzeFrame(_ sampleBuffer: CMSampleBuffer) async -> RealTimeFaceAnalysisResult?

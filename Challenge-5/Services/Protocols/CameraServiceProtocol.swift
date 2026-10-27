@@ -10,7 +10,8 @@ import AVFoundation
 
 /// Protocol defining the camera hardware lifecycle, preview session, and capture capabilities.
 /// Conforms to `APP_STRUCTURE.md` Section 9 to allow mock implementations in previews and tests.
-public protocol CameraServiceProtocol: AnyObject, Sendable {
+@MainActor
+public protocol CameraServiceProtocol: AnyObject {
 
     /// True if the capture session is actively running.
     var isRunning: Bool { get }

@@ -301,12 +301,14 @@ struct FaceCameraView: View {
         countdownRemaining = 3
 
         Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
-            if countdownRemaining > 1 {
-                countdownRemaining -= 1
-            } else {
-                timer.invalidate()
-                viewModel.isCountingDown = false
-                executeCapture()
+            Task { @MainActor in
+                if countdownRemaining > 1 {
+                    countdownRemaining -= 1
+                } else {
+                    timer.invalidate()
+                    viewModel.isCountingDown = false
+                    executeCapture()
+                }
             }
         }
     }

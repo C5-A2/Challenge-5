@@ -20,7 +20,7 @@ public final class CameraService: NSObject, CameraServiceProtocol {
     public private(set) var isRunning: Bool = false
     public var isFlashEnabled: Bool = false
     public private(set) var cameraPosition: AVCaptureDevice.Position = .front
-    public private(set) var session = AVCaptureSession()
+    public nonisolated let session = AVCaptureSession()
     public private(set) var permissionGranted: Bool = false
     public var errorMessage: String? = nil
 
@@ -31,12 +31,11 @@ public final class CameraService: NSObject, CameraServiceProtocol {
 
     // MARK: - Internal AVFoundation Components
 
-    private let photoOutput = AVCapturePhotoOutput()
-    private let videoOutput = AVCaptureVideoDataOutput()
-    private let sessionQueue = DispatchQueue(label: "com.challenge5.camera.sessionQueue")
-    private let sampleQueue = DispatchQueue(label: "com.challenge5.camera.sampleQueue")
+    private nonisolated let photoOutput = AVCapturePhotoOutput()
+    private nonisolated let videoOutput = AVCaptureVideoDataOutput()
+    private nonisolated let sessionQueue = DispatchQueue(label: "com.challenge5.camera.sessionQueue")
+    private nonisolated let sampleQueue = DispatchQueue(label: "com.challenge5.camera.sampleQueue")
 
-    private var currentInput: AVCaptureDeviceInput?
     private var photoContinuation: CheckedContinuation<UIImage, Error>?
 
     // MARK: - Initializer
@@ -60,6 +59,7 @@ public final class CameraService: NSObject, CameraServiceProtocol {
             return
         }
 
+        let initialPosition = self.cameraPosition
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             sessionQueue.async { [weak self] in
                 guard let self = self else { return }
@@ -68,7 +68,7 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                     self.session.sessionPreset = .photo
 
                     // Configure default input (front camera for Face Scan)
-                    try self.configureDeviceInput(position: self.cameraPosition)
+                    try self.configureDeviceInput(position: initialPosition)
 
                     // Configure Photo Output
                     if self.session.canAddOutput(self.photoOutput) {
@@ -79,7 +79,7 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                             if photoConnection.isVideoOrientationSupported {
                                 photoConnection.videoOrientation = .portrait
                             }
-                            if photoConnection.isVideoMirroringSupported && self.cameraPosition == .front {
+                            if photoConnection.isVideoMirroringSupported && initialPosition == .front {
                                 photoConnection.isVideoMirrored = true
                             }
                         }
@@ -98,7 +98,7 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                             if connection.isVideoOrientationSupported {
                                 connection.videoOrientation = .portrait
                             }
-                            if connection.isVideoMirroringSupported && self.cameraPosition == .front {
+                            if connection.isVideoMirroringSupported && initialPosition == .front {
                                 connection.isVideoMirrored = true
                             }
                         }
@@ -196,7 +196,7 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                 photoSettings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
             }
 
-            if self.currentInput?.device.hasFlash == true {
+            if let deviceInput = self.session.inputs.first as? AVCaptureDeviceInput, deviceInput.device.hasFlash {
                 photoSettings.flashMode = self.isFlashEnabled ? .on : .off
             }
 
@@ -226,9 +226,9 @@ public final class CameraService: NSObject, CameraServiceProtocol {
         #endif
     }
 
-    private func configureDeviceInput(position: AVCaptureDevice.Position) throws {
-        if let current = currentInput {
-            session.removeInput(current)
+    nonisolated private func configureDeviceInput(position: AVCaptureDevice.Position) throws {
+        for input in session.inputs {
+            session.removeInput(input)
         }
 
         let discovery = AVCaptureDevice.DiscoverySession(
@@ -245,7 +245,6 @@ public final class CameraService: NSObject, CameraServiceProtocol {
         let input = try AVCaptureDeviceInput(device: device)
         if session.canAddInput(input) {
             session.addInput(input)
-            self.currentInput = input
         }
     }
 
