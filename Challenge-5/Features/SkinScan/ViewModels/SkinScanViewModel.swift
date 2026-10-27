@@ -55,7 +55,7 @@ public final class SkinScanViewModel {
 
     /// Indicates whether lighting is sufficient for color undertone detection.
     public var isLightingAdequate: Bool {
-        luminanceLevel >= 0.35 && luminanceLevel <= 0.85
+        luminanceLevel >= 0.20 && luminanceLevel <= 0.90
     }
 
     /// True when face is centered, directly facing camera, and lighting is optimal.

@@ -51,8 +51,9 @@ struct FaceCameraView: View {
             cameraService.onSampleBuffer = { [weak vm] sampleBuffer in
                 guard let vm else { return }
                 Task {
-                    let result = await analyzer.analyzeFrame(sampleBuffer)
-                    vm.applyRealTimeAnalysis(result)
+                    if let result = await analyzer.analyzeFrame(sampleBuffer) {
+                        vm.applyRealTimeAnalysis(result)
+                    }
                 }
             }
             do {
@@ -77,8 +78,11 @@ struct FaceCameraView: View {
         simulatorPreviewPlaceholder
         #else
         if cameraService.permissionGranted && cameraService.isRunning {
-            CameraPreviewRepresentable(session: cameraService.session)
-                .ignoresSafeArea()
+            CameraPreviewRepresentable(
+                session: cameraService.session,
+                isFrontCamera: cameraService.cameraPosition == .front
+            )
+            .ignoresSafeArea()
         } else {
             simulatorPreviewPlaceholder
         }
@@ -358,24 +362,52 @@ private struct CornerBracketsShape: Shape {
 
 private struct CameraPreviewRepresentable: UIViewRepresentable {
     let session: AVCaptureSession
+    let isFrontCamera: Bool
 
     func makeUIView(context: Context) -> CameraPreviewUIView {
         let view = CameraPreviewUIView()
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
+        view.isFrontCamera = isFrontCamera
         return view
     }
 
-    func updateUIView(_ uiView: CameraPreviewUIView, context: Context) {}
+    func updateUIView(_ uiView: CameraPreviewUIView, context: Context) {
+        if uiView.previewLayer.session != session {
+            uiView.previewLayer.session = session
+        }
+        uiView.isFrontCamera = isFrontCamera
+        uiView.updateOrientationAndMirroring()
+    }
 }
 
 private final class CameraPreviewUIView: UIView {
+    var isFrontCamera: Bool = true
+
     override class var layerClass: AnyClass {
         AVCaptureVideoPreviewLayer.self
     }
 
     var previewLayer: AVCaptureVideoPreviewLayer {
         layer as! AVCaptureVideoPreviewLayer
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        previewLayer.frame = bounds
+        updateOrientationAndMirroring()
+    }
+
+    func updateOrientationAndMirroring() {
+        if let connection = previewLayer.connection {
+            if connection.isVideoOrientationSupported {
+                connection.videoOrientation = .portrait
+            }
+            if connection.isVideoMirroringSupported {
+                connection.automaticallyAdjustsVideoMirroring = false
+                connection.isVideoMirrored = isFrontCamera
+            }
+        }
     }
 }
 

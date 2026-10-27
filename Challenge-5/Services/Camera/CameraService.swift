@@ -74,11 +74,23 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                     if self.session.canAddOutput(self.photoOutput) {
                         self.session.addOutput(self.photoOutput)
                         self.photoOutput.isHighResolutionCaptureEnabled = true
+
+                        if let photoConnection = self.photoOutput.connection(with: .video) {
+                            if photoConnection.isVideoOrientationSupported {
+                                photoConnection.videoOrientation = .portrait
+                            }
+                            if photoConnection.isVideoMirroringSupported && self.cameraPosition == .front {
+                                photoConnection.isVideoMirrored = true
+                            }
+                        }
                     }
 
                     // Configure Video Output for Lighting Analysis
                     if self.session.canAddOutput(self.videoOutput) {
                         self.videoOutput.alwaysDiscardsLateVideoFrames = true
+                        self.videoOutput.videoSettings = [
+                            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
+                        ]
                         self.videoOutput.setSampleBufferDelegate(self, queue: self.sampleQueue)
                         self.session.addOutput(self.videoOutput)
 
@@ -133,6 +145,14 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                 do {
                     self.session.beginConfiguration()
                     try self.configureDeviceInput(position: newPosition)
+                    if let photoConnection = self.photoOutput.connection(with: .video) {
+                        if photoConnection.isVideoOrientationSupported {
+                            photoConnection.videoOrientation = .portrait
+                        }
+                        if photoConnection.isVideoMirroringSupported {
+                            photoConnection.isVideoMirrored = (newPosition == .front)
+                        }
+                    }
                     if let connection = self.videoOutput.connection(with: .video) {
                         if connection.isVideoOrientationSupported {
                             connection.videoOrientation = .portrait
