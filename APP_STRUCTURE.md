@@ -351,14 +351,17 @@ Challenge-5/
 │   │   │   │   └── VisionChipsGridView.swift      # 12 predefined StyleVision chips (min 0, max 3, no "Other")
 │   │   │   └── ViewModels/
 │   │   │       └── OccasionInputViewModel.swift
-│   │   └── Result/                                # (Michael)
+│   │   └── Output/                                # (Michael — C5-31–C5-36)
 │   │       ├── Views/
-│   │       │   ├── ResultStageView.swift          # Avatar stage + 5-look carousel
-│   │       │   ├── FlankingGarmentCard.swift      # Outer / Top / Bottom cards
-│   │       │   ├── FitsIndicatorBadges.swift      # Body Shape, Color, Torso badges
-│   │       │   └── FitRationaleDrawer.swift       # AI explanation bottom sheet
+│   │       │   ├── OccasionOutputView.swift       # Root screen coordinating Alt 5 & Alt 5.1
+│   │       │   ├── AvatarStageView.swift          # Hero avatar stage + guidelines + ground shadow
+│   │       │   ├── HorizontalLookSwitcher.swift   # Swipeable 5-look page TabView
+│   │       │   ├── FitsIndicatorBadges.swift      # 3-Fits badges & drawer segmented tabs
+│   │       │   ├── CollapsibleRationaleDrawer.swift # AI explanation bottom drawer (Alt 5.1)
+│   │       │   ├── OnThisOutfitSection.swift      # "On this outfit" carousel with corner brackets
+│   │       │   └── OccasionOutputBottomBar.swift  # Bottom chat, plus, and bookmark actions
 │   │       └── ViewModels/
-│   │           └── ResultStageViewModel.swift
+│   │           └── OccasionOutputViewModel.swift  # Selected look index, 5 AI looks, mock data, states
 │   │
 │   └── Store/                                     # ── Stack 14 ── (Natalie)
 │       ├── StoreConstants.swift                   # Named store values (crop ratios, encoding, search)
