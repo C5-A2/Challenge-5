@@ -261,7 +261,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = c5;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
-				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access to analyze your facial skin tone and estimate body proportions for personalized outfit recommendations.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access to analyze your facial skin tone, estimate body proportions, and take outfit reference photos for personalized recommendations.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save garment images to your photo library.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need access to your photo library to select outfit reference images.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -306,7 +306,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = c5;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
-				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access to analyze your facial skin tone and estimate body proportions for personalized outfit recommendations.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access to analyze your facial skin tone, estimate body proportions, and take outfit reference photos for personalized recommendations.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save garment images to your photo library.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need access to your photo library to select outfit reference images.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
