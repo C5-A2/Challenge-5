@@ -10,7 +10,7 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-/// Encodes a garment crop for upload (imgbb or direct Google Lens upload).
+/// Encodes a garment crop for the Google Lens upload.
 nonisolated enum GarmentImageEncoder {
 
     /// JPEG-encodes the image, downscaled so uploads stay fast.
@@ -20,8 +20,8 @@ nonisolated enum GarmentImageEncoder {
             return nil
         }
         let options: [CFString: Any] = [
-            kCGImageDestinationLossyCompressionQuality: StoreConstants.Upload.jpegCompressionQuality,
-            kCGImageDestinationImageMaxPixelSize: StoreConstants.Upload.maximumUploadPixelSize
+            kCGImageDestinationLossyCompressionQuality: StoreConstants.ImageEncoding.jpegCompressionQuality,
+            kCGImageDestinationImageMaxPixelSize: StoreConstants.ImageEncoding.maximumPixelSize
         ]
         CGImageDestinationAddImage(destination, image, options as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { return nil }

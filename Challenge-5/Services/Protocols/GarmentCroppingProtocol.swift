@@ -19,7 +19,16 @@ nonisolated struct GarmentCropRequest: Sendable {
     let hasOuterLayer: Bool
 }
 
+/// A cropped garment.
+nonisolated struct GarmentCrop: Sendable {
+
+    // MARK: - Properties
+
+    /// The cropped garment, sent to Google Lens and shown as the thumbnail.
+    let image: CGImage
+}
+
 /// Crops a single garment (outer, top, or bottom) from a look image for visual search.
 nonisolated protocol GarmentCroppingProtocol: Sendable {
-    func makeGarmentCrop(for request: GarmentCropRequest) async throws -> CGImage
+    func makeGarmentCrop(for request: GarmentCropRequest) async throws -> GarmentCrop
 }

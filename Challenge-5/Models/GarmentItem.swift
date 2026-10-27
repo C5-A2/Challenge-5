@@ -11,7 +11,7 @@ import SwiftData
 /// A single garment inside a generated outfit look, shown on a flanking garment card.
 ///
 /// Used by the result stage (`FlankingGarmentCard`) and the store flow (`WhereToBuySheet`),
-/// which builds image and keyword searches from this garment.
+/// which crops this garment from the look image and searches it with Google Lens.
 @Model
 final class GarmentItem {
 
@@ -23,7 +23,6 @@ final class GarmentItem {
     var material: String                    // e.g. "French Terry Cotton"
     var colorName: String                   // e.g. "Burgundy red"
     var hexColor: String                    // e.g. "#800020"
-    //var purchaseURLString: String?          // deep link to e-commerce store
 
     /// The look this garment belongs to. Lets the store flow read the look image for cropping.
     var outfitLook: OutfitLook?
@@ -35,15 +34,13 @@ final class GarmentItem {
         name: String,
         material: String,
         colorName: String,
-        hexColor: String,
-        purchaseURLString: String? = nil
+        hexColor: String
     ) {
         self.category = category
         self.name = name
         self.material = material
         self.colorName = colorName
         self.hexColor = hexColor
-       // self.purchaseURLString = purchaseURLString
     }
 }
 

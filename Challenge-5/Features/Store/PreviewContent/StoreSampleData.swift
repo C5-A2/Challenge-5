@@ -8,10 +8,10 @@
 import Foundation
 import SwiftData
 
-/// Dummy looks for testing the store flow before real generated looks exist.
+/// Dummy look for testing the store flow before real generated looks exist.
 ///
-/// The two sample photos are placeholders for local testing only.
-/// Replace them with the team's own generated look images before release.
+/// The sample photo (a denim set with an outer, an inner top, and a bottom) is a placeholder
+/// for local testing only. Replace it with the team's own generated look image before release.
 @MainActor
 enum StoreSampleData {
 
@@ -21,6 +21,7 @@ enum StoreSampleData {
         let lookIndex: Int
         let imageName: String
         let imageExtension: String
+        let fitRationale: String
         let garments: [SampleGarment]
     }
 
@@ -33,6 +34,9 @@ enum StoreSampleData {
     }
 
     // MARK: - Public Data
+
+    /// Title of the sample occasion, shown above the look like the result stage.
+    static let occasionTitle = "Cousin's Wedding"
 
     /// In-memory container holding the sample looks and garments.
     static let container: ModelContainer = makeContainer()
@@ -56,6 +60,7 @@ enum StoreSampleData {
             lookIndex: 0,
             imageName: "store-sample-denim-look",
             imageExtension: "jpeg",
+            fitRationale: "A matching denim set creates one long vertical line, and the white tee breaks it up at the chest so the outfit feels relaxed instead of heavy.",
             garments: [
                 SampleGarment(category: .outer, name: "Monogram Denim Jacket", material: "Denim",
                               colorName: "Blue", hexColor: "#3B5B8C"),
@@ -63,17 +68,6 @@ enum StoreSampleData {
                               colorName: "White", hexColor: "#FFFFFF"),
                 SampleGarment(category: .bottom, name: "Monogram Denim Trousers", material: "Denim",
                               colorName: "Blue", hexColor: "#3B5B8C")
-            ]
-        ),
-        SampleLook(
-            lookIndex: 1,
-            imageName: "store-sample-polo-look",
-            imageExtension: "jpg",
-            garments: [
-                SampleGarment(category: .top, name: "Rugby Stripe Polo", material: "Cotton",
-                              colorName: "Navy white", hexColor: "#1F2A44"),
-                SampleGarment(category: .bottom, name: "Chino Pants", material: "Cotton Twill",
-                              colorName: "Beige", hexColor: "#D8CBB0")
             ]
         )
     ]
@@ -93,6 +87,7 @@ enum StoreSampleData {
         for sampleLook in sampleLooks {
             let look = OutfitLook(
                 lookIndex: sampleLook.lookIndex,
+                fitRationale: sampleLook.fitRationale,
                 lookImageData: imageData(named: sampleLook.imageName, withExtension: sampleLook.imageExtension)
             )
             context.insert(look)

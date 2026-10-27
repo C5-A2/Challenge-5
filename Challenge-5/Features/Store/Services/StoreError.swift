@@ -8,14 +8,14 @@
 import Foundation
 
 /// Errors in the "Where to Buy" flow, shown to the user through `StoreViewModel` state.
-nonisolated enum StoreError: LocalizedError, Equatable {
+nonisolated enum StoreError: LocalizedError {
     case lookImageUnavailable
     case lookImageDecodingFailed
     case garmentNotDetected(GarmentCategory)
-    case uploadNotConfigured
     case imageEncodingFailed
-    case uploadFailed
     case lensURLInvalid
+    case photoLibraryAccessDenied
+    case photoSaveFailed
 
     var errorDescription: String? {
         switch self {
@@ -24,15 +24,15 @@ nonisolated enum StoreError: LocalizedError, Equatable {
         case .lookImageDecodingFailed:
             return "Couldn't read the look image."
         case .garmentNotDetected(let category):
-            return "Couldn't find the \(category.rawValue.lowercased()) in the look image. Try a marketplace search instead."
-        case .uploadNotConfigured:
-            return "Image search isn't set up. Add the IMGBB_API_KEY environment variable to the Xcode scheme."
+            return "Couldn't find the \(category.rawValue.lowercased()) in the look image."
         case .imageEncodingFailed:
             return "Couldn't prepare the image for search."
-        case .uploadFailed:
-            return "Couldn't upload the image. Check your internet connection and try again."
         case .lensURLInvalid:
             return "Couldn't open Google Lens for this image."
+        case .photoLibraryAccessDenied:
+            return "Allow photo access in Settings to save this image."
+        case .photoSaveFailed:
+            return "Couldn't save the image to Photos."
         }
     }
 }

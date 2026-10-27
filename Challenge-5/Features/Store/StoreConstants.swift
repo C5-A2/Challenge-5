@@ -42,42 +42,24 @@ nonisolated enum StoreConstants {
         static let fallbackLowerBodyHeightRatio: CGFloat = 0.50
     }
 
-    // MARK: - Image Upload
+    // MARK: - Image Encoding
 
-    nonisolated enum Upload {
-        static let endpoint = URL(string: "https://api.imgbb.com/1/upload")
-        /// The imgbb API key is read from this environment variable (set it in the Xcode scheme).
-        static let apiKeyEnvironmentKey = "IMGBB_API_KEY"
-        /// Seconds before imgbb deletes the uploaded crop (imgbb minimum is 60).
-        static let expirationSeconds = 300
+    nonisolated enum ImageEncoding {
         static let jpegCompressionQuality: CGFloat = 0.85
-        static let maximumUploadPixelSize = 1280
+        /// Crops are downscaled to this size before they're sent to Google Lens.
+        static let maximumPixelSize = 1280
     }
 
     // MARK: - Search
 
     nonisolated enum Search {
-        static let lensUploadEndpoint = URL(string: "https://lens.google.com/uploadbyurl")
+        /// The crop is posted as a file (`encoded_image`) from `WKWebView`.
+        /// Not an official API. If it stops working, try "https://lens.google.com/v3/upload".
+        static let lensUploadEndpoint = URL(string: "https://lens.google.com/upload")
+        static let lensUploadFieldName = "encoded_image"
         static let lensLanguageCode = "id"
-        /// Country hint for Google Lens. C5-55: verify that Lens applies it.
+        /// Country hint for Google Lens.
         static let lensCountryCode = "id"
-
-        /// Direct upload (no imgbb): the crop is posted as a file from `WKWebView`.
-        /// Not an official API. C5-55: if it stops working, try "https://lens.google.com/v3/upload".
-        static let lensDirectUploadEndpoint = URL(string: "https://lens.google.com/upload")
-        static let lensDirectUploadFieldName = "encoded_image"
-
-        /// Added to Google results pages in the in-app web view so they open on the Shopping tab.
-        /// Not documented by Google. C5-55: check the URLs logged as "[StoreLens]" in the Xcode console;
-        /// set to `nil` to keep Google's default tab.
-        /// udm=28 was tested on 25/10/26: it drops the image and shows unrelated sponsored products,
-        /// so it's off until the real Lens products tab value is known.
-        static let shoppingTabQueryItem: URLQueryItem? = nil
-        /// Google Lens results pages carry this parameter (visual search ID); the default Lens tab is udm=26.
-        static let lensResultsMarkerQueryName = "vsrid"
-        static let googleSearchEndpoint = "https://www.google.com/search"
-        /// Shopping tab for a keyword search on Google (used by the "Google Shopping" button).
-        static let googleShoppingKeywordTabQueryItem = URLQueryItem(name: "udm", value: "28")
     }
 
     // MARK: - Consent
@@ -89,7 +71,13 @@ nonisolated enum StoreConstants {
     // MARK: - Layout
 
     nonisolated enum Layout {
-        static let cropPreviewMaximumHeight: CGFloat = 240
+        static let lensStatusCropMaximumHeight: CGFloat = 160
         static let sandboxLookImageMaximumHeight: CGFloat = 220
+
+        // "On this outfit" garment thumbnails.
+        static let garmentThumbnailSize: CGFloat = 132
+        static let garmentThumbnailSelectedInset: CGFloat = 12
+        static let garmentThumbnailBackgroundOpacity: Double = 0.15
+        static let garmentThumbnailSelectedBackgroundOpacity: Double = 0.6
     }
 }

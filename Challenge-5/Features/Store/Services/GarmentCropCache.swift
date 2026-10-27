@@ -17,19 +17,15 @@ final class GarmentCropCache {
 
     static let shared = GarmentCropCache()
 
-    private var cropsByGarmentID: [UUID: CGImage] = [:]
+    private var cropsByGarmentID: [UUID: GarmentCrop] = [:]
 
     // MARK: - Access
 
-    func crop(forGarmentID garmentID: UUID) -> CGImage? {
+    func crop(forGarmentID garmentID: UUID) -> GarmentCrop? {
         cropsByGarmentID[garmentID]
     }
 
-    func store(_ crop: CGImage, forGarmentID garmentID: UUID) {
+    func store(_ crop: GarmentCrop, forGarmentID garmentID: UUID) {
         cropsByGarmentID[garmentID] = crop
-    }
-
-    func removeAll() {
-        cropsByGarmentID.removeAll()
     }
 }

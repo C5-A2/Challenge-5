@@ -8,17 +8,19 @@
 import SwiftData
 import SwiftUI
 
-/// Bottom sheet that helps the user find where to buy one garment of a look (C5-112).
+/// Bottom sheet that shows Google Lens results for one cropped garment of a look (C5-112).
 ///
-/// Presented when `appState.isShowingWhereToBuySheet` is true, for
-/// `appState.selectedGarmentForPurchase` (integration contract 8.2).
+/// The garment is picked from the "On this outfit" row (`OutfitGarmentStrip`). Presented when
+/// `appState.isShowingWhereToBuySheet` is true, for `appState.selectedGarmentForPurchase`
+/// (integration contract 8.2).
 struct WhereToBuySheet: View {
 
     // MARK: - Properties
 
     @State private var viewModel: StoreViewModel
-    @State private var presentedPage: StoreWebPage?
-    @Environment(\.openURL) private var openURL
+    @State private var isLensPageLoading = true
+    @State private var isShowingMoreActions = false
+    @Environment(\.dismiss) private var dismiss
 
     // MARK: - Initializers
 
@@ -33,176 +35,132 @@ struct WhereToBuySheet: View {
     // MARK: - Body
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppDimensions.sectionSpacing) {
-                    garmentHeader
-                    garmentCropPreview
-                    visualSearchSection
-                    marketplaceSection
-                }
-                .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-                .padding(.vertical, AppDimensions.sectionSpacing)
-            }
-            .background(AppColors.canvasBackground)
-            .navigationTitle("Where to Buy")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
+        VStack(spacing: AppDimensions.elementSpacing) {
+            header
+            googleLensContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .task { await viewModel.prepareGarmentCrop() }
-        .onChange(of: viewModel.visualSearchState) { _, newState in
-            if case .ready(let lensURL) = newState {
-                open(lensURL)
-                viewModel.markLensPageOpened()
-            }
-        }
+        .background(AppColors.cardBackground)
+        .task { await viewModel.loadInitialContent() }
         .alert("Search With Your Look Image?", isPresented: $viewModel.isShowingUploadConsent) {
             Button("Not Now", role: .cancel) { viewModel.declineUploadConsent() }
             Button("Allow") { Task { await viewModel.grantUploadConsent() } }
         } message: {
-            Text(viewModel.uploadConsentMessage)
+            Text("To find similar items, the cropped garment image is sent to Google Lens.")
         }
-        #if os(iOS)
-        .sheet(item: $presentedPage) { page in
-            SafariView(url: page.url)
-                .ignoresSafeArea()
+        .alert(viewModel.photoSaveMessage ?? "", isPresented: $viewModel.isShowingPhotoSaveResult) {
+            Button("OK", role: .cancel) {}
         }
-        .fullScreenCover(item: $viewModel.directLensPage) { page in
-            LensWebPageView(page: page)
+    }
+
+    // MARK: - Header
+
+    /// Close button, "Shop" title, and "more" menu, with the garment name below.
+    private var header: some View {
+        VStack(spacing: AppDimensions.elementSpacing) {
+            ZStack {
+                Text("Shop")
+                    .font(AppTypography.cardHeadline)
+                    .foregroundStyle(AppColors.espressoTitle)
+                HStack {
+                    CircularIconButton(systemName: "xmark") { dismiss() }
+                        .accessibilityLabel("Close")
+                    Spacer()
+                    moreButton
+                }
+            }
+            Text(viewModel.sheetTitle)
+                .font(AppTypography.chipLabel)
+                .foregroundStyle(AppColors.bodyText)
+                .multilineTextAlignment(.center)
         }
-        #endif
+        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+        .padding(.top, AppDimensions.sectionSpacing)
+    }
+
+    /// The shared `CircularIconButton` opens the extra actions as a dialog anchored to the button.
+    private var moreButton: some View {
+        CircularIconButton(systemName: "ellipsis") { isShowingMoreActions = true }
+            .accessibilityLabel("More")
+            .confirmationDialog("More", isPresented: $isShowingMoreActions, titleVisibility: .hidden) {
+                #if os(iOS)
+                Button("Save to Photos") {
+                    Task { await viewModel.saveGarmentCropToPhotos() }
+                }
+                .disabled(viewModel.garmentCrop == nil)
+                #endif
+            }
     }
 
     // MARK: - Subviews
 
-    private var garmentHeader: some View {
-        VStack(alignment: .leading, spacing: AppDimensions.elementSpacing) {
-            Text(viewModel.garment.category.rawValue.uppercased())
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.mutedCaption)
-            Text(viewModel.garment.name)
-                .font(AppTypography.sectionHeader)
-                .foregroundStyle(AppColors.espressoTitle)
-            Text("\(viewModel.garment.material) · \(viewModel.garment.colorName)")
-                .font(AppTypography.bodyRegular)
-                .foregroundStyle(AppColors.mutedCaption)
-        }
-    }
-
     @ViewBuilder
-    private var garmentCropPreview: some View {
-        if let garmentCrop = viewModel.garmentCrop {
-            Image(garmentCrop, scale: 1, label: Text("Cropped \(viewModel.garment.name)"))
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: StoreConstants.Layout.cropPreviewMaximumHeight)
-                .background(AppColors.cardBackground)
-                .clipShape(.rect(cornerRadius: AppDimensions.cardCornerRadius))
-        } else if viewModel.visualSearchState == .cropping {
-            ProgressView("Finding the \(viewModel.garment.category.rawValue.lowercased()) in your look…")
-                .frame(maxWidth: .infinity, minHeight: StoreConstants.Layout.cropPreviewMaximumHeight)
-        }
-    }
-
-    private var visualSearchSection: some View {
-        VStack(alignment: .leading, spacing: AppDimensions.elementSpacing) {
-            Text("Search by image")
-                .font(AppTypography.cardHeadline)
-                .foregroundStyle(AppColors.bodyText)
-            visualSearchContent
-        }
-    }
-
-    @ViewBuilder
-    private var visualSearchContent: some View {
-        switch viewModel.visualSearchState {
-        case .idle, .ready:
-            searchButtons
-        case .cropping:
-            PrimaryPillButton(title: "Preparing image…", isEnabled: false) {}
-        case .uploading:
-            HStack(spacing: AppDimensions.elementSpacing) {
-                ProgressView()
-                Text("Uploading image…")
-                    .font(AppTypography.bodyRegular)
-                    .foregroundStyle(AppColors.mutedCaption)
-            }
-        case .unavailable(let message):
-            VStack(alignment: .leading, spacing: AppDimensions.elementSpacing) {
-                Text(message)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.mutedCaption)
-                // The other search method may still work, so keep the buttons when there is a crop.
-                if viewModel.garmentCrop != nil {
-                    searchButtons
+    private var googleLensContent: some View {
+        #if os(iOS)
+        if let lensPage = viewModel.lensPage {
+            LensWebView(request: lensPage.request, isLoading: $isLensPageLoading)
+                .id(lensPage.id)
+                .overlay {
+                    if isLensPageLoading {
+                        ProgressView()
+                    }
                 }
+        } else {
+            lensStatusView
+        }
+        #else
+        lensStatusView
+        #endif
+    }
+
+    /// Shown before Lens results load: cropping, the search button, or why search isn't available.
+    private var lensStatusView: some View {
+        ScrollView {
+            VStack(spacing: AppDimensions.sectionSpacing) {
+                if let garmentCrop = viewModel.garmentCrop {
+                    Image(garmentCrop.image, scale: 1, label: Text("Cropped \(viewModel.garment.name)"))
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: StoreConstants.Layout.lensStatusCropMaximumHeight)
+                        .clipShape(.rect(cornerRadius: AppDimensions.cardCornerRadius))
+                }
+                lensStatusContent
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+            .padding(.vertical, AppDimensions.sectionSpacing)
+        }
+    }
+
+    @ViewBuilder
+    private var lensStatusContent: some View {
+        switch viewModel.visualSearchState {
+        case .idle:
+            lensSearchButton
+        case .cropping:
+            ProgressView("Finding the \(viewModel.garment.category.rawValue.lowercased()) in your look…")
+        case .unavailable(let message):
+            lensMessage(message, color: AppColors.mutedCaption)
+            if viewModel.garmentCrop != nil {
+                lensSearchButton
             }
         case .failed(let message):
-            // Tapping a search button again retries.
-            VStack(alignment: .leading, spacing: AppDimensions.elementSpacing) {
-                Text(message)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.destructiveRed)
-                searchButtons
-            }
+            lensMessage(message, color: AppColors.destructiveRed)
+            lensSearchButton
         }
     }
 
-    /// Two ways to reach Google Lens, kept side by side for comparison (C5-55).
-    private var searchButtons: some View {
-        VStack(spacing: AppDimensions.elementSpacing) {
-            #if os(iOS)
-            PrimaryPillButton(title: "Google Lens (direct)", isEnabled: viewModel.garmentCrop != nil) {
-                Task { await viewModel.requestVisualSearch(using: .directUpload) }
-            }
-            #endif
-            PrimaryPillButton(title: "Google Lens (via imgbb)", isEnabled: viewModel.garmentCrop != nil) {
-                Task { await viewModel.requestVisualSearch(using: .hostedImage) }
-            }
+    private var lensSearchButton: some View {
+        PrimaryPillButton(title: "Search with Google Lens", isEnabled: viewModel.garmentCrop != nil) {
+            Task { await viewModel.requestLensSearch() }
         }
     }
 
-    private var marketplaceSection: some View {
-        VStack(alignment: .leading, spacing: AppDimensions.elementSpacing) {
-            Text("Search by keyword")
-                .font(AppTypography.cardHeadline)
-                .foregroundStyle(AppColors.bodyText)
-            Text("Keyword: \(viewModel.searchKeyword)")
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.mutedCaption)
-            ForEach(viewModel.marketplaceLinks) { link in
-                marketplaceButton(for: link)
-            }
-        }
-    }
-
-    private func marketplaceButton(for link: MarketplaceSearchLink) -> some View {
-        Button {
-            open(link.url)
-        } label: {
-            HStack {
-                Text(link.marketplace.rawValue)
-                    .font(AppTypography.buttonLabel)
-                Spacer()
-                Image(systemName: "arrow.up.right")
-            }
-            .foregroundStyle(AppColors.primaryBlue)
-            .padding(AppDimensions.cardInternalPadding)
-            .background(AppColors.cardBackground)
-            .clipShape(.rect(cornerRadius: AppDimensions.cardCornerRadius))
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Actions
-
-    private func open(_ url: URL) {
-        #if os(iOS)
-        presentedPage = StoreWebPage(url: url)
-        #else
-        openURL(url)
-        #endif
+    private func lensMessage(_ message: String, color: Color) -> some View {
+        Text(message)
+            .font(AppTypography.caption)
+            .foregroundStyle(color)
+            .multilineTextAlignment(.center)
     }
 }
 
@@ -217,8 +175,7 @@ struct WhereToBuySheet: View {
     WhereToBuySheet(
         viewModel: StoreViewModel(
             garment: StoreSampleData.sampleGarment,
-            cropper: MockGarmentCropper(),
-            uploader: MockImageUploader()
+            cropProvider: GarmentCropProvider(cropper: MockGarmentCropper(), cropCache: GarmentCropCache())
         )
     )
     .modelContainer(StoreSampleData.container)

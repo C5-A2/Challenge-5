@@ -259,6 +259,7 @@
 				EXCLUDED_SOURCE_FILE_NAMES = "*gitkeep*";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = c5;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save garment images to your photo library.";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -300,6 +301,7 @@
 				EXCLUDED_SOURCE_FILE_NAMES = "*gitkeep*";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = c5;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save garment images to your photo library.";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;

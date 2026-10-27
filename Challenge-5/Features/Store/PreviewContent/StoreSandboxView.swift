@@ -8,8 +8,9 @@
 import SwiftData
 import SwiftUI
 
-/// Test screen for the store flow with dummy looks (C5-75).
-/// Not part of the production navigation: tap a garment to open `WhereToBuySheet`.
+/// Test screen for the store flow with the dummy look (C5-75).
+/// Not part of the production navigation: it mimics the result stage with the look image and the
+/// "On this outfit" row. Tap a garment to open its Google Lens results.
 struct StoreSandboxView: View {
 
     // MARK: - Properties
@@ -21,35 +22,47 @@ struct StoreSandboxView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(looks) { look in
-                    Section("Look \(look.lookIndex + 1)") {
-                        lookImage(for: look)
-                        ForEach(orderedGarments(of: look)) { garment in
-                            Button {
-                                selectedGarment = garment
-                            } label: {
-                                garmentRow(for: garment)
-                            }
-                            .buttonStyle(.plain)
-                        }
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppDimensions.sectionSpacing) {
+                    occasionTitle
+                    ForEach(looks) { look in
+                        lookSection(for: look)
                     }
                 }
+                .padding(.vertical, AppDimensions.sectionSpacing)
             }
-            .navigationTitle("Store Sandbox")
+            .background(AppColors.canvasBackground)
         }
         .sheet(item: $selectedGarment) { garment in
             WhereToBuySheet(garment: garment)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
     }
 
     // MARK: - Subviews
 
+    private var occasionTitle: some View {
+        Text(StoreSampleData.occasionTitle)
+            .font(AppTypography.displayTitle)
+            .foregroundStyle(AppColors.espressoTitle)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+    }
+
+    private func lookSection(for look: OutfitLook) -> some View {
+        VStack(alignment: .leading, spacing: AppDimensions.elementSpacing) {
+            lookImage(for: look)
+            OutfitGarmentStrip(look: look, selectedGarmentID: selectedGarment?.id) { garment in
+                selectedGarment = garment
+            }
+        }
+    }
+
     @ViewBuilder
     private func lookImage(for look: OutfitLook) -> some View {
-        if let data = look.lookImageData, let image = LookImageDecoder.makeImage(from: data) {
+        if let image = try? GarmentCropProvider.shared.lookImage(for: look) {
             Image(image, scale: 1, label: Text("Look \(look.lookIndex + 1)"))
                 .resizable()
                 .scaledToFit()
@@ -58,36 +71,7 @@ struct StoreSandboxView: View {
             Text("No look image")
                 .font(AppTypography.caption)
                 .foregroundStyle(AppColors.mutedCaption)
-        }
-    }
-
-    private func garmentRow(for garment: GarmentItem) -> some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text(garment.category.rawValue.uppercased())
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.mutedCaption)
-                Text(garment.name)
-                    .font(AppTypography.cardHeadline)
-                    .foregroundStyle(AppColors.bodyText)
-                Text("\(garment.material) · \(garment.colorName)")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.mutedCaption)
-            }
-            Spacer()
-            Image(systemName: "cart")
-                .foregroundStyle(AppColors.primaryBlue)
-        }
-        .contentShape(.rect)
-    }
-
-    // MARK: - Helpers
-
-    /// Outer, then top, then bottom.
-    private func orderedGarments(of look: OutfitLook) -> [GarmentItem] {
-        let order = GarmentCategory.allCases
-        return look.garments.sorted {
-            (order.firstIndex(of: $0.category) ?? 0) < (order.firstIndex(of: $1.category) ?? 0)
+                .padding(.horizontal, AppDimensions.screenHorizontalPadding)
         }
     }
 }

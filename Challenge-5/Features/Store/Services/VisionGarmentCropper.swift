@@ -35,7 +35,7 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
 
     // MARK: - Cropping
 
-    func makeGarmentCrop(for request: GarmentCropRequest) async throws -> CGImage {
+    func makeGarmentCrop(for request: GarmentCropRequest) async throws -> GarmentCrop {
         let image = request.lookImage
         let imageBounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         let personBounds = await mainPersonRect(in: image) ?? imageBounds
@@ -64,10 +64,11 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
         guard !clippedRect.isNull,
               clippedRect.width > minimumSide,
               clippedRect.height > minimumSide,
-              let crop = baseImage.cropping(to: clippedRect) else {
+              let garmentImage = baseImage.cropping(to: clippedRect) else {
             throw StoreError.garmentNotDetected(request.category)
         }
-        return crop
+
+        return GarmentCrop(image: garmentImage)
     }
 
     // MARK: - Person Region
