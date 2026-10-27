@@ -44,7 +44,8 @@ public struct GuideDoDontCard: View {
                 .font(AppTypography.caption)
                 .foregroundStyle(AppColors.bodyText)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
+                .lineLimit(3)
+                .minimumScaleFactor(0.85)
         }
         .frame(maxWidth: .infinity)
     }

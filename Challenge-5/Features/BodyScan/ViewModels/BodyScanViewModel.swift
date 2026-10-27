@@ -165,6 +165,14 @@ public final class BodyScanViewModel {
         currentStep = .sideCamera
     }
 
+    public func startCamera() {
+        isCameraRunning = true
+    }
+
+    public func stopCamera() {
+        isCameraRunning = false
+    }
+
     // MARK: - Analysis Execution
 
     /// Execute body pose estimation, dimension calculations, and body/torso classification.
