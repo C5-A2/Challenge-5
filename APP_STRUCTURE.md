@@ -273,7 +273,7 @@ struct FrontBodyGuideView: View {
 | **Ricky Jonathan** | `C5-2` | `Features/SkinScan/`<br>`Features/BodyScan/`<br>`Services/Camera/`<br>`Services/Vision/` | Face scan (lighting check, color season extraction).<br>Front & side body scan (camera guides, pose estimation).<br>Physical metrics input form.<br>Body type & torso balance calculation. |
 | **Bryan Samuel** | `C5-3` | `Features/Occasion/Input/`<br>`Services/AI/Prompts/` | Occasion form: title (required), date (defaults to tomorrow, past dates disabled), dresscode (optional).<br>Vision chips grid: 12 predefined StyleVision enum chips (min 0, max 3; no "Other").<br>Data processing pipeline.<br>LLM prompt engineering & fine-tuning. |
 | **Michael David Sin** | `C5-1`<br>`C5-4`<br>`C5-31–46` | `Features/Home/`<br>`Features/Library/`<br>`Features/Occasion/Result/`<br>`Features/Profile/`<br>`Services/AI/Engine/`<br>`Shared/Components/` | App shell (Home, Library, Profile Hub tabs).<br>Interactive avatar result stage.<br>Flanking garment cards & 5-look carousel.<br>3-Fits compliance badges & rationale drawer.<br>On-device LLaMA engine integration. |
-| **Natalie Grace** | `C5-5`<br>`C5-11`<br>`C5-16–18` | `Features/Store/`<br>`Shared/Pickers/` | Image source action sheet (Camera, Photos, Saved).<br>In-app image retrieval from local storage.<br>"Where to Buy" e-commerce store links. |
+| **Natalie Grace** | `C5-5`<br>`C5-11`<br>`C5-16–18` | `Features/Store/`<br>`Services/Store/`<br>`Shared/Pickers/` | Image source action sheet (Camera, Photos, Saved).<br>In-app image retrieval from local storage.<br>"Where to Buy" e-commerce store links. |
 | **Nicole Clarence** | `C5-20`<br>`C5-44` | `Shared/Theme/`<br>`Resources/` | Global color palette, typography, spacing tokens.<br>Glassmorphism effects, shadows, corner radii.<br>Final Hi-Fi polish to match Sketch designs. |
 
 ---
@@ -348,10 +348,12 @@ Challenge-5/
 │   │   │   ├── Views/
 │   │   │   │   ├── OccasionFormSheet.swift        # Modal: title (req), date (tomorrow+), dresscode (opt)
 │   │   │   │   ├── DatePickerModalView.swift      # Calendar popover
-│   │   │   │   └── VisionChipsGridView.swift      # 12 predefined StyleVision chips (min 0, max 3, no "Other")
+│   │   │   │   ├── VisionChipsGridView.swift      # 12 predefined StyleVision chips (min 0, max 3, no "Other")
+│   │   │   │   ├── ReferenceImagesView.swift      # (Natalie) Reference section: + Add Ref + up to 3 photos
+│   │   │   │   └── ReferenceCameraView.swift      # (Natalie) Reference camera: ✓, gallery, shutter, retake
 │   │   │   └── ViewModels/
-│   │   │       └── OccasionInputViewModel.swift
-│   │   └── Output/                                # (Michael — C5-31–C5-36)
+│   │   │       └── OccasionInputViewModel.swift   # Form state, incl. reference photos and reference camera
+│   │   └── Result/                                # (Michael)
 │   │       ├── Views/
 │   │       │   ├── OccasionOutputView.swift       # Root screen coordinating Alt 5 & Alt 5.1
 │   │       │   ├── AvatarStageView.swift          # Hero avatar stage + guidelines + ground shadow
@@ -431,8 +433,10 @@ Challenge-5/
 │   │   ├── CircularIconButton.swift               # Header icons (profile, history, close)
 │   │   ├── GuideDoDontCard.swift                  # Do ✅ / Don't ❌ instruction card
 │   │   └── MultiSelectChip.swift                  # Selectable vision chip
-│   ├── Pickers/
-│   │   └── ImageSourceActionSheet.swift           # Camera / Photos / Library action menu
+│   ├── Pickers/                                   # (Natalie)
+│   │   ├── ImageSourceActionSheet.swift           # Camera / Photos / Library menu (custom label supported)
+│   │   ├── ReferenceImageEncoder.swift            # Downscaled JPEG for stored reference photos
+│   │   └── ReferencePickerConstants.swift         # Reference picker values (max 3, sizes)
 │   └── Extensions/
 │       ├── Color+Hex.swift                        # Color(hex:) initializer
 │       └── View+Modifiers.swift                   # Common view modifiers
