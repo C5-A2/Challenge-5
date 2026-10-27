@@ -30,8 +30,9 @@ public enum CapsuleTabItem: Int, CaseIterable, Identifiable, Sendable {
 
 public struct CapsuleTabBar: View {
     
-    // MARK: - Bindings
+    // MARK: - Bindings & Namespace
     @Binding public var selectedTab: CapsuleTabItem
+    @Namespace private var tabAnimationNamespace
     
     // MARK: - Initializer
     public init(selectedTab: Binding<CapsuleTabItem>) {
@@ -40,33 +41,48 @@ public struct CapsuleTabBar: View {
     
     // MARK: - Body
     public var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 6) {
             ForEach(CapsuleTabItem.allCases) { tab in
+                let isSelected = selectedTab == tab
+                
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                         selectedTab = tab
                     }
                 } label: {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 3) {
                         Image(systemName: tab.iconName)
-                            .font(.system(size: 18, weight: .medium))
+                            .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
                         Text(tab.title)
                             .font(AppTypography.caption)
+                            .fontWeight(isSelected ? .semibold : .regular)
                     }
                     .foregroundStyle(
-                        selectedTab == tab ? AppColors.espressoTitle : AppColors.mutedCaption
+                        isSelected ? AppColors.espressoTitle : AppColors.mutedCaption
                     )
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    .background {
+                        if isSelected {
+                            Capsule()
+                                .fill(AppColors.tabSelectionHighlight)
+                                .matchedGeometryEffect(id: "ACTIVE_TAB_PILL", in: tabAnimationNamespace)
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 24)
+        .padding(4)
         .background(
             Capsule()
-                .fill(AppColors.cardBackground)
-                .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
+                .fill(AppColors.cardBackground.opacity(0.95))
+                .overlay(
+                    Capsule()
+                        .strokeBorder(AppColors.subtleBorder, lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
         )
         .frame(height: AppDimensions.tabBarHeight)
     }
@@ -74,6 +90,13 @@ public struct CapsuleTabBar: View {
 
 // MARK: - Preview
 #Preview {
-    CapsuleTabBar(selectedTab: .constant(.occasions))
-        .padding()
+    ZStack {
+        AppColors.canvasBackground.ignoresSafeArea()
+        
+        VStack {
+            Spacer()
+            CapsuleTabBar(selectedTab: .constant(.occasions))
+                .padding(.bottom, 20)
+        }
+    }
 }
