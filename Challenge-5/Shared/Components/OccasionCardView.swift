@@ -159,11 +159,15 @@ public struct OccasionCardView: View {
                         Text(dayText)
                             .font(AppTypography.scheduleDayNumber)
                             .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         Text(monthText.uppercased())
                             .font(AppTypography.scheduleMonth)
                             .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
-                    .frame(width: 44)
+                    .frame(width: 56)
                     .padding(.top, 4)
                     
                     // Title, subtitle, and vision tags
@@ -230,6 +234,15 @@ public struct OccasionCardView: View {
 
 #Preview("Populated Occasion Card") {
     VStack(spacing: 20) {
+        OccasionCardView(
+            dayText: "28",
+            monthText: "Oct",
+            title: "Jjj",
+            subtitle: "Clean look, elegant, classy",
+            tags: []
+        ) { }
+        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+        
         OccasionCardView(
             dayText: "13",
             monthText: "Oct",

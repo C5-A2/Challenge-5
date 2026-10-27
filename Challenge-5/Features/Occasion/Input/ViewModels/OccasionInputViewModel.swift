@@ -12,7 +12,7 @@ import Observation
 ///
 /// Follows the Observation framework conventions (`@Observable @MainActor`)
 /// and validates input for occasion title, date, and dress code.
-@Observable @MainActor
+@Observable 
 public final class OccasionInputViewModel {
     
     // MARK: - Date Helpers
