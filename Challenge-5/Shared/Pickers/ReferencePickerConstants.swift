@@ -39,6 +39,14 @@ nonisolated enum ReferencePickerConstants {
 
     // MARK: - Camera
 
+    /// Default circular camera icon of `ImageSourceMenu`.
+    nonisolated enum MenuIcon {
+        static let iconSize: CGFloat = 18
+        static let shadowOpacity: Double = 0.06
+        static let shadowRadius: CGFloat = 4
+        static let shadowOffsetY: CGFloat = 2
+    }
+    
     nonisolated enum Camera {
         /// Width divided by height of the camera frame.
         static let frameAspectRatio: CGFloat = 3.0 / 4.0

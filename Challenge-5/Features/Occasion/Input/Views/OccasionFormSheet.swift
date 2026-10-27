@@ -183,6 +183,12 @@ public typealias OccasionInputView = OccasionFormSheet
         .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self], inMemory: true)
 }
 
+/// "+ Add Ref" → "From Library" shows 4 saved looks. Reopen it to see the picked ones preselected.
+#Preview("Saved Looks as References") {
+    OccasionFormSheet()
+        .modelContainer(SavedLookSampleData.makeContainer(savedLookCount: 4))
+}
+
 #Preview("Prefilled State") {
     OccasionFormSheet(
         viewModel: OccasionInputViewModel(

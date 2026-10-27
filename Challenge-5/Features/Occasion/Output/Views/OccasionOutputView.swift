@@ -76,6 +76,10 @@ struct OccasionOutputView: View {
                 OccasionOutputBottomBar(
                     onInfoTap: {
                         isShowingDetailsSheet = true
+                    },
+                    isBookmarked: viewModel.isCurrentLookBookmarked,
+                    onBookmarkTap: {
+                        viewModel.toggleBookmark()
                     }
                 )
                 .offset(y: -24)
@@ -100,6 +104,17 @@ struct OccasionOutputView: View {
                     .zIndex(10)
             }
         }
+        .alert(
+            "Couldn't Save Look",
+            isPresented: Binding(
+                get: { viewModel.bookmarkErrorMessage != nil },
+                set: { if !$0 { viewModel.bookmarkErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(viewModel.bookmarkErrorMessage ?? "")
+        }
         .sheet(isPresented: $isShowingDetailsSheet) {
             CollapsibleRationaleDrawer(viewModel: viewModel)
                 .presentationDetents([.fraction(0.65), .large])
@@ -113,6 +128,8 @@ struct OccasionOutputView: View {
                     viewModel.occasion.date = updatedDetail.date
                     viewModel.occasion.dresscode = updatedDetail.dresscode
                     viewModel.occasion.visionKeywords = updatedDetail.visions.map(\.rawValue)
+                    viewModel.occasion.referenceImagesData = updatedDetail.referenceImages
+                    viewModel.occasion.referenceImageData = updatedDetail.referenceImages.first
                     onEditOccasion?(viewModel.occasion)
                     isShowingEditSheet = false
                 },
@@ -237,4 +254,25 @@ struct OccasionOutputView: View {
     let vm = OccasionOutputViewModel.mock()
     var view = OccasionOutputView(viewModel: vm)
     return view
+}
+
+/// Bookmark saves to SwiftData. Look 1 and 2 start saved; tap bookmark on others to save them.
+#Preview("Bookmark - Saved to SwiftData") {
+    let container = SavedLookSampleData.makeContainer()
+    return OccasionOutputView(occasion: SavedLookSampleData.occasion(in: container))
+        .modelContainer(container)
+}
+
+/// Save a look in the Output tab, then open the Library tab to see it.
+#Preview("Flow - Output to Library") {
+    let container = SavedLookSampleData.makeContainer(savedLookCount: 0)
+    return TabView {
+        Tab("Output", systemImage: "sparkles") {
+            OccasionOutputView(occasion: SavedLookSampleData.occasion(in: container))
+        }
+        Tab("Library", systemImage: "bookmark") {
+            LibraryView(initialLooks: [])
+        }
+    }
+    .modelContainer(container)
 }

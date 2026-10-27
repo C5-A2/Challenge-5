@@ -22,7 +22,9 @@ struct ReferenceImagesView: View {
     // MARK: - Properties
 
     @Bindable var viewModel: OccasionInputViewModel
-    @Query(filter: #Predicate<OutfitLook> { $0.isBookmarked }, sort: \OutfitLook.lookIndex)
+    /// Saved looks (bookmarked), newest first, same order as the Library.
+    @Query(filter: #Predicate<OutfitLook> { $0.isBookmarked },
+           sort: [SortDescriptor(\OutfitLook.savedAt, order: .reverse)])
     private var bookmarkedLooks: [OutfitLook]
 
     // MARK: - Body
@@ -48,7 +50,8 @@ struct ReferenceImagesView: View {
             SavedReferencePickerSheet(
                 savedLooks: viewModel.savedReferenceLooks(from: bookmarkedLooks),
                 allowsMultipleSelection: true,
-                onSelectReferences: { pickedLooks in viewModel.addReferenceImages(from: pickedLooks) },
+                preselectedLookIds: viewModel.selectedSavedLookIDs,
+                onSelectReferences: { pickedLooks in viewModel.updateSavedReferenceLooks(pickedLooks) },
                 onDismiss: { viewModel.isShowingReferenceLibrary = false }
             )
         }
@@ -156,5 +159,5 @@ struct ReferenceImagesView: View {
 #Preview {
     ReferenceImagesView(viewModel: OccasionInputViewModel())
         .padding(AppDimensions.screenHorizontalPadding)
-        .modelContainer(for: [OutfitLook.self, GarmentItem.self], inMemory: true)
+        .modelContainer(SavedLookSampleData.makeContainer(savedLookCount: 4))
 }

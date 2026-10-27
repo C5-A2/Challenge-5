@@ -11,10 +11,19 @@ struct OccasionOutputBottomBar: View {
     
     
     var onInfoTap: (() -> Void)? = nil
+    /// Whether the current look is saved to the Library (filled icon when true).
+    var isBookmarked: Bool = false
+    var onBookmarkTap: (() -> Void)? = nil
     
     
-    init(onInfoTap: (() -> Void)? = nil) {
+    init(
+        onInfoTap: (() -> Void)? = nil,
+        isBookmarked: Bool = false,
+        onBookmarkTap: (() -> Void)? = nil
+    ) {
         self.onInfoTap = onInfoTap
+        self.isBookmarked = isBookmarked
+        self.onBookmarkTap = onBookmarkTap
     }
     
     
@@ -29,8 +38,10 @@ struct OccasionOutputBottomBar: View {
             CircularIconButton(systemName: "plus") {
             }
             
-            CircularIconButton(systemName: "bookmark") {
+            CircularIconButton(systemName: isBookmarked ? "bookmark.fill" : "bookmark", isFilled: isBookmarked) {
+                onBookmarkTap?()
             }
+            .accessibilityLabel(isBookmarked ? "Remove from Library" : "Save to Library")
         }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
         .padding(.bottom, 6)
@@ -38,7 +49,7 @@ struct OccasionOutputBottomBar: View {
 }
 
 #Preview {
-    OccasionOutputBottomBar(onInfoTap: { })
+    OccasionOutputBottomBar(onInfoTap: { }, isBookmarked: true, onBookmarkTap: { })
         .padding()
         .background(AppColors.canvasBackground)
 }
