@@ -9,34 +9,25 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    
-    // MARK: - Navigation & Tab State
-    
-    @State private var selectedTab: CapsuleTabItem = .occasions
-    
-    // MARK: - Body
-    
+    @State private var viewModel = SkinScanViewModel()
+
     var body: some View {
         Group {
-            switch selectedTab {
-            case .occasions:
-                OccasionsHomeView(
-                    selectedTab: $selectedTab,
-                    onProfileTap: {
-                        // Profile view destination (empty objective for now)
-                        print("Profile view tapped")
-                    }
-                )
-            case .library:
-                LibraryView(
-                    selectedTab: $selectedTab,
-                    onProfileTap: {
-                        // Profile view destination (empty objective for now)
-                        print("Profile view tapped from Library")
-                    }
-                )
+            switch viewModel.currentStep {
+            case .guide:
+                SkinScanGuideView(viewModel: viewModel)
+            case .camera:
+                FaceCameraView(viewModel: viewModel)
+            case .review:
+                FaceReviewView(viewModel: viewModel)
+            case .result:
+                SkinResultView(viewModel: viewModel) {
+                    // Action when tapping 'Next' on result
+                    viewModel.currentStep = .guide
+                }
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.currentStep)
     }
 }
 
@@ -44,5 +35,4 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self], inMemory: true)
 }

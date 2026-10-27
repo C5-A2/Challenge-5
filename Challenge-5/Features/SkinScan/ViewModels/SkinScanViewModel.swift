@@ -100,7 +100,13 @@ public final class SkinScanViewModel {
     /// The currently selected season (can be manually overridden by user in C5-86).
     public var selectedColorSeason: ColorSeason?
 
+    /// Scientific metrics computed from the face photo (CIELAB h°, ITA°, C*).
+    public var analysisMetrics: SkinAnalysisMetrics?
+
     public var detectedUndertone: String {
+        if let metrics = analysisMetrics {
+            return "\(metrics.undertoneName) Undertone (ITA: \(String(format: "%.1f", metrics.ita))°, h: \(String(format: "%.1f", metrics.hueAngle))°)"
+        }
         guard let season = selectedColorSeason ?? predictedColorSeason else { return "Neutral" }
         switch season {
         case .brightSpring, .trueSpring, .lightSpring:
@@ -114,9 +120,15 @@ public final class SkinScanViewModel {
         }
     }
 
+    // MARK: - Dependencies
+
+    private let colorAnalyzer: any SkinColorAnalyzerProtocol
+
     // MARK: - Initializer
 
-    public init() {}
+    public init(colorAnalyzer: any SkinColorAnalyzerProtocol = SkinColorAnalyzer()) {
+        self.colorAnalyzer = colorAnalyzer
+    }
 
     // MARK: - Camera Actions
 
@@ -170,22 +182,41 @@ public final class SkinScanViewModel {
 
     // MARK: - Analysis Actions
 
-    /// Trigger skin color analysis and personal color season classification.
+    /// Trigger skin color analysis and personal color season classification using Vision & CIELAB.
     public func analyzeSkinTone() async {
         guard capturedFaceData != nil else { return }
         isAnalyzing = true
-        analysisProgressText = "Analyzing skin tone and undertone..."
+        analysisProgressText = "Analyzing facial undertone and personal season..."
         errorMessage = nil
 
-        // Simulated brief processing pause for ML model / heuristic execution
-        try? await Task.sleep(nanoseconds: 600_000_000)
+        do {
+            #if canImport(UIKit)
+            if let image = capturedFaceImage {
+                let (season, metrics) = try await colorAnalyzer.analyzeDetailedSkinTone(from: image)
+                self.predictedColorSeason = season
+                self.selectedColorSeason = season
+                self.analysisMetrics = metrics
+                self.isAnalyzing = false
+                self.currentStep = .result
+                return
+            }
+            #endif
 
-        // Default heuristic / placeholder until ML service is integrated
-        let detected = ColorSeason.trueSpring
-        self.predictedColorSeason = detected
-        self.selectedColorSeason = detected
-        self.isAnalyzing = false
-        self.currentStep = .result
+            // Fallback default if image is not directly available
+            let fallback = ColorSeason.trueSpring
+            self.predictedColorSeason = fallback
+            self.selectedColorSeason = fallback
+            self.isAnalyzing = false
+            self.currentStep = .result
+        } catch {
+            // If landmark extraction failed (e.g. face angled/shadowed), gracefully fallback with notification
+            self.errorMessage = error.localizedDescription
+            let fallback = ColorSeason.trueSpring
+            self.predictedColorSeason = fallback
+            self.selectedColorSeason = fallback
+            self.isAnalyzing = false
+            self.currentStep = .result
+        }
     }
 
     /// Allow user to fine-tune and manually override their predicted palette.
