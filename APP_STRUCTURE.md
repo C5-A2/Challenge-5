@@ -271,7 +271,7 @@ struct FrontBodyGuideView: View {
 | Team Member | Jira Story | Owned Directories | Responsibilities |
 | :--- | :--- | :--- | :--- |
 | **Ricky Jonathan** | `C5-2` | `Features/SkinScan/`<br>`Features/BodyScan/`<br>`Services/Camera/`<br>`Services/Vision/` | Face scan (lighting check, color season extraction).<br>Front & side body scan (camera guides, pose estimation).<br>Physical metrics input form.<br>Body type & torso balance calculation. |
-| **Bryan Samuel** | `C5-3` | `Features/Occasion/Input/`<br>`Services/AI/Prompts/` | Occasion form (title, date, dresscode, reference).<br>Vision chips grid (16 preset + "Other").<br>Data processing pipeline.<br>LLM prompt engineering & fine-tuning. |
+| **Bryan Samuel** | `C5-3` | `Features/Occasion/Input/`<br>`Services/AI/Prompts/` | Occasion form: title (required), date (defaults to tomorrow, past dates disabled), dresscode (optional).<br>Vision chips grid: 12 predefined StyleVision enum chips (min 0, max 3; no "Other").<br>Data processing pipeline.<br>LLM prompt engineering & fine-tuning. |
 | **Michael David Sin** | `C5-1`<br>`C5-4`<br>`C5-31–46` | `Features/Home/`<br>`Features/Library/`<br>`Features/Occasion/Result/`<br>`Features/Profile/`<br>`Services/AI/Engine/`<br>`Shared/Components/` | App shell (Home, Library, Profile Hub tabs).<br>Interactive avatar result stage.<br>Flanking garment cards & 5-look carousel.<br>3-Fits compliance badges & rationale drawer.<br>On-device LLaMA engine integration. |
 | **Natalie Grace** | `C5-5`<br>`C5-11`<br>`C5-16–18` | `Features/Store/`<br>`Shared/Pickers/` | Image source action sheet (Camera, Photos, Saved).<br>In-app image retrieval from local storage.<br>"Where to Buy" e-commerce store links. |
 | **Nicole Clarence** | `C5-20`<br>`C5-44` | `Shared/Theme/`<br>`Resources/` | Global color palette, typography, spacing tokens.<br>Glassmorphism effects, shadows, corner radii.<br>Final Hi-Fi polish to match Sketch designs. |
@@ -346,9 +346,9 @@ Challenge-5/
 │   ├── Occasion/                                  # ── Stack 14 ── (Bryan & Michael)
 │   │   ├── Input/                                 # (Bryan)
 │   │   │   ├── Views/
-│   │   │   │   ├── OccasionFormSheet.swift        # Modal: title, date, dresscode, ref, chips
+│   │   │   │   ├── OccasionFormSheet.swift        # Modal: title (req), date (tomorrow+), dresscode (opt)
 │   │   │   │   ├── DatePickerModalView.swift      # Calendar popover
-│   │   │   │   └── VisionChipsGridView.swift      # 16 preset chips + "Other"
+│   │   │   │   └── VisionChipsGridView.swift      # 12 predefined StyleVision chips (min 0, max 3, no "Other")
 │   │   │   └── ViewModels/
 │   │   │       └── OccasionInputViewModel.swift
 │   │   └── Result/                                # (Michael)
@@ -562,18 +562,18 @@ enum ColorSeason: String, Codable, CaseIterable, Identifiable {
 
 // Models/StyleVision.swift
 enum StyleVision: String, Codable, CaseIterable, Identifiable {
-    case happy = "Happy"
-    case confident = "Confident"
-    case calm = "Calm"
     case approachable = "Approachable"
-    case powerful = "Powerful"
+    case calm = "Calm"
     case competent = "Competent"
-    case elegant = "Elegant"
-    case playful = "Playful"
+    case confident = "Confident"
     case creative = "Creative"
-    case romantic = "Romantic"
+    case elegant = "Elegant"
     case energetic = "Energetic"
+    case happy = "Happy"
     case mysterious = "Mysterious"
+    case playful = "Playful"
+    case powerful = "Powerful"
+    case romantic = "Romantic"
     
     var id: String { rawValue }
 }
@@ -1246,7 +1246,7 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - `Pirate Black (19-4305 TCX): #343636`
   - `Anthracite (19-4007 TCX): #26262B`
 
-#### 5.1.4 Style Vision — 12 Outfit Mood / Vibe Reference
+#### 5.1.4 Style Vision — 12 Outfit Mood / Vibe Reference (Alphabetical Order A–Z)
 
 > [!NOTE]
 > Style Visions represent the user's desired **emotional impression and presence** for an occasion.
@@ -1655,6 +1655,8 @@ import AVFoundation
 
 protocol CameraServiceProtocol: AnyObject, Sendable {
     var isRunning: Bool { get }
+    var isFlashEnabled: Bool { get set }
+    var cameraPosition: AVCaptureDevice.Position { get }
     func startSession() async throws
     func stopSession()
     func capturePhoto() async throws -> UIImage
@@ -1665,16 +1667,34 @@ protocol CameraServiceProtocol: AnyObject, Sendable {
 ```swift
 // Services/Protocols/LightingAnalyzerProtocol.swift
 import AVFoundation
+import SwiftUI
 
 enum LightingStatus: String, Sendable {
     case optimal            // Green indicator — proceed with capture
     case tooDark            // Orange indicator — warn user
     case tooBright          // Orange indicator — warn user
     case backlit            // Silhouette detected — prompt repositioning
+
+    var statusText: String { ... }
+    var indicatorColor: Color { ... }
+}
+
+struct RealTimeFaceAnalysisResult: Sendable {
+    let luminance: Double
+    let lightingStatus: LightingStatus
+    let isFaceDetected: Bool
+    let isFaceCentered: Bool
+    let isHeadPoseDirect: Bool
+    let rollAngleDegrees: Double
+    let yawAngleDegrees: Double
+    let captureQuality: Float
+    let guidanceText: String
+    let isReadyForOptimalCapture: Bool
 }
 
 protocol LightingAnalyzerProtocol: Sendable {
     func evaluateLuminance(from sampleBuffer: CMSampleBuffer) -> LightingStatus
+    func analyzeFrame(_ sampleBuffer: CMSampleBuffer) async -> RealTimeFaceAnalysisResult?
 }
 ```
 

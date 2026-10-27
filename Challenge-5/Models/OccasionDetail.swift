@@ -33,11 +33,18 @@ public struct OccasionDetail: Identifiable, Codable, Sendable, Hashable {
     /// Desired style visions (emotional impression / mood) for this occasion.
     public var visions: [StyleVision]
 
+    // MARK: - Date Helpers
+    
+    /// Default date representing tomorrow.
+    public static var defaultTomorrowDate: Date {
+        Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+    }
+
     // MARK: - Initializer
 
     public init(
         id: UUID = UUID(),
-        date: Date = Date(),
+        date: Date = OccasionDetail.defaultTomorrowDate,
         title: String = "",
         dresscode: String = "",
         referenceImages: [Data] = [],
@@ -53,10 +60,15 @@ public struct OccasionDetail: Identifiable, Codable, Sendable, Hashable {
 
     // MARK: - Computed Properties
 
-    /// Checks if the occasion has minimum required fields filled.
+    /// Checks if the occasion has valid parameters:
+    /// - `title` must be non-empty (required).
+    /// - `date` cannot be in the past (`!isPast`).
+    /// - `visions` count is between 0 and 3 (`min 0, max 3`).
+    /// - `dresscode` is optional.
     public var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !dresscode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !isPast &&
+        visions.count <= 3
     }
 
     /// Whether this occasion date has already passed (prior to today; today is not past).
