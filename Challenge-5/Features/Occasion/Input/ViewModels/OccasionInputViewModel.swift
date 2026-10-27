@@ -12,7 +12,7 @@ import Observation
 ///
 /// Follows the Observation framework conventions (`@Observable @MainActor`)
 /// and validates input for occasion title, date, and dress code.
-@Observable @MainActor
+@Observable 
 public final class OccasionInputViewModel {
     
     // MARK: - Date Helpers
@@ -39,6 +39,13 @@ public final class OccasionInputViewModel {
     /// Controls presentation of the discard confirmation alert when canceling with unsaved changes.
     public var isShowingDiscardAlert: Bool = false
     
+    // MARK: - Initial State Tracking (For Unsaved Changes Detection)
+    
+    private var initialTitle: String
+    private var initialDate: Date
+    private var initialDresscode: String
+    private var initialVisions: Set<StyleVision>
+    
     // MARK: - Initializers
     
     public init(
@@ -51,6 +58,11 @@ public final class OccasionInputViewModel {
         self.date = date
         self.dresscode = dresscode
         self.selectedVisions = selectedVisions
+        
+        self.initialTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.initialDate = date
+        self.initialDresscode = dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.initialVisions = selectedVisions
     }
     
     public init(from occasion: OccasionDetail) {
@@ -58,6 +70,23 @@ public final class OccasionInputViewModel {
         self.date = occasion.date
         self.dresscode = occasion.dresscode
         self.selectedVisions = Set(occasion.visions)
+        
+        self.initialTitle = occasion.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.initialDate = occasion.date
+        self.initialDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.initialVisions = Set(occasion.visions)
+    }
+    
+    init(from occasion: OccasionItem) {
+        self.title = occasion.title
+        self.date = occasion.date
+        self.dresscode = occasion.dresscode
+        self.selectedVisions = Set(occasion.visions)
+        
+        self.initialTitle = occasion.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.initialDate = occasion.date
+        self.initialDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.initialVisions = Set(occasion.visions)
     }
     
     // MARK: - Computed Properties
@@ -78,12 +107,12 @@ public final class OccasionInputViewModel {
         selectedVisions.count <= 3
     }
     
-    /// Indicates whether the user has typed anything, selected visions, or modified the default date.
+    /// Indicates whether the user has modified any field from its initial state.
     public var hasUnsavedChanges: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        !dresscode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        !selectedVisions.isEmpty ||
-        !Calendar.current.isDate(date, inSameDayAs: Self.defaultTomorrowDate)
+        title.trimmingCharacters(in: .whitespacesAndNewlines) != initialTitle ||
+        dresscode.trimmingCharacters(in: .whitespacesAndNewlines) != initialDresscode ||
+        selectedVisions != initialVisions ||
+        !Calendar.current.isDate(date, inSameDayAs: initialDate)
     }
     
     /// Formatted date string for accessibility and display purposes.

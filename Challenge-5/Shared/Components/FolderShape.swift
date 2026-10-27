@@ -45,6 +45,8 @@ public struct FolderTabShape: Shape {
         let tabW = width * tabWidthFraction
         let tabH = tabHeight
         
+        let slopeW: CGFloat = 20
+        
         switch tabPosition {
         case .leading:
             // Start at bottom left
@@ -72,28 +74,14 @@ public struct FolderTabShape: Shape {
                 clockwise: true
             )
             
-            // Step across to tab right transition
-            let tabRightX = tabW + r
-            path.addLine(to: CGPoint(x: tabRightX, y: tabH))
+            // Shoulder across to tab transition
+            path.addLine(to: CGPoint(x: tabW + slopeW, y: tabH))
             
-            // Inverted fillet curve from lower shoulder up to tab
-            path.addArc(
-                center: CGPoint(x: tabW + r, y: tabH - r),
-                radius: r,
-                startAngle: .degrees(90),
-                endAngle: .degrees(180),
-                clockwise: false
-            )
-            
-            // Up to top-right of tab
-            path.addLine(to: CGPoint(x: tabW, y: r))
-            // Top-right of tab
-            path.addArc(
-                center: CGPoint(x: tabW - r, y: r),
-                radius: r,
-                startAngle: .degrees(0),
-                endAngle: .degrees(270),
-                clockwise: true
+            // Smooth, non-intersecting S-curve from shoulder (tabH) up to tab top (0)
+            path.addCurve(
+                to: CGPoint(x: tabW, y: 0),
+                control1: CGPoint(x: tabW + slopeW * 0.5, y: tabH),
+                control2: CGPoint(x: tabW + slopeW * 0.5, y: 0)
             )
             
             // Tab top edge to top-left
@@ -144,23 +132,13 @@ public struct FolderTabShape: Shape {
             
             // Top of tab going left
             let tabLeftX = width - tabW
-            path.addLine(to: CGPoint(x: tabLeftX + r, y: 0))
-            path.addArc(
-                center: CGPoint(x: tabLeftX + r, y: r),
-                radius: r,
-                startAngle: .degrees(270),
-                endAngle: .degrees(180),
-                clockwise: true
-            )
+            path.addLine(to: CGPoint(x: tabLeftX, y: 0))
             
-            // Down to shoulder
-            path.addLine(to: CGPoint(x: tabLeftX, y: tabH - r))
-            path.addArc(
-                center: CGPoint(x: tabLeftX - r, y: tabH - r),
-                radius: r,
-                startAngle: .degrees(0),
-                endAngle: .degrees(90),
-                clockwise: false
+            // Smooth S-curve down from tab top (0) to shoulder (tabH)
+            path.addCurve(
+                to: CGPoint(x: tabLeftX - slopeW, y: tabH),
+                control1: CGPoint(x: tabLeftX - slopeW * 0.5, y: 0),
+                control2: CGPoint(x: tabLeftX - slopeW * 0.5, y: tabH)
             )
             
             // Shoulder across to left

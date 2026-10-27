@@ -36,10 +36,12 @@ public struct TagChip: View {
             }
             Text(text)
                 .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
         }
         .foregroundStyle(AppColors.bodyText)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
         .background {
             if isFrosted {
                 Capsule()
