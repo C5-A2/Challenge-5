@@ -1,5 +1,5 @@
 //
-//  CameraService.swift
+//  CameraManager.swift
 //  Challenge-5
 //
 //  Created by Team Challenge-5 on 26/10/26.

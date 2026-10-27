@@ -78,7 +78,7 @@ struct FaceCameraView: View {
         simulatorPreviewPlaceholder
         #else
         if cameraService.permissionGranted && cameraService.isRunning {
-            CameraPreviewRepresentable(
+            FaceCameraPreviewRepresentable(
                 session: cameraService.session,
                 isFrontCamera: cameraService.cameraPosition == .front
             )
@@ -360,19 +360,19 @@ private struct CornerBracketsShape: Shape {
 
 // MARK: - UIKit Camera Preview Representable
 
-private struct CameraPreviewRepresentable: UIViewRepresentable {
+private struct FaceCameraPreviewRepresentable: UIViewRepresentable {
     let session: AVCaptureSession
     let isFrontCamera: Bool
 
-    func makeUIView(context: Context) -> CameraPreviewUIView {
-        let view = CameraPreviewUIView()
+    func makeUIView(context: Context) -> FaceCameraPreviewUIView {
+        let view = FaceCameraPreviewUIView()
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
         view.isFrontCamera = isFrontCamera
         return view
     }
 
-    func updateUIView(_ uiView: CameraPreviewUIView, context: Context) {
+    func updateUIView(_ uiView: FaceCameraPreviewUIView, context: Context) {
         if uiView.previewLayer.session != session {
             uiView.previewLayer.session = session
         }
@@ -381,7 +381,7 @@ private struct CameraPreviewRepresentable: UIViewRepresentable {
     }
 }
 
-private final class CameraPreviewUIView: UIView {
+private final class FaceCameraPreviewUIView: UIView {
     var isFrontCamera: Bool = true
 
     override class var layerClass: AnyClass {

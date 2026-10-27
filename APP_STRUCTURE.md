@@ -369,17 +369,6 @@ Challenge-5/
 │       ├── ViewModels/
 │       │   ├── StoreViewModel.swift               # Crop → consent → Google Lens flow
 │       │   └── OutfitGarmentStripViewModel.swift  # Crops all garments of a look for thumbnails
-│       ├── Services/
-│       │   ├── VisionGarmentCropper.swift         # Crops outer / top / bottom from the look image
-│       │   ├── GarmentCropProvider.swift          # Shared crop source (cache + cropper)
-│       │   ├── GarmentCropCache.swift             # In-memory crops by GarmentItem.id
-│       │   ├── LensUploadRequestBuilder.swift     # Google Lens upload request (encoded_image)
-│       │   ├── GarmentImageEncoder.swift          # JPEG + multipart encoding
-│       │   ├── GarmentPhotoSaver.swift            # "Save to Photos" for a garment crop (iOS)
-│       │   ├── LookImageDecoder.swift             # lookImageData → CGImage
-│       │   ├── GarmentTitleBuilder.swift          # Garment title from color + name + material
-│       │   ├── StoreError.swift                   # Store domain errors
-│       │   └── StoreServiceMocks.swift            # Mock cropper for previews
 │       └── PreviewContent/
 │           ├── StoreSampleData.swift              # Dummy look for testing (replace image later)
 │           └── StoreSandboxView.swift             # Test screen: look + "On this outfit" → WhereToBuySheet
@@ -406,6 +395,17 @@ Challenge-5/
 │   ├── Camera/
 │   │   ├── CameraService.swift                    # AVFoundation session management
 │   │   └── LightingAnalyzer.swift                 # Real-time luminance / EV analysis
+│   ├── Store/                                     # Store & Visual Search Services (Natalie)
+│   │   ├── VisionGarmentCropper.swift             # Crops outer / top / bottom from the look image
+│   │   ├── GarmentCropProvider.swift              # Shared crop source (cache + cropper)
+│   │   ├── GarmentCropCache.swift                 # In-memory crops by GarmentItem.id
+│   │   ├── LensUploadRequestBuilder.swift         # Google Lens upload request (encoded_image)
+│   │   ├── GarmentImageEncoder.swift              # JPEG + multipart encoding
+│   │   ├── GarmentPhotoSaver.swift                # "Save to Photos" for a garment crop (iOS)
+│   │   ├── LookImageDecoder.swift                 # lookImageData → CGImage
+│   │   ├── GarmentTitleBuilder.swift              # Garment title from color + name + material
+│   │   ├── StoreError.swift                       # Store domain errors
+│   │   └── StoreServiceMocks.swift                # Mock cropper for previews
 │   ├── Vision/
 │   │   ├── BodyPoseEstimator.swift                # Joint detection + body ratio calculation
 │   │   └── SkinColorAnalyzer.swift                # Pixel sampling + undertone classification
