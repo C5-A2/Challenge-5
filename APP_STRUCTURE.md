@@ -1660,6 +1660,8 @@ import AVFoundation
 
 protocol CameraServiceProtocol: AnyObject, Sendable {
     var isRunning: Bool { get }
+    var isFlashEnabled: Bool { get set }
+    var cameraPosition: AVCaptureDevice.Position { get }
     func startSession() async throws
     func stopSession()
     func capturePhoto() async throws -> UIImage
@@ -1670,16 +1672,34 @@ protocol CameraServiceProtocol: AnyObject, Sendable {
 ```swift
 // Services/Protocols/LightingAnalyzerProtocol.swift
 import AVFoundation
+import SwiftUI
 
 enum LightingStatus: String, Sendable {
     case optimal            // Green indicator — proceed with capture
     case tooDark            // Orange indicator — warn user
     case tooBright          // Orange indicator — warn user
     case backlit            // Silhouette detected — prompt repositioning
+
+    var statusText: String { ... }
+    var indicatorColor: Color { ... }
+}
+
+struct RealTimeFaceAnalysisResult: Sendable {
+    let luminance: Double
+    let lightingStatus: LightingStatus
+    let isFaceDetected: Bool
+    let isFaceCentered: Bool
+    let isHeadPoseDirect: Bool
+    let rollAngleDegrees: Double
+    let yawAngleDegrees: Double
+    let captureQuality: Float
+    let guidanceText: String
+    let isReadyForOptimalCapture: Bool
 }
 
 protocol LightingAnalyzerProtocol: Sendable {
     func evaluateLuminance(from sampleBuffer: CMSampleBuffer) -> LightingStatus
+    func analyzeFrame(_ sampleBuffer: CMSampleBuffer) async -> RealTimeFaceAnalysisResult?
 }
 ```
 
