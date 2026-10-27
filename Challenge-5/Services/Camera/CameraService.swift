@@ -27,7 +27,7 @@ public final class CameraService: NSObject, CameraServiceProtocol {
     // MARK: - Callbacks
 
     /// Real-time video sample buffer hook for LightingAnalyzer (C5-83).
-    public var onSampleBuffer: (@Sendable (CMSampleBuffer) -> Void)? = nil
+    public var onSampleBuffer: (@MainActor @Sendable (CMSampleBuffer) -> Void)? = nil
 
     // MARK: - Internal AVFoundation Components
 
@@ -81,6 +81,15 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                         self.videoOutput.alwaysDiscardsLateVideoFrames = true
                         self.videoOutput.setSampleBufferDelegate(self, queue: self.sampleQueue)
                         self.session.addOutput(self.videoOutput)
+
+                        if let connection = self.videoOutput.connection(with: .video) {
+                            if connection.isVideoOrientationSupported {
+                                connection.videoOrientation = .portrait
+                            }
+                            if connection.isVideoMirroringSupported && self.cameraPosition == .front {
+                                connection.isVideoMirrored = true
+                            }
+                        }
                     }
 
                     self.session.commitConfiguration()
@@ -124,6 +133,14 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                 do {
                     self.session.beginConfiguration()
                     try self.configureDeviceInput(position: newPosition)
+                    if let connection = self.videoOutput.connection(with: .video) {
+                        if connection.isVideoOrientationSupported {
+                            connection.videoOrientation = .portrait
+                        }
+                        if connection.isVideoMirroringSupported {
+                            connection.isVideoMirrored = (newPosition == .front)
+                        }
+                    }
                     self.session.commitConfiguration()
 
                     Task { @MainActor in

@@ -17,6 +17,7 @@ struct FaceCameraView: View {
 
     @Bindable var viewModel: SkinScanViewModel
     @State private var cameraService = CameraService()
+    @State private var lightingAnalyzer = LightingAnalyzer()
     @State private var isCapturing: Bool = false
     @State private var countdownRemaining: Int = 3
 
@@ -45,6 +46,15 @@ struct FaceCameraView: View {
             bottomControlBar
         }
         .task {
+            let vm = viewModel
+            let analyzer = lightingAnalyzer
+            cameraService.onSampleBuffer = { [weak vm] sampleBuffer in
+                guard let vm else { return }
+                Task {
+                    let result = await analyzer.analyzeFrame(sampleBuffer)
+                    vm.applyRealTimeAnalysis(result)
+                }
+            }
             do {
                 try await cameraService.startSession()
                 viewModel.startCamera()
@@ -53,6 +63,7 @@ struct FaceCameraView: View {
             }
         }
         .onDisappear {
+            cameraService.onSampleBuffer = nil
             cameraService.stopSession()
             viewModel.stopCamera()
         }
@@ -107,6 +118,7 @@ struct FaceCameraView: View {
             let frameWidth = min(geometry.size.width * 0.78, 300)
             let frameHeight = frameWidth * 1.35
             let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height * 0.44)
+            let statusColor = viewModel.lightingStatusColor
 
             ZStack {
                 // Rule-of-thirds background grid lines
@@ -128,19 +140,21 @@ struct FaceCameraView: View {
                     path.move(to: CGPoint(x: left, y: top + (2 * frameHeight) / 3))
                     path.addLine(to: CGPoint(x: left + frameWidth, y: top + (2 * frameHeight) / 3))
                 }
-                .stroke(Color.yellow.opacity(0.22), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                .stroke(statusColor.opacity(0.22), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
 
                 // Facial Oval Silhouette Guide
                 Ellipse()
-                    .stroke(Color.yellow.opacity(0.35), lineWidth: 1.5)
+                    .stroke(statusColor.opacity(viewModel.isReadyForOptimalCapture ? 0.75 : 0.35), lineWidth: 2)
                     .frame(width: frameWidth * 0.72, height: frameHeight * 0.82)
                     .position(center)
+                    .animation(.easeInOut(duration: 0.25), value: viewModel.isReadyForOptimalCapture)
 
-                // Golden Corner Brackets
+                // Corner Brackets (Green when optimal, Orange/Yellow when adjusting)
                 CornerBracketsShape(bracketLength: 28)
-                    .stroke(Color.yellow.opacity(0.85), lineWidth: 3)
+                    .stroke(statusColor.opacity(0.9), lineWidth: 3.5)
                     .frame(width: frameWidth, height: frameHeight)
                     .position(center)
+                    .animation(.easeInOut(duration: 0.25), value: viewModel.isReadyForOptimalCapture)
             }
         }
         .allowsHitTesting(false)

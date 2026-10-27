@@ -50,30 +50,29 @@ public final class SkinScanViewModel {
     /// Real-time normalized luminance level (0.0 to 1.0) computed by `LightingAnalyzer`.
     public var luminanceLevel: Double = 0.5
     public var isFaceInFrame: Bool = false
+    public var isHeadPoseDirect: Bool = false
+    public var dynamicGuidanceText: String = "Position face within the oval guide"
 
     /// Indicates whether lighting is sufficient for color undertone detection.
     public var isLightingAdequate: Bool {
         luminanceLevel >= 0.35 && luminanceLevel <= 0.85
     }
 
+    /// True when face is centered, directly facing camera, and lighting is optimal.
+    public var isReadyForOptimalCapture: Bool {
+        isFaceInFrame && isHeadPoseDirect && isLightingAdequate
+    }
+
     /// Status message displayed near the camera lighting indicator.
     public var lightingStatusText: String {
-        if !isFaceInFrame {
-            return "Position face within the oval guide"
-        } else if luminanceLevel < 0.35 {
-            return "Too dark — move toward natural daylight"
-        } else if luminanceLevel > 0.85 {
-            return "Too bright — avoid harsh direct backlight"
-        } else {
-            return "Lighting is optimal"
-        }
+        dynamicGuidanceText
     }
 
     public var lightingStatusColor: Color {
-        if isLightingAdequate && isFaceInFrame {
-            return .green
+        if isReadyForOptimalCapture {
+            return Color(hex: "#34C759") // Green
         } else {
-            return .orange
+            return Color(hex: "#FF9500") // Orange
         }
     }
 
@@ -133,13 +132,22 @@ public final class SkinScanViewModel {
         isFlashEnabled.toggle()
     }
 
+    /// Update real-time vision & lighting results streaming from LightingAnalyzer.
+    public func applyRealTimeAnalysis(_ result: RealTimeFaceAnalysisResult) {
+        self.luminanceLevel = result.luminance
+        self.isFaceInFrame = result.isFaceDetected && result.isFaceCentered
+        self.isHeadPoseDirect = result.isHeadPoseDirect
+        self.dynamicGuidanceText = result.guidanceText
+    }
+
     #if canImport(UIKit)
     public func setCapturedPhoto(_ image: UIImage) {
         self.capturedFaceImage = image
         self.capturedFaceData = image.jpegData(compressionQuality: 0.85)
-        self.isBareFaceConfirmed = false
+        // Auto-confirm criteria based on the real-time detection at the moment of capture
         self.isLightingConfirmed = isLightingAdequate
-        self.isDirectAngleConfirmed = false
+        self.isDirectAngleConfirmed = isHeadPoseDirect && isFaceInFrame
+        self.isBareFaceConfirmed = isReadyForOptimalCapture || (isLightingAdequate && isHeadPoseDirect)
         self.currentStep = .review
     }
     #endif
