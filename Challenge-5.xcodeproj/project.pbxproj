@@ -251,6 +251,7 @@
 		000000000000000111000000 /* Debug configuration for PBXNativeTarget "Challenge-5" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3B89X8VBLQ;
@@ -260,6 +261,8 @@
 				EXCLUDED_SOURCE_FILE_NAMES = "*gitkeep*";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = c5;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access to analyze your facial skin tone, estimate body proportions, and take outfit reference photos for personalized recommendations.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save garment images to your photo library.";
@@ -296,6 +299,7 @@
 		000000000000000112000000 /* Release configuration for PBXNativeTarget "Challenge-5" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3B89X8VBLQ;
@@ -305,6 +309,8 @@
 				EXCLUDED_SOURCE_FILE_NAMES = "*gitkeep*";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = c5;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access to analyze your facial skin tone, estimate body proportions, and take outfit reference photos for personalized recommendations.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save garment images to your photo library.";
