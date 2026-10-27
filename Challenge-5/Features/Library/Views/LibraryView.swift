@@ -18,6 +18,7 @@ public struct LibraryView: View {
     
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: LibraryViewModel
+    @State private var selectedOccasionForOutput: OccasionItem? = nil
     @Binding public var selectedTab: CapsuleTabItem
     
     // Action callbacks
@@ -85,6 +86,14 @@ public struct LibraryView: View {
             // Attempt SwiftData context sync if models exist
             viewModel.fetchSavedLooksFromContext(modelContext)
         }
+        .fullScreenCover(item: $selectedOccasionForOutput) { occasion in
+            OccasionOutputView(
+                occasion: occasion,
+                onDismiss: {
+                    selectedOccasionForOutput = nil
+                }
+            )
+        }
     }
     
     // MARK: - Subviews
@@ -116,7 +125,16 @@ public struct LibraryView: View {
             LibraryCardView(
                 look: look,
                 onSelect: {
-                    onSelectLook?(look)
+                    if let onSelectLook {
+                        onSelectLook(look)
+                    } else {
+                        // Navigate to OccasionOutputView
+                        selectedOccasionForOutput = OccasionItem(
+                            title: look.occasionTitle.isEmpty ? "My Occasion" : look.occasionTitle,
+                            date: look.date,
+                            dresscode: look.dresscode.isEmpty ? "Casual / Smart Casual" : look.dresscode
+                        )
+                    }
                 },
                 onToggleBookmark: {
                     viewModel.toggleBookmark(for: look)

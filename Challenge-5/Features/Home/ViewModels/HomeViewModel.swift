@@ -23,7 +23,8 @@ final class HomeViewModel {
     
     // MARK: - SwiftData Operations
     
-    func saveOccasion(from detail: OccasionDetail, in context: ModelContext) {
+    @discardableResult
+    func saveOccasion(from detail: OccasionDetail, in context: ModelContext) -> OccasionItem {
         let newOccasion = OccasionItem(from: detail)
         context.insert(newOccasion)
         do {
@@ -31,6 +32,7 @@ final class HomeViewModel {
         } catch {
             print("HomeViewModel: Failed to save occasion: \(error.localizedDescription)")
         }
+        return newOccasion
     }
     
     func updateOccasion(_ occasion: OccasionItem, with detail: OccasionDetail, in context: ModelContext) {

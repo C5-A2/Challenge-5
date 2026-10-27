@@ -99,6 +99,18 @@ struct OccasionsHomeView: View {
         .sheet(isPresented: $viewModel.isShowingHistorySheet) {
             OccasionsHistoryView()
         }
+        .fullScreenCover(item: $viewModel.selectedOccasion) { occasion in
+            OccasionOutputView(
+                occasion: occasion,
+                onDismiss: {
+                    viewModel.selectedOccasion = nil
+                },
+                onEditOccasion: { occasionToEdit in
+                    viewModel.selectedOccasion = nil
+                    viewModel.editingOccasion = occasionToEdit
+                }
+            )
+        }
     }
     
     // MARK: - Subviews
@@ -154,7 +166,7 @@ struct OccasionsHomeView: View {
                     if let onSelectOccasion {
                         onSelectOccasion(occasion)
                     } else {
-                        viewModel.editingOccasion = occasion
+                        viewModel.selectedOccasion = occasion
                     }
                 }
                 .contextMenu {
@@ -208,7 +220,8 @@ struct OccasionsHomeView: View {
         .padding(.bottom, AppDimensions.tabBarHeight + 28)
         .sheet(isPresented: $viewModel.isShowingNewOccasionSheet) {
             OccasionFormSheet { occasionDetail in
-                viewModel.saveOccasion(from: occasionDetail, in: modelContext)
+                let createdOccasion = viewModel.saveOccasion(from: occasionDetail, in: modelContext)
+                viewModel.selectedOccasion = createdOccasion
             }
         }
     }
