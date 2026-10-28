@@ -319,7 +319,9 @@ private struct BodyScanFlowHostView: View {
             case .metricsInput:
                 PhysicalMetricsInputView(viewModel: viewModel)
             case .analysisResult:
-                Color.black.overlay(Text("Result").foregroundColor(.white))
+                BodyAnalysisResultView(viewModel: viewModel) {
+                    dismiss()
+                }
             }
         }
     }
