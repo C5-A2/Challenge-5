@@ -273,7 +273,7 @@ struct FrontBodyGuideView: View {
 | **Ricky Jonathan** | `C5-2` | `Features/SkinScan/`<br>`Features/BodyScan/`<br>`Services/Camera/`<br>`Services/Vision/` | Face scan (lighting check, color season extraction).<br>Front & side body scan (camera guides, pose estimation).<br>Physical metrics input form.<br>Body type & torso balance calculation. |
 | **Bryan Samuel** | `C5-3` | `Features/Occasion/Input/`<br>`Services/AI/Prompts/` | Occasion form: title (required), date (defaults to tomorrow, past dates disabled), dresscode (optional).<br>Vision chips grid: 12 predefined StyleVision enum chips (min 0, max 3; no "Other").<br>Data processing pipeline.<br>LLM prompt engineering & fine-tuning. |
 | **Michael David Sin** | `C5-1`<br>`C5-4`<br>`C5-31–46` | `Features/Home/`<br>`Features/Library/`<br>`Features/Occasion/Result/`<br>`Features/Profile/`<br>`Services/AI/Engine/`<br>`Shared/Components/` | App shell (Home, Library, Profile Hub tabs).<br>Interactive avatar result stage.<br>Flanking garment cards & 5-look carousel.<br>3-Fits compliance badges & rationale drawer.<br>On-device LLaMA engine integration. |
-| **Natalie Grace** | `C5-5`<br>`C5-11`<br>`C5-16–18` | `Features/Store/`<br>`Shared/Pickers/` | Image source action sheet (Camera, Photos, Saved).<br>In-app image retrieval from local storage.<br>"Where to Buy" e-commerce store links. |
+| **Natalie Grace** | `C5-5`<br>`C5-11`<br>`C5-16–18` | `Features/Store/`<br>`Services/Store/`<br>`Shared/Pickers/` | Image source action sheet (Camera, Photos, Saved).<br>In-app image retrieval from local storage.<br>"Where to Buy" e-commerce store links. |
 | **Nicole Clarence** | `C5-20`<br>`C5-44` | `Shared/Theme/`<br>`Resources/` | Global color palette, typography, spacing tokens.<br>Glassmorphism effects, shadows, corner radii.<br>Final Hi-Fi polish to match Sketch designs. |
 
 ---
@@ -348,17 +348,22 @@ Challenge-5/
 │   │   │   ├── Views/
 │   │   │   │   ├── OccasionFormSheet.swift        # Modal: title (req), date (tomorrow+), dresscode (opt)
 │   │   │   │   ├── DatePickerModalView.swift      # Calendar popover
-│   │   │   │   └── VisionChipsGridView.swift      # 12 predefined StyleVision chips (min 0, max 3, no "Other")
+│   │   │   │   ├── VisionChipsGridView.swift      # 12 predefined StyleVision chips (min 0, max 3, no "Other")
+│   │   │   │   ├── ReferenceImagesView.swift      # (Natalie) Reference section: + Add Ref + up to 3 photos
+│   │   │   │   └── ReferenceCameraView.swift      # (Natalie) Reference camera: ✓, gallery, shutter, retake
 │   │   │   └── ViewModels/
-│   │   │       └── OccasionInputViewModel.swift
+│   │   │       └── OccasionInputViewModel.swift   # Form state, incl. reference photos and reference camera
 │   │   └── Result/                                # (Michael)
 │   │       ├── Views/
-│   │       │   ├── ResultStageView.swift          # Avatar stage + 5-look carousel
-│   │       │   ├── FlankingGarmentCard.swift      # Outer / Top / Bottom cards
-│   │       │   ├── FitsIndicatorBadges.swift      # Body Shape, Color, Torso badges
-│   │       │   └── FitRationaleDrawer.swift       # AI explanation bottom sheet
+│   │       │   ├── OccasionOutputView.swift       # Root screen coordinating Alt 5 & Alt 5.1
+│   │       │   ├── AvatarStageView.swift          # Hero avatar stage + guidelines + ground shadow
+│   │       │   ├── HorizontalLookSwitcher.swift   # Swipeable 5-look page TabView
+│   │       │   ├── FitsIndicatorBadges.swift      # 3-Fits badges & drawer segmented tabs
+│   │       │   ├── CollapsibleRationaleDrawer.swift # AI explanation bottom drawer (Alt 5.1)
+│   │       │   ├── OnThisOutfitSection.swift      # "On this outfit" carousel with corner brackets
+│   │       │   └── OccasionOutputBottomBar.swift  # Bottom chat, plus, and bookmark actions
 │   │       └── ViewModels/
-│   │           └── ResultStageViewModel.swift
+│   │           └── OccasionOutputViewModel.swift  # Selected look index, 5 AI looks, mock data, states
 │   │
 │   └── Store/                                     # ── Stack 14 ── (Natalie)
 │       ├── StoreConstants.swift                   # Named store values (crop ratios, encoding, search)
@@ -391,7 +396,8 @@ Challenge-5/
 │   │   ├── BodyPoseEstimatorProtocol.swift
 │   │   ├── SkinColorAnalyzerProtocol.swift
 │   │   ├── RecommendationEngineProtocol.swift
-│   │   └── GarmentCroppingProtocol.swift         # (Natalie) Store garment crop
+│   │   ├── GarmentCroppingProtocol.swift         # (Natalie) Store garment crop
+│   │   └── SavedLookStorageProtocol.swift        # Save / unsave looks + fetch saved looks
 │   ├── Camera/
 │   │   ├── CameraService.swift                    # AVFoundation session management
 │   │   └── LightingAnalyzer.swift                 # Real-time luminance / EV analysis
@@ -415,7 +421,10 @@ Challenge-5/
 │   │   └── Prompts/
 │   │       └── PromptTemplates.swift              # System prompt builder for 5-look generation
 │   └── Storage/
-│       └── SwiftDataStack.swift                   # ModelContainer + query helpers
+│       ├── SwiftDataStack.swift                   # ModelContainer + query helpers
+│       ├── SavedLookStorageService.swift          # SwiftData saved looks + mock for previews
+│       ├── SavedLookStorageError.swift            # Saved look fetch / save errors
+│       └── SavedLookSampleData.swift              # In-memory sample (occasion + 5 looks) for previews
 │
 ├── Shared/                                        # Reusable Design System
 │   ├── Theme/
@@ -428,8 +437,10 @@ Challenge-5/
 │   │   ├── CircularIconButton.swift               # Header icons (profile, history, close)
 │   │   ├── GuideDoDontCard.swift                  # Do ✅ / Don't ❌ instruction card
 │   │   └── MultiSelectChip.swift                  # Selectable vision chip
-│   ├── Pickers/
-│   │   └── ImageSourceActionSheet.swift           # Camera / Photos / Library action menu
+│   ├── Pickers/                                   # (Natalie)
+│   │   ├── ImageSourceActionSheet.swift           # Camera / Photos / Library menu (custom label supported)
+│   │   ├── ReferenceImageEncoder.swift            # Downscaled JPEG for stored reference photos
+│   │   └── ReferencePickerConstants.swift         # Reference picker values (max 3, sizes)
 │   └── Extensions/
 │       ├── Color+Hex.swift                        # Color(hex:) initializer
 │       └── View+Modifiers.swift                   # Common view modifiers
@@ -1368,7 +1379,7 @@ final class OccasionItem {
     var createdAt: Date = Date()
     var isCompleted: Bool = false
     
-    @Relationship(deleteRule: .cascade)
+    @Relationship(deleteRule: .cascade, inverse: \OutfitLook.occasion)
     var generatedLooks: [OutfitLook] = []
     
     var isUpcoming: Bool { date > Date() }
@@ -1400,7 +1411,8 @@ import SwiftData
 final class OutfitLook {
     @Attribute(.unique) var id: UUID = UUID()
     var lookIndex: Int                      // 0..4 for 5 AI-generated looks
-    var isBookmarked: Bool = false
+    var isBookmarked: Bool = false          // true = saved to the Library
+    var savedAt: Date?                      // when it was saved, nil when not saved
     
     // 3-Fits compliance scores (0.0 to 1.0)
     var bodyShapeScore: Double
@@ -1414,6 +1426,9 @@ final class OutfitLook {
     
     @Relationship(deleteRule: .cascade, inverse: \GarmentItem.outfitLook)
     var garments: [GarmentItem] = []
+    
+    /// The occasion this look was generated for (Library card title, dresscode).
+    var occasion: OccasionItem?
     
     init(
         lookIndex: Int,
@@ -1754,6 +1769,17 @@ nonisolated struct GarmentCrop: Sendable {
 
 nonisolated protocol GarmentCroppingProtocol: Sendable {
     func makeGarmentCrop(for request: GarmentCropRequest) async throws -> GarmentCrop
+}
+```
+
+```swift
+// Services/Protocols/SavedLookStorageProtocol.swift
+@MainActor
+protocol SavedLookStoring {
+    /// Saved (bookmarked) looks, newest first.
+    func fetchSavedLooks() throws -> [OutfitLook]
+    /// Saves or unsaves a look. Inserts the look first if it is not stored yet.
+    func setSaved(_ isSaved: Bool, for look: OutfitLook) throws
 }
 ```
 

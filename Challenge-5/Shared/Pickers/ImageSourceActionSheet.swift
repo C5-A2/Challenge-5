@@ -23,14 +23,19 @@ public enum ImageSourceOption: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-public struct ImageSourceMenu: View {
+/// Menu listing the image sources (Camera, Open from Photos, From Library).
+///
+/// Use the default camera-icon label, or pass a custom label (for example the "+ Add Ref" tile).
+public struct ImageSourceMenu<MenuLabel: View>: View {
     
     // MARK: - Properties
     public let onSelect: (ImageSourceOption) -> Void
+    private let menuLabel: MenuLabel
     
     // MARK: - Initializer
-    public init(onSelect: @escaping (ImageSourceOption) -> Void) {
+    public init(onSelect: @escaping (ImageSourceOption) -> Void, @ViewBuilder label: () -> MenuLabel) {
         self.onSelect = onSelect
+        self.menuLabel = label()
     }
     
     // MARK: - Body
@@ -44,14 +49,34 @@ public struct ImageSourceMenu: View {
                 }
             }
         } label: {
-            Image(systemName: "camera")
-                .font(.system(size: 18))
-                .foregroundStyle(AppColors.bodyText)
-                .frame(width: 36, height: 36)
-                .background(AppColors.cardBackground)
-                .clipShape(Circle())
-                .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
+            menuLabel
         }
+    }
+}
+
+public extension ImageSourceMenu where MenuLabel == ImageSourceMenuIconLabel {
+    /// Menu with the default circular camera icon.
+    init(onSelect: @escaping (ImageSourceOption) -> Void) {
+        self.init(onSelect: onSelect) { ImageSourceMenuIconLabel() }
+    }
+}
+
+/// The default circular camera icon for `ImageSourceMenu`.
+public struct ImageSourceMenuIconLabel: View {
+    public init() {}
+    
+    public var body: some View {
+        Image(systemName: "camera")
+            .font(.system(size: ReferencePickerConstants.MenuIcon.iconSize))
+            .foregroundStyle(AppColors.bodyText)
+            .frame(width: AppDimensions.circularIconSize, height: AppDimensions.circularIconSize)
+            .background(AppColors.cardBackground)
+            .clipShape(Circle())
+            .shadow(
+                color: .black.opacity(ReferencePickerConstants.MenuIcon.shadowOpacity),
+                radius: ReferencePickerConstants.MenuIcon.shadowRadius,
+                y: ReferencePickerConstants.MenuIcon.shadowOffsetY
+            )
     }
 }
 

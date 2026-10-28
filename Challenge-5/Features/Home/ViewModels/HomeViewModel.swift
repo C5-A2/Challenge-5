@@ -23,7 +23,8 @@ final class HomeViewModel {
     
     // MARK: - SwiftData Operations
     
-    func saveOccasion(from detail: OccasionDetail, in context: ModelContext) {
+    @discardableResult
+    func saveOccasion(from detail: OccasionDetail, in context: ModelContext) -> OccasionItem {
         let newOccasion = OccasionItem(from: detail)
         context.insert(newOccasion)
         do {
@@ -31,6 +32,7 @@ final class HomeViewModel {
         } catch {
             print("HomeViewModel: Failed to save occasion: \(error.localizedDescription)")
         }
+        return newOccasion
     }
     
     func updateOccasion(_ occasion: OccasionItem, with detail: OccasionDetail, in context: ModelContext) {
@@ -38,10 +40,9 @@ final class HomeViewModel {
         occasion.date = detail.date
         occasion.dresscode = detail.dresscode
         occasion.visionKeywords = detail.visions.map(\.rawValue)
-        if !detail.referenceImages.isEmpty {
-            occasion.referenceImagesData = detail.referenceImages
-            occasion.referenceImageData = detail.referenceImages.first
-        }
+        // Always update, so removing every reference photo is saved too.
+        occasion.referenceImagesData = detail.referenceImages
+        occasion.referenceImageData = detail.referenceImages.first
         do {
             try context.save()
         } catch {

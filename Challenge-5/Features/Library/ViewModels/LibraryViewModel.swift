@@ -28,6 +28,14 @@ public final class LibraryViewModel {
     // Loading State
     public var isLoading: Bool = false
     
+    /// Shown when saving or unsaving a look fails.
+    public var saveErrorMessage: String? = nil
+    
+    // Saved-look storage, set by `fetchSavedLooksFromContext(_:)`.
+    private var savedLookStorage: (any SavedLookStoring)?
+    /// Stored looks behind `savedLooks`, so bookmark changes are saved to SwiftData.
+    private var outfitLooksByID: [UUID: OutfitLook] = [:]
+    
     // MARK: - Initializer
     
     public init(initialLooks: [SavedLookItem] = SavedLookItem.samples) {
@@ -72,6 +80,7 @@ public final class LibraryViewModel {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
             savedLooks[index].isBookmarked.toggle()
         }
+        persistSavedState(savedLooks[index].isBookmarked, forLookID: look.id)
     }
     
     /// Unsave and remove a look directly from the library collection
@@ -81,6 +90,18 @@ public final class LibraryViewModel {
                 savedLooks[index].isBookmarked = false
                 savedLooks.remove(at: index)
             }
+        }
+        persistSavedState(false, forLookID: id)
+    }
+    
+    /// Saves a bookmark change to SwiftData. Sample looks (no stored look) stay in memory only.
+    private func persistSavedState(_ isSaved: Bool, forLookID lookID: UUID) {
+        guard let savedLookStorage, let outfitLook = outfitLooksByID[lookID] else { return }
+        do {
+            try savedLookStorage.setSaved(isSaved, for: outfitLook)
+            saveErrorMessage = nil
+        } catch {
+            saveErrorMessage = error.localizedDescription
         }
     }
     
@@ -126,19 +147,35 @@ public final class LibraryViewModel {
     
     // MARK: - SwiftData Integration Hook [C5-100 Ready]
     
+    /// The stored occasion behind a saved look and the look's position in it,
+    /// so the Output opens the real looks (with their saved state) instead of new mock looks.
+    func outputDestination(for look: SavedLookItem) -> (occasion: OccasionItem, lookIndex: Int)? {
+        guard let occasion = outfitLooksByID[look.id]?.occasion else { return nil }
+        let orderedLooks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
+        let lookIndex = orderedLooks.firstIndex { $0.id == look.id } ?? 0
+        return (occasion: occasion, lookIndex: lookIndex)
+    }
+    
     /// Loads bookmarked looks from SwiftData context when available
     public func fetchSavedLooksFromContext(_ context: ModelContext) {
-        let descriptor = FetchDescriptor<OutfitLook>(
-            predicate: #Predicate<OutfitLook> { $0.isBookmarked == true }
-        )
-        
+        loadSavedLooks(using: SavedLookStorageService(modelContext: context))
+    }
+    
+    /// Loads saved looks (newest first) through `SavedLookStoring`.
+    /// Keeps the sample looks when nothing is saved yet (Lofi testing).
+    func loadSavedLooks(using storage: any SavedLookStoring) {
+        savedLookStorage = storage
         do {
-            let fetched = try context.fetch(descriptor)
-            if !fetched.isEmpty {
+            let fetched = try storage.fetchSavedLooks()
+            // Looks were shown from storage before, so an empty fetch means all were unsaved.
+            let didShowStoredLooks = !outfitLooksByID.isEmpty
+            outfitLooksByID = Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0) })
+            if fetched.isEmpty && didShowStoredLooks {
+                self.savedLooks = []
+            } else if !fetched.isEmpty {
                 self.savedLooks = fetched.enumerated().map { index, outfitLook in
                     SavedLookItem(
                         outfitLook: outfitLook,
-                        occasionTitle: "Occasion Outfit #\(index + 1)",
                         cardHeightRatio: index.isMultiple(of: 2) ? 1.5 : 1.2
                     )
                 }

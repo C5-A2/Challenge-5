@@ -5,6 +5,7 @@
 //  Created by Bryan Samuel on 26/10/26.
 //
 
+import SwiftData
 import SwiftUI
 
 /// A modal sheet view for entering occasion details.
@@ -14,6 +15,7 @@ import SwiftUI
 /// - `ModalHeaderBar` (powered by `CircularIconButton`)
 /// - `PillTextField` (for title and dresscode input)
 /// - `pillInputContainer` modifier (for the native DatePicker row)
+/// - `ReferenceImagesView` (for outfit reference photos)
 /// - `discardConfirmation` dialog
 @MainActor
 public struct OccasionFormSheet: View {
@@ -103,7 +105,10 @@ public struct OccasionFormSheet: View {
                             // 3. Dresscode Section (Optional)
                             dresscodeSection
                             
-                            // 4. "I want to look more" Style Vision Chips Section (Min 0, Max 3)
+                            // 4. Reference Photos Section (Optional, Max 3)
+                            ReferenceImagesView(viewModel: viewModel)
+                            
+                            // 5. "I want to look more" Style Vision Chips Section (Min 0, Max 3)
                             VisionChipsGridView(viewModel: viewModel)
                         }
                         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
@@ -175,6 +180,13 @@ public typealias OccasionInputView = OccasionFormSheet
 
 #Preview("Empty State") {
     OccasionFormSheet()
+        .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self], inMemory: true)
+}
+
+/// "+ Add Ref" → "From Library" shows 4 saved looks. Reopen it to see the picked ones preselected.
+#Preview("Saved Looks as References") {
+    OccasionFormSheet()
+        .modelContainer(SavedLookSampleData.makeContainer(savedLookCount: 4))
 }
 
 #Preview("Prefilled State") {
@@ -185,4 +197,5 @@ public typealias OccasionInputView = OccasionFormSheet
             dresscode: "Black Tie Optional"
         )
     )
+    .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self], inMemory: true)
 }

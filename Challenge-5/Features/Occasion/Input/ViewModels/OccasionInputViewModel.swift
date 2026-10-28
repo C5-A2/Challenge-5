@@ -7,6 +7,9 @@
 
 import Foundation
 import Observation
+import PhotosUI
+import SwiftUI
+import UIKit
 
 /// ViewModel managing state, validation, and submission for the Occasion Input flow.
 ///
@@ -36,6 +39,29 @@ public final class OccasionInputViewModel {
     /// Desired emotional style impressions selected by the user. Min 0, Max 3.
     public var selectedVisions: Set<StyleVision> = []
     
+    /// Outfit reference photos (JPEG) from the camera, photo library, or saved looks. Optional, Max 3.
+    /// Change it through the reference actions, so `referenceSavedLookIDs` stays in sync.
+    public private(set) var referenceImages: [Data] = []
+    
+    /// The saved look behind each reference photo, in the same order as `referenceImages`.
+    /// `nil` for photos from the camera or the photo library.
+    public private(set) var referenceSavedLookIDs: [UUID?] = []
+    
+    /// Presentation state of the three reference sources (Camera, Open from Photos, From Library).
+    public var isShowingReferenceCamera: Bool = false
+    public var isShowingReferencePhotoPicker: Bool = false
+    public var isShowingReferenceLibrary: Bool = false
+    
+    /// Photos picked in "Open from Photos", loaded into `referenceImages` by `loadPickedReferencePhotos()`.
+    public var referencePhotoPickerItems: [PhotosPickerItem] = []
+    public private(set) var isLoadingReferencePhotos: Bool = false
+    
+    /// Reference camera state. Reset each time the camera opens, and released when it closes.
+    public private(set) var referenceCameraService: CameraService?
+    public private(set) var capturedReferenceImage: UIImage?
+    public private(set) var isCapturingReference: Bool = false
+    public private(set) var referenceCameraErrorMessage: String?
+    
     /// Controls presentation of the discard confirmation alert when canceling with unsaved changes.
     public var isShowingDiscardAlert: Bool = false
     
@@ -45,6 +71,7 @@ public final class OccasionInputViewModel {
     private var initialDate: Date
     private var initialDresscode: String
     private var initialVisions: Set<StyleVision>
+    private var initialReferenceImages: [Data]
     
     // MARK: - Initializers
     
@@ -52,17 +79,21 @@ public final class OccasionInputViewModel {
         title: String = "",
         date: Date = OccasionInputViewModel.defaultTomorrowDate,
         dresscode: String = "",
-        selectedVisions: Set<StyleVision> = []
+        selectedVisions: Set<StyleVision> = [],
+        referenceImages: [Data] = []
     ) {
         self.title = title
         self.date = date
         self.dresscode = dresscode
         self.selectedVisions = selectedVisions
+        self.referenceImages = referenceImages
+        self.referenceSavedLookIDs = Array(repeating: nil, count: referenceImages.count)
         
         self.initialTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialDate = date
         self.initialDresscode = dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialVisions = selectedVisions
+        self.initialReferenceImages = referenceImages
     }
     
     public init(from occasion: OccasionDetail) {
@@ -70,11 +101,14 @@ public final class OccasionInputViewModel {
         self.date = occasion.date
         self.dresscode = occasion.dresscode
         self.selectedVisions = Set(occasion.visions)
+        self.referenceImages = occasion.referenceImages
+        self.referenceSavedLookIDs = Array(repeating: nil, count: occasion.referenceImages.count)
         
         self.initialTitle = occasion.title.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialDate = occasion.date
         self.initialDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialVisions = Set(occasion.visions)
+        self.initialReferenceImages = occasion.referenceImages
     }
     
     init(from occasion: OccasionItem) {
@@ -82,11 +116,14 @@ public final class OccasionInputViewModel {
         self.date = occasion.date
         self.dresscode = occasion.dresscode
         self.selectedVisions = Set(occasion.visions)
+        self.referenceImages = occasion.referenceImagesData
+        self.referenceSavedLookIDs = Array(repeating: nil, count: occasion.referenceImagesData.count)
         
         self.initialTitle = occasion.title.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialDate = occasion.date
         self.initialDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialVisions = Set(occasion.visions)
+        self.initialReferenceImages = occasion.referenceImagesData
     }
     
     // MARK: - Computed Properties
@@ -100,11 +137,13 @@ public final class OccasionInputViewModel {
     /// - Occasion `title` must be non-empty (required).
     /// - `date` cannot be in the past.
     /// - `selectedVisions` count must be between 0 and 3 (min 0, max 3).
+    /// - `referenceImages` count must be between 0 and 3 (min 0, max 3).
     /// - `dresscode` is optional.
     public var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !isDateInPast &&
-        selectedVisions.count <= 3
+        selectedVisions.count <= 3 &&
+        referenceImages.count <= ReferencePickerConstants.maximumReferenceCount
     }
     
     /// Indicates whether the user has modified any field from its initial state.
@@ -112,6 +151,7 @@ public final class OccasionInputViewModel {
         title.trimmingCharacters(in: .whitespacesAndNewlines) != initialTitle ||
         dresscode.trimmingCharacters(in: .whitespacesAndNewlines) != initialDresscode ||
         selectedVisions != initialVisions ||
+        referenceImages != initialReferenceImages ||
         !Calendar.current.isDate(date, inSameDayAs: initialDate)
     }
     
@@ -123,6 +163,36 @@ public final class OccasionInputViewModel {
     /// Whether additional visions can be selected before reaching the maximum limit of 3.
     public var canSelectMoreVisions: Bool {
         selectedVisions.count < 3
+    }
+    
+    /// How many more reference photos can be added before reaching the maximum of 3.
+    public var remainingReferenceCount: Int {
+        max(0, ReferencePickerConstants.maximumReferenceCount - referenceImages.count)
+    }
+    
+    /// Whether another reference photo can be added.
+    public var canAddMoreReferences: Bool {
+        remainingReferenceCount > 0
+    }
+    
+    /// Saved looks already added as references, so "From Library" shows them as selected.
+    public var selectedSavedLookIDs: Set<UUID> {
+        Set(referenceSavedLookIDs.compactMap { $0 })
+    }
+    
+    public var hasCapturedReference: Bool {
+        capturedReferenceImage != nil
+    }
+    
+    /// Without camera access, `CameraService` would return a test image, so capture is blocked.
+    /// The Simulator has no camera, so its test image is allowed there.
+    public var canCaptureReference: Bool {
+        guard let referenceCameraService, !isCapturingReference else { return false }
+        #if targetEnvironment(simulator)
+        return referenceCameraService.isRunning
+        #else
+        return referenceCameraService.permissionGranted
+        #endif
     }
     
     // MARK: - Actions
@@ -148,12 +218,159 @@ public final class OccasionInputViewModel {
         selectedVisions.contains(vision) || selectedVisions.count < 3
     }
     
+    // MARK: - Reference Actions
+    
+    /// Opens the camera, the user's photo library, or the app's saved looks.
+    public func selectReferenceSource(_ option: ImageSourceOption) {
+        switch option {
+        case .camera:
+            isShowingReferenceCamera = true
+        case .photoLibrary:
+            isShowingReferencePhotoPicker = true
+        case .savedLibrary:
+            isShowingReferenceLibrary = true
+        }
+    }
+    
+    /// Adds reference photos from the camera or photo library after the existing ones, keeping at most 3.
+    public func addReferenceImages(_ newImages: [Data]) {
+        appendReferences(newImages.map { (image: $0, savedLookID: nil) })
+    }
+    
+    public func removeReferenceImage(at index: Int) {
+        guard referenceImages.indices.contains(index) else { return }
+        referenceImages.remove(at: index)
+        if referenceSavedLookIDs.indices.contains(index) {
+            referenceSavedLookIDs.remove(at: index)
+        }
+    }
+    
+    /// Adds references up to the limit, keeping `referenceImages` and `referenceSavedLookIDs` in sync.
+    private func appendReferences(_ newReferences: [(image: Data, savedLookID: UUID?)]) {
+        let addedReferences = newReferences.prefix(remainingReferenceCount)
+        referenceImages += addedReferences.map(\.image)
+        referenceSavedLookIDs += addedReferences.map(\.savedLookID)
+    }
+    
+    /// Loads the photos picked in "Open from Photos" as reference JPEGs and adds them.
+    public func loadPickedReferencePhotos() async {
+        let pickedItems = referencePhotoPickerItems
+        guard !pickedItems.isEmpty else { return }
+        referencePhotoPickerItems = []
+        isLoadingReferencePhotos = true
+        defer { isLoadingReferencePhotos = false }
+        
+        var pickedImages: [Data] = []
+        for item in pickedItems {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let referenceData = ReferenceImageEncoder.makeJPEGData(from: data) {
+                pickedImages.append(referenceData)
+            }
+        }
+        addReferenceImages(pickedImages)
+    }
+    
+    /// Bookmarked looks with an image, shown in "From Library".
+    func savedReferenceLooks(from outfitLooks: [OutfitLook]) -> [SavedLookItem] {
+        outfitLooks
+            .filter { $0.lookImageData != nil }
+            .map { SavedLookItem(outfitLook: $0) }
+    }
+    
+    /// Applies the "From Library" selection: removes saved looks that were unselected
+    /// and adds newly selected ones, so the same look is never added twice.
+    public func updateSavedReferenceLooks(_ pickedLooks: [SavedLookItem]) {
+        let pickedLookIDs = Set(pickedLooks.map(\.id))
+        for index in referenceSavedLookIDs.indices.reversed() {
+            if let lookID = referenceSavedLookIDs[index], !pickedLookIDs.contains(lookID) {
+                removeReferenceImage(at: index)
+            }
+        }
+        let alreadyAddedIDs = selectedSavedLookIDs
+        let newReferences = pickedLooks
+            .filter { !alreadyAddedIDs.contains($0.id) }
+            .compactMap { look -> (image: Data, savedLookID: UUID?)? in
+                guard let referenceData = look.lookImageData.flatMap(ReferenceImageEncoder.makeJPEGData) else { return nil }
+                return (image: referenceData, savedLookID: look.id)
+            }
+        appendReferences(newReferences)
+    }
+    
+    // MARK: - Reference Camera Actions
+    
+    /// Starts a fresh camera session on the back camera, since references are usually of other outfits.
+    public func startReferenceCamera() async {
+        capturedReferenceImage = nil
+        referenceCameraErrorMessage = nil
+        let cameraService = CameraService()
+        referenceCameraService = cameraService
+        do {
+            try await cameraService.startSession()
+            if cameraService.permissionGranted, cameraService.cameraPosition == .front {
+                try await cameraService.switchCamera()
+            }
+        } catch {
+            referenceCameraErrorMessage = "Couldn't start the camera."
+        }
+        #if !targetEnvironment(simulator)
+        if !cameraService.permissionGranted {
+            referenceCameraErrorMessage = "Camera access is off. Turn it on in Settings, or pick a photo from your gallery."
+        }
+        #endif
+    }
+    
+    /// Stops the camera session and clears the camera state.
+    public func stopReferenceCamera() {
+        referenceCameraService?.stopSession()
+        referenceCameraService = nil
+        capturedReferenceImage = nil
+        isCapturingReference = false
+        referenceCameraErrorMessage = nil
+    }
+    
+    public func captureReferencePhoto() async {
+        guard let referenceCameraService, canCaptureReference else { return }
+        isCapturingReference = true
+        defer { isCapturingReference = false }
+        do {
+            capturedReferenceImage = try await referenceCameraService.capturePhoto()
+        } catch {
+            referenceCameraErrorMessage = "Couldn't take the photo. Try again."
+        }
+    }
+    
+    public func retakeReferencePhoto() {
+        capturedReferenceImage = nil
+    }
+    
+    /// Adds the captured photo to `referenceImages`. Returns `false` if there is nothing to add.
+    @discardableResult
+    public func confirmCapturedReference() -> Bool {
+        guard let referenceData = capturedReferenceImage?
+            .jpegData(compressionQuality: 1)
+            .flatMap(ReferenceImageEncoder.makeJPEGData) else { return false }
+        addReferenceImages([referenceData])
+        return true
+    }
+    
+    /// Adds a photo picked from the camera's gallery button. Returns `false` if it couldn't be loaded.
+    @discardableResult
+    public func addGalleryReference(_ item: PhotosPickerItem) async -> Bool {
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let referenceData = ReferenceImageEncoder.makeJPEGData(from: data) else { return false }
+        addReferenceImages([referenceData])
+        return true
+    }
+    
+    // MARK: - Submission
+    
     /// Builds an `OccasionDetail` model populated with the current form values.
     public func createOccasionDetail() -> OccasionDetail {
         OccasionDetail(
             date: date,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             dresscode: dresscode.trimmingCharacters(in: .whitespacesAndNewlines),
+            referenceImages: referenceImages,
             visions: Array(selectedVisions)
         )
     }
@@ -164,6 +381,9 @@ public final class OccasionInputViewModel {
         date = Self.defaultTomorrowDate
         dresscode = ""
         selectedVisions = []
+        referenceImages = []
+        referenceSavedLookIDs = []
+        referencePhotoPickerItems = []
         isShowingDiscardAlert = false
     }
 }
