@@ -106,7 +106,14 @@ struct OccasionOutputView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .topTrailing)))
                     .zIndex(10)
             }
+
+            if viewModel.isLoading {
+                generationLoadingOverlay
+                    .transition(.opacity)
+                    .zIndex(20)
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.isLoading)
         .alert(
             "Couldn't Save Look",
             isPresented: Binding(
@@ -309,6 +316,52 @@ struct OccasionOutputView: View {
                     lineWidth: 1
                 )
         )
+    }
+    
+    // MARK: - Loading Overlay
+    
+    private var generationLoadingOverlay: some View {
+        ZStack {
+            AppColors.canvasBackground.opacity(0.88)
+                .ignoresSafeArea()
+                .background(.ultraThinMaterial)
+            
+            VStack(spacing: 20) {
+                ZStack {
+                    Circle()
+                        .stroke(AppColors.espressoTitle.opacity(0.12), lineWidth: 4)
+                        .frame(width: 64, height: 64)
+                    
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: AppColors.espressoTitle))
+                        .scaleEffect(1.3)
+                }
+                
+                VStack(spacing: 6) {
+                    Text("Curating Your Looks")
+                        .font(AppTypography.sfProSemiboldExtended(size: 19))
+                        .foregroundStyle(AppColors.espressoTitle)
+                    
+                    Text("Styling ensembles tailored to your silhouette and \(viewModel.occasion.title)...")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.mutedCaption)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 32)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(AppColors.glassmorphicFill)
+                    .shadow(color: Color.black.opacity(0.08), radius: 24, y: 12)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.8), lineWidth: 1)
+            )
+            .padding(.horizontal, 32)
+        }
     }
 }
 

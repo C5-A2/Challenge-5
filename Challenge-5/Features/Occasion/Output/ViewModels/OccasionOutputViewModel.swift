@@ -121,6 +121,7 @@ final class OccasionOutputViewModel {
                     )
                     withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                         self.looks = newLooks
+                        self.occasion.generatedLooks = newLooks
                         self.selectedLookIndex = 0
                         self.isLoading = false
                     }

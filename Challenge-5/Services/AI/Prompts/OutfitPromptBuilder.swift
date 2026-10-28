@@ -143,10 +143,14 @@ struct OutfitPromptBuilder: Sendable {
         3. Bottom (e.g. trousers, skirt, tailored pants) with rise and silhouette flattering the body type and torso balance.
 
         CRITICAL REQUIREMENT - INDIVIDUAL GARMENT RATIONALE:
-        For every garment item, you MUST provide a dedicated "rationale" explaining why this specific cut, neckline, rise, sleeve, or fabric flatters the user's body shape and torso ratio.
+        For every garment item, provide a concise dedicated "rationale" (1 concise sentence, max 20 words) explaining why this cut flatters the user's silhouette. Keep "fitRationale" concise as well (1-2 sentences). Do not write excessively long rationales.
 
-        COLOR SELECTION DIRECTIVE (LLM-DECIDED COLORS):
-        You, the LLM, must intentionally choose and coordinate the exact color for each garment item ("colorName" and "hexColor") from the seasonal palette provided above. Intentionally coordinate harmonic pairings for each look (e.g. balancing foundational neutrals for bottoms/outerwear with flattering accent tones for tops near the face). Do NOT repeat identical color schemes across looks.
+        COLOR SELECTION DIRECTIVE (STRICT SEASONAL PALETTE):
+        You MUST select each garment's "colorName" and "hexColor" DIRECTLY and EXCLUSIVELY from the user's seasonal Color Palette list provided in the rules above.
+        - Do NOT invent or hallucinate new colors (e.g., do NOT output generic "Navy Blue", "Bright Yellow", "White" unless they are explicitly in the palette).
+        - Copy the EXACT color name and its exact 6-character hex code from the palette list.
+        - Balance foundational neutrals (e.g. for bottoms or outerwear) with accent or statement colors (e.g. for tops near the face).
+        - Avoid all colors listed under "Colors to Avoid".
 
         ======================================================================
         STRICT OUTPUT SCHEMA (JSON ONLY)
@@ -270,6 +274,11 @@ struct OutfitPromptBuilder: Sendable {
 
     // MARK: - LLaMA 3.2 Formatted Chat Prompt (<|start_header_id|>)
 
+    /// The JSON prefix that pre-fills the assistant turn, forcing the model to continue
+    /// the object directly with no prose preamble or markdown wrapper.
+    /// Must be prepended back to the raw LLM output before JSON decoding.
+    public static let assistantPrefill = "{\"looks\":["
+
     /// Produces a ready-to-run Llama 3.2 chat-templated prompt for `Llama-3.2-1B-Instruct-Q4_K_M.gguf`.
     public func buildLlamaFormattedPrompt(
         occasion: OccasionItem,
@@ -285,6 +294,7 @@ struct OutfitPromptBuilder: Sendable {
 
         \(user)<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
+        \(OutfitPromptBuilder.assistantPrefill)
         """
     }
 }

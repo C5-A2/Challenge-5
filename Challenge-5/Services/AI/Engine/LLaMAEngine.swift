@@ -151,9 +151,10 @@ public actor LLaMAEngine {
         self.model = loadedModel
         
         var contextParams = llama_context_default_params()
-        // The outfit system prompt alone is ~2600 tokens; allow 1024 tokens of output headroom.
-        // Llama-3.2-1B supports up to 131072 context tokens — 4096 is comfortably within limits.
-        contextParams.n_ctx = 4096
+        // Expanded context window: 16,384 tokens (KV cache size is only ~512 MB for 1B model with Metal).
+        // Leaves massive headroom for complex prompts + complete 5-look outfit JSON outputs.
+        // Llama-3.2-1B supports up to 131,072 max context tokens natively.
+        contextParams.n_ctx = 16384
         contextParams.n_batch = 512
         
         guard let loadedContext = llama_init_from_model(loadedModel, contextParams) else {
@@ -213,7 +214,8 @@ public actor LLaMAEngine {
         // Clear the KV cache so each new generation starts from a clean state.
         // Without this, the singleton context retains positions from the previous call
         // and llama_decode rejects the next batch with "inconsistent sequence positions".
-        llama_kv_cache_clear(context)
+        // This version of llama.cpp (2.10549) uses llama_memory_clear via llama_get_memory().
+        llama_memory_clear(llama_get_memory(context), false)
 
         // The pipeline passes a fully-formatted Llama 3.2 chat prompt that already contains
         // <|begin_of_text|>, <|start_header_id|>, and <|eot_id|> tokens.
