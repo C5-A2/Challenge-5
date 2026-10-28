@@ -78,7 +78,7 @@ public final class BodyScanViewModel {
         sideImageData != nil && isSideAngleConfirmed && isSidePostureConfirmed && isSideFittedClothingConfirmed
     }
 
-    // MARK: - Physical Metrics Input (Form Validation)
+    // MARK: - Physical Metrics Input (Form Validation - C5-91)
 
     public var age: Int = 23
     public var weightKg: Double = 60.0
@@ -86,15 +86,15 @@ public final class BodyScanViewModel {
     public var usualSize: ClothingSize = .m
 
     public var isHeightValid: Bool {
-        heightCm >= 100.0 && heightCm <= 250.0
+        PhysicalMetricsValidator.isHeightValid(heightCm)
     }
 
     public var isWeightValid: Bool {
-        weightKg >= 30.0 && weightKg <= 250.0
+        PhysicalMetricsValidator.isWeightValid(weightKg)
     }
 
     public var isAgeValid: Bool {
-        age >= 10 && age <= 120
+        PhysicalMetricsValidator.isAgeValid(age)
     }
 
     public var canProceedWithMetrics: Bool {
@@ -102,12 +102,18 @@ public final class BodyScanViewModel {
     }
 
     public var validationErrorMessage: String? {
-        if !isHeightValid {
-            return "Height must be between 100 cm and 250 cm."
+        if heightCm <= 0 {
+            return "Height must be greater than 0 cm."
+        } else if !isHeightValid {
+            return "Height must be between \(Int(PhysicalMetricsValidator.minHeightCm)) cm and \(Int(PhysicalMetricsValidator.maxHeightCm)) cm."
+        } else if weightKg <= 0 {
+            return "Weight must be greater than 0 kg."
         } else if !isWeightValid {
-            return "Weight must be between 30 kg and 250 kg."
+            return "Weight must be between \(Int(PhysicalMetricsValidator.minWeightKg)) kg and \(Int(PhysicalMetricsValidator.maxWeightKg)) kg."
+        } else if age <= 0 {
+            return "Age must be greater than 0."
         } else if !isAgeValid {
-            return "Please enter a valid age."
+            return "Age must be between \(PhysicalMetricsValidator.minAge) and \(PhysicalMetricsValidator.maxAge) years."
         }
         return nil
     }

@@ -29,6 +29,14 @@ struct PhysicalMetricsInputView: View {
         case height
     }
 
+    private var validationResult: PhysicalMetricsValidationResult {
+        PhysicalMetricsValidator.validate(
+            ageText: ageText,
+            weightText: weightText,
+            heightText: heightText
+        )
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -45,7 +53,7 @@ struct PhysicalMetricsInputView: View {
 
                         metricsFormCard
 
-                        if let error = viewModel.validationErrorMessage, !isFormEmpty {
+                        if let error = validationResult.summaryError, !isFormEmpty {
                             validationBanner(error)
                         }
 
@@ -135,10 +143,13 @@ struct PhysicalMetricsInputView: View {
                 unit: "years",
                 text: $ageText,
                 placeholder: "23",
-                field: .age
+                field: .age,
+                hasError: validationResult.ageError != nil && !ageText.isEmpty
             ) { newValue in
                 if let val = Int(newValue) {
                     viewModel.age = val
+                } else if newValue.isEmpty {
+                    viewModel.age = 0
                 }
             }
 
@@ -151,10 +162,14 @@ struct PhysicalMetricsInputView: View {
                 unit: "kg",
                 text: $weightText,
                 placeholder: "60",
-                field: .weight
+                field: .weight,
+                hasError: validationResult.weightError != nil && !weightText.isEmpty
             ) { newValue in
-                if let val = Double(newValue) {
+                let normalized = newValue.replacingOccurrences(of: ",", with: ".")
+                if let val = Double(normalized) {
                     viewModel.weightKg = val
+                } else if newValue.isEmpty {
+                    viewModel.weightKg = 0
                 }
             }
 
@@ -167,10 +182,14 @@ struct PhysicalMetricsInputView: View {
                 unit: "cm",
                 text: $heightText,
                 placeholder: "170",
-                field: .height
+                field: .height,
+                hasError: validationResult.heightError != nil && !heightText.isEmpty
             ) { newValue in
-                if let val = Double(newValue) {
+                let normalized = newValue.replacingOccurrences(of: ",", with: ".")
+                if let val = Double(normalized) {
                     viewModel.heightCm = val
+                } else if newValue.isEmpty {
+                    viewModel.heightCm = 0
                 }
             }
 
@@ -198,18 +217,19 @@ struct PhysicalMetricsInputView: View {
         text: Binding<String>,
         placeholder: String,
         field: MetricField,
+        hasError: Bool = false,
         onChange: @escaping (String) -> Void
     ) -> some View {
         HStack {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 16))
-                    .foregroundStyle(AppColors.espressoTitle.opacity(0.75))
+                    .foregroundStyle(hasError ? Color.red.opacity(0.85) : AppColors.espressoTitle.opacity(0.75))
                     .frame(width: 24)
 
                 Text(title)
                     .font(AppTypography.cardHeadline)
-                    .foregroundStyle(AppColors.espressoTitle)
+                    .foregroundStyle(hasError ? Color.red.opacity(0.9) : AppColors.espressoTitle)
             }
 
             Spacer()
@@ -232,11 +252,14 @@ struct PhysicalMetricsInputView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color.black.opacity(0.035))
+            .background(hasError ? Color.red.opacity(0.05) : Color.black.opacity(0.035))
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(focusedField == field ? AppColors.primaryBlue.opacity(0.6) : Color.clear, lineWidth: 1.5)
+                    .stroke(
+                        hasError ? Color.red.opacity(0.7) : (focusedField == field ? AppColors.primaryBlue.opacity(0.6) : Color.clear),
+                        lineWidth: hasError ? 1.5 : 1.5
+                    )
             )
         }
     }
@@ -320,8 +343,8 @@ struct PhysicalMetricsInputView: View {
                     }
                 }
             }
-            .disabled(!viewModel.canProceedWithMetrics || viewModel.isAnalyzing)
-            .opacity(viewModel.canProceedWithMetrics ? 1.0 : 0.45)
+            .disabled(!validationResult.isValid || viewModel.isAnalyzing)
+            .opacity(validationResult.isValid ? 1.0 : 0.45)
             .padding(.horizontal, AppDimensions.screenHorizontalPadding)
             .padding(.vertical, 16)
         }
