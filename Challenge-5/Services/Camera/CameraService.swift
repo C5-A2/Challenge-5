@@ -179,6 +179,20 @@ public final class CameraService: NSObject, CameraServiceProtocol {
 
     // MARK: - Still Photo Capture
 
+    public func setZoomFactor(_ factor: CGFloat) {
+        #if !targetEnvironment(simulator)
+        guard let device = currentInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            let clamped = max(device.minAvailableVideoZoomFactor, min(factor, min(device.maxAvailableVideoZoomFactor, 5.0)))
+            device.videoZoomFactor = clamped
+            device.unlockForConfiguration()
+        } catch {
+            // Configuration lock failed
+        }
+        #endif
+    }
+
     public func capturePhoto() async throws -> UIImage {
         // If running in simulator or without physical camera, generate simulated photo
         #if targetEnvironment(simulator)

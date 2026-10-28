@@ -9,25 +9,8 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @State private var viewModel = SkinScanViewModel()
-
     var body: some View {
-        Group {
-            switch viewModel.currentStep {
-            case .guide:
-                SkinScanGuideView(viewModel: viewModel)
-            case .camera:
-                FaceCameraView(viewModel: viewModel)
-            case .review:
-                FaceReviewView(viewModel: viewModel)
-            case .result:
-                SkinResultView(viewModel: viewModel) {
-                    // Action when tapping 'Next' on result
-                    viewModel.currentStep = .guide
-                }
-            }
-        }
-        .animation(.easeInOut(duration: 0.25), value: viewModel.currentStep)
+        ProfileHubView()
     }
 }
 
@@ -35,4 +18,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .modelContainer(for: [UserProfile.self], inMemory: true)
 }
