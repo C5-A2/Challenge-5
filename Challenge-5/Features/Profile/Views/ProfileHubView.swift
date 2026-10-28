@@ -260,20 +260,15 @@ struct ProfileHubView: View {
     }
 
     private var metricsFlowPlaceholder: some View {
-        ZStack {
-            AppColors.canvasBackground.ignoresSafeArea()
-            VStack(spacing: 16) {
-                Text("Physical Metrics")
-                    .font(AppTypography.cardHeadline)
-                    .foregroundStyle(AppColors.espressoTitle)
-                Text("Configure height, weight, and sizing.")
-                    .font(AppTypography.bodyRegular)
-                    .foregroundStyle(AppColors.bodyText)
-                PrimaryPillButton(title: "Done") {
-                    activeSheet = nil
-                }
-                .padding(.horizontal, 24)
-            }
+        let vm = BodyScanViewModel()
+        if let m = currentProfile?.measurements {
+            vm.age = m.age
+            vm.weightKg = m.weightKg
+            vm.heightCm = m.heightCm
+            vm.usualSize = m.usualSize
+        }
+        return PhysicalMetricsInputView(viewModel: vm) {
+            activeSheet = nil
         }
     }
 }
@@ -322,7 +317,7 @@ private struct BodyScanFlowHostView: View {
             case .sideReview:
                 SideBodyReviewView(viewModel: viewModel)
             case .metricsInput:
-                Color.black.overlay(Text("Metrics").foregroundColor(.white))
+                PhysicalMetricsInputView(viewModel: viewModel)
             case .analysisResult:
                 Color.black.overlay(Text("Result").foregroundColor(.white))
             }
