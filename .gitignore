@@ -72,3 +72,6 @@ fastlane/test_output
 .Spotlight-V100
 .Trashes
 
+# Large AI Model Binaries (GGUF is tracked via Git LFS in .gitattributes)
+*.bin
+

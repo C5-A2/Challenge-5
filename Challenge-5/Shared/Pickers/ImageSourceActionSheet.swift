@@ -67,12 +67,16 @@ public struct ImageSourceMenuIconLabel: View {
     
     public var body: some View {
         Image(systemName: "camera")
-            .font(.system(size: 18))
+            .font(.system(size: ReferencePickerConstants.MenuIcon.iconSize))
             .foregroundStyle(AppColors.bodyText)
-            .frame(width: 36, height: 36)
+            .frame(width: AppDimensions.circularIconSize, height: AppDimensions.circularIconSize)
             .background(AppColors.cardBackground)
             .clipShape(Circle())
-            .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
+            .shadow(
+                color: .black.opacity(ReferencePickerConstants.MenuIcon.shadowOpacity),
+                radius: ReferencePickerConstants.MenuIcon.shadowRadius,
+                y: ReferencePickerConstants.MenuIcon.shadowOffsetY
+            )
     }
 }
 

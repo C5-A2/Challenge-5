@@ -40,6 +40,19 @@ final class OccasionOutputViewModel {
     
     var isShowingAddLookModal: Bool = false
     
+    /// Shown when saving or unsaving a look fails.
+    var bookmarkErrorMessage: String?
+    
+    /// Injected storage (previews and tests). Without it, the occasion's SwiftData context is used.
+    private let injectedSavedLookStorage: (any SavedLookStoring)?
+    
+    /// Saved-look storage for bookmarks. `nil` when the occasion isn't stored (for example in previews).
+    private var savedLookStorage: (any SavedLookStoring)? {
+        if let injectedSavedLookStorage {
+            return injectedSavedLookStorage
+        }
+        return occasion.modelContext.map { SavedLookStorageService(modelContext: $0) }
+    }
     var errorMessage: String? = nil
     
     var isShowingErrorAlert: Bool = false
@@ -65,7 +78,7 @@ final class OccasionOutputViewModel {
             currentLook?.isBookmarked ?? false
         }
         set {
-            currentLook?.isBookmarked = newValue
+            setCurrentLookSaved(newValue)
         }
     }
     
@@ -74,13 +87,18 @@ final class OccasionOutputViewModel {
     }
     
     
+    /// Uses `looks` when given, otherwise the occasion's stored looks, otherwise mock looks.
     init(
         occasion: OccasionItem,
         looks: [OutfitLook] = [],
         selectedLookIndex: Int = 0,
+        savedLookStorage: (any SavedLookStoring)? = nil
         profile: UserProfile? = nil
     ) {
         self.occasion = occasion
+        let storedLooks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
+        let initialLooks = looks.isEmpty ? storedLooks : looks
+        self.looks = initialLooks.isEmpty ? OccasionOutputViewModel.makeMockLooks() : initialLooks
         self.profile = profile
         if !looks.isEmpty {
             self.looks = looks
@@ -101,6 +119,7 @@ final class OccasionOutputViewModel {
             }
         }
         self.selectedLookIndex = selectedLookIndex
+        self.injectedSavedLookStorage = savedLookStorage
     }
     
     
@@ -121,10 +140,39 @@ final class OccasionOutputViewModel {
         selectLook(at: selectedLookIndex + 1)
     }
     
+    /// Saves or unsaves the current look, so it appears in (or leaves) the Library.
     func toggleBookmark() {
         guard let currentLook else { return }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-            currentLook.isBookmarked.toggle()
+            setCurrentLookSaved(!currentLook.isBookmarked)
+        }
+    }
+    
+    /// Stores the bookmark through `SavedLookStoring`. Reverts it if saving fails.
+    private func setCurrentLookSaved(_ isSaved: Bool) {
+        guard let currentLook else { return }
+        guard let savedLookStorage else {
+            // Occasion isn't stored (previews): keep the bookmark in memory only.
+            currentLook.isBookmarked = isSaved
+            return
+        }
+        attachLooksToOccasion()
+        do {
+            try savedLookStorage.setSaved(isSaved, for: currentLook)
+            bookmarkErrorMessage = nil
+        } catch {
+            currentLook.isBookmarked = !isSaved
+            bookmarkErrorMessage = error.localizedDescription
+        }
+    }
+    
+    /// Adds looks that aren't stored yet (for example mock looks) to the occasion,
+    /// so a saved look keeps its occasion and stays after this screen closes.
+    private func attachLooksToOccasion() {
+        guard occasion.modelContext != nil else { return }
+        let storedLookIDs = Set(occasion.generatedLooks.map(\.id))
+        for look in looks where !storedLookIDs.contains(look.id) {
+            occasion.generatedLooks.append(look)
         }
     }
     
@@ -206,7 +254,7 @@ extension OccasionOutputViewModel {
         let look2 = OutfitLook(
             lookIndex: 1,
             fitRationale: "The warm terracotta long coat establishes a striking vertical column, balancing upper proportions with warm autumnal earth tones.",
-            isBookmarked: true
+            isBookmarked: false
         )
         let coat2 = GarmentItem(
             category: .outer,
@@ -264,15 +312,39 @@ extension OccasionOutputViewModel {
             fitRationale: "Monochromatic dark tones create an uninterrupted vertical presence, elevating evening cocktail formality effortlessly.",
             isBookmarked: false
         )
-        look4.garments = [top1, pants1, shoes1]
+        // Copies, not the same objects: a SwiftData garment belongs to one look only,
+        // so sharing them would move them away from look 1 (its Library card lost its garment name).
+        look4.garments = makeGarmentCopies(of: [top1, pants1, shoes1])
         
         let look5 = OutfitLook(
             lookIndex: 4,
             fitRationale: "Vibrant warmth and tailored structure highlight personal color radiance while maintaining comfortable wedding movement.",
             isBookmarked: false
         )
-        look5.garments = [coat2, inner2, pants2]
+        look5.garments = makeGarmentCopies(of: [coat2, inner2, pants2])
         
-        return [look1, look2, look3, look4, look5]
+        let mockLooks = [look1, look2, look3, look4, look5]
+        // Dummy look images (same assets as the avatar stage), so saved mock looks
+        // show in the Library and in "From Library" references. Replace with generated images.
+        for look in mockLooks {
+            look.lookImageData = UIImage(named: "mock_result_\(look.lookIndex + 1)")?
+                .jpegData(compressionQuality: mockLookImageCompressionQuality)
+        }
+        return mockLooks
+    }
+    
+    private static let mockLookImageCompressionQuality: CGFloat = 0.8
+    
+    /// New garment objects with the same details, for reusing a mock outfit in another look.
+    private static func makeGarmentCopies(of garments: [GarmentItem]) -> [GarmentItem] {
+        garments.map {
+            GarmentItem(
+                category: $0.category,
+                name: $0.name,
+                material: $0.material,
+                colorName: $0.colorName,
+                hexColor: $0.hexColor
+            )
+        }
     }
 }

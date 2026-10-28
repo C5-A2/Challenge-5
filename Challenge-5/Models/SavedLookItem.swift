@@ -66,17 +66,18 @@ public struct SavedLookItem: Identifiable, Hashable, Sendable {
     
     // MARK: - Bridge Initializer from SwiftData OutfitLook
     
+    /// Uses the look's occasion (title, dresscode, date) when no value is passed.
     init(
         outfitLook: OutfitLook,
-        occasionTitle: String = "Occasion Outfit",
-        dresscode: String = "Smart Casual",
-        date: Date = Date(),
+        occasionTitle: String? = nil,
+        dresscode: String? = nil,
+        date: Date? = nil,
         cardHeightRatio: CGFloat = 1.35
     ) {
         self.id = outfitLook.id
-        self.occasionTitle = occasionTitle
-        self.dresscode = dresscode
-        self.date = date
+        self.occasionTitle = occasionTitle ?? outfitLook.occasion?.title ?? "Occasion Outfit"
+        self.dresscode = dresscode ?? outfitLook.occasion?.dresscode ?? "Smart Casual"
+        self.date = date ?? outfitLook.savedAt ?? outfitLook.occasion?.date ?? Date()
         self.lookIndex = outfitLook.lookIndex
         self.isBookmarked = outfitLook.isBookmarked
         self.fitRationale = outfitLook.fitRationale

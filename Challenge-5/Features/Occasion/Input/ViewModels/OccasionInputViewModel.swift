@@ -40,7 +40,12 @@ public final class OccasionInputViewModel {
     public var selectedVisions: Set<StyleVision> = []
     
     /// Outfit reference photos (JPEG) from the camera, photo library, or saved looks. Optional, Max 3.
-    public var referenceImages: [Data] = []
+    /// Change it through the reference actions, so `referenceSavedLookIDs` stays in sync.
+    public private(set) var referenceImages: [Data] = []
+    
+    /// The saved look behind each reference photo, in the same order as `referenceImages`.
+    /// `nil` for photos from the camera or the photo library.
+    public private(set) var referenceSavedLookIDs: [UUID?] = []
     
     /// Presentation state of the three reference sources (Camera, Open from Photos, From Library).
     public var isShowingReferenceCamera: Bool = false
@@ -82,6 +87,7 @@ public final class OccasionInputViewModel {
         self.dresscode = dresscode
         self.selectedVisions = selectedVisions
         self.referenceImages = referenceImages
+        self.referenceSavedLookIDs = Array(repeating: nil, count: referenceImages.count)
         
         self.initialTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialDate = date
@@ -96,6 +102,7 @@ public final class OccasionInputViewModel {
         self.dresscode = occasion.dresscode
         self.selectedVisions = Set(occasion.visions)
         self.referenceImages = occasion.referenceImages
+        self.referenceSavedLookIDs = Array(repeating: nil, count: occasion.referenceImages.count)
         
         self.initialTitle = occasion.title.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialDate = occasion.date
@@ -110,6 +117,7 @@ public final class OccasionInputViewModel {
         self.dresscode = occasion.dresscode
         self.selectedVisions = Set(occasion.visions)
         self.referenceImages = occasion.referenceImagesData
+        self.referenceSavedLookIDs = Array(repeating: nil, count: occasion.referenceImagesData.count)
         
         self.initialTitle = occasion.title.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialDate = occasion.date
@@ -167,6 +175,11 @@ public final class OccasionInputViewModel {
         remainingReferenceCount > 0
     }
     
+    /// Saved looks already added as references, so "From Library" shows them as selected.
+    public var selectedSavedLookIDs: Set<UUID> {
+        Set(referenceSavedLookIDs.compactMap { $0 })
+    }
+    
     public var hasCapturedReference: Bool {
         capturedReferenceImage != nil
     }
@@ -219,14 +232,24 @@ public final class OccasionInputViewModel {
         }
     }
     
-    /// Adds reference photos after the existing ones, keeping at most 3.
+    /// Adds reference photos from the camera or photo library after the existing ones, keeping at most 3.
     public func addReferenceImages(_ newImages: [Data]) {
-        referenceImages = Array((referenceImages + newImages).prefix(ReferencePickerConstants.maximumReferenceCount))
+        appendReferences(newImages.map { (image: $0, savedLookID: nil) })
     }
     
     public func removeReferenceImage(at index: Int) {
         guard referenceImages.indices.contains(index) else { return }
         referenceImages.remove(at: index)
+        if referenceSavedLookIDs.indices.contains(index) {
+            referenceSavedLookIDs.remove(at: index)
+        }
+    }
+    
+    /// Adds references up to the limit, keeping `referenceImages` and `referenceSavedLookIDs` in sync.
+    private func appendReferences(_ newReferences: [(image: Data, savedLookID: UUID?)]) {
+        let addedReferences = newReferences.prefix(remainingReferenceCount)
+        referenceImages += addedReferences.map(\.image)
+        referenceSavedLookIDs += addedReferences.map(\.savedLookID)
     }
     
     /// Loads the photos picked in "Open from Photos" as reference JPEGs and adds them.
@@ -254,9 +277,23 @@ public final class OccasionInputViewModel {
             .map { SavedLookItem(outfitLook: $0) }
     }
     
-    /// Adds the looks picked in "From Library" as reference photos.
-    public func addReferenceImages(from savedLooks: [SavedLookItem]) {
-        addReferenceImages(savedLooks.compactMap { $0.lookImageData.flatMap(ReferenceImageEncoder.makeJPEGData) })
+    /// Applies the "From Library" selection: removes saved looks that were unselected
+    /// and adds newly selected ones, so the same look is never added twice.
+    public func updateSavedReferenceLooks(_ pickedLooks: [SavedLookItem]) {
+        let pickedLookIDs = Set(pickedLooks.map(\.id))
+        for index in referenceSavedLookIDs.indices.reversed() {
+            if let lookID = referenceSavedLookIDs[index], !pickedLookIDs.contains(lookID) {
+                removeReferenceImage(at: index)
+            }
+        }
+        let alreadyAddedIDs = selectedSavedLookIDs
+        let newReferences = pickedLooks
+            .filter { !alreadyAddedIDs.contains($0.id) }
+            .compactMap { look -> (image: Data, savedLookID: UUID?)? in
+                guard let referenceData = look.lookImageData.flatMap(ReferenceImageEncoder.makeJPEGData) else { return nil }
+                return (image: referenceData, savedLookID: look.id)
+            }
+        appendReferences(newReferences)
     }
     
     // MARK: - Reference Camera Actions
@@ -345,6 +382,7 @@ public final class OccasionInputViewModel {
         dresscode = ""
         selectedVisions = []
         referenceImages = []
+        referenceSavedLookIDs = []
         referencePhotoPickerItems = []
         isShowingDiscardAlert = false
     }

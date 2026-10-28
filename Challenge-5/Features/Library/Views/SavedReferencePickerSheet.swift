@@ -30,6 +30,15 @@ public struct SavedReferencePickerSheet: View {
     @State private var selectedSegment: PickerSegment = .collection
     @State private var selectedLookIds: Set<UUID> = []
     
+    /// Collection grid cell sizes (square cells, like Photos).
+    private enum GridCellLayout {
+        static let cellAspectRatio: CGFloat = 1
+        static let selectionBorderWidth: CGFloat = 3.5
+        static let checkmarkBadgeSize: CGFloat = 22
+        static let checkmarkIconSize: CGFloat = 11
+        static let checkmarkBadgePadding: CGFloat = 6
+    }
+    
     private let columns = [
         GridItem(.flexible(), spacing: 2),
         GridItem(.flexible(), spacing: 2),
@@ -135,7 +144,7 @@ public struct SavedReferencePickerSheet: View {
         .padding(3)
         .background(
             Capsule()
-                .fill(Color(hex: "#EAE7E1"))
+                .fill(AppColors.tabSelectionHighlight)
         )
     }
     
@@ -150,34 +159,37 @@ public struct SavedReferencePickerSheet: View {
                     Button {
                         toggleSelection(for: look.id)
                     } label: {
-                        ZStack(alignment: .topTrailing) {
-                          
-                            AsyncLookThumbnailView(
-                                imageData: look.lookImageData,
-                                assetImageName: look.assetImageName,
-                                contentMode: .fill,
-                                showPlaceholderIcon: false
-                            )
-                            .aspectRatio(1, contentMode: .fill)
-                            .frame(minWidth: 0, maxWidth: .infinity)
-                            .clipped()
-
-                            if isSelected {
-                                Rectangle()
-                                    .strokeBorder(Color(hex: "#007AFF"), lineWidth: 3.5)
-                                
-                                ZStack {
-                                    Circle()
-                                        .fill(Color(hex: "#007AFF"))
-                                        .frame(width: 22, height: 22)
-                                    
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(.white)
-                                }
-                                .padding(6)
+                        // Same-size square cells (like Photos): the square sets the size,
+                        // the image fills it and is cropped.
+                        Color.clear
+                            .aspectRatio(GridCellLayout.cellAspectRatio, contentMode: .fit)
+                            .overlay {
+                                AsyncLookThumbnailView(
+                                    imageData: look.lookImageData,
+                                    assetImageName: look.assetImageName,
+                                    contentMode: .fill,
+                                    showPlaceholderIcon: false
+                                )
                             }
-                        }
+                            .clipped()
+                            .contentShape(Rectangle())
+                            .overlay(alignment: .topTrailing) {
+                                if isSelected {
+                                    Rectangle()
+                                        .strokeBorder(AppColors.primaryBlue, lineWidth: GridCellLayout.selectionBorderWidth)
+                                
+                                    ZStack {
+                                        Circle()
+                                            .fill(AppColors.primaryBlue)
+                                            .frame(width: GridCellLayout.checkmarkBadgeSize, height: GridCellLayout.checkmarkBadgeSize)
+                                    
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: GridCellLayout.checkmarkIconSize, weight: .bold))
+                                            .foregroundStyle(AppColors.cardBackground)
+                                    }
+                                    .padding(GridCellLayout.checkmarkBadgePadding)
+                                }
+                            }
                     }
                     .buttonStyle(.plain)
                 }

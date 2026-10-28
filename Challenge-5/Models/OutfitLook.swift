@@ -17,6 +17,8 @@ final class OutfitLook {
     @Attribute(.unique) var id: UUID = UUID()
     var lookIndex: Int                      // 0..4 for 5 AI-generated looks
     var isBookmarked: Bool = false
+    /// When the user saved (bookmarked) this look. `nil` when it isn't saved. Library shows newest first.
+    var savedAt: Date?
 
     var fitRationale: String
 
@@ -26,6 +28,9 @@ final class OutfitLook {
 
     @Relationship(deleteRule: .cascade, inverse: \GarmentItem.outfitLook)
     var garments: [GarmentItem] = []
+
+    /// The occasion this look was generated for. Lets the Library show the occasion title.
+    var occasion: OccasionItem?
 
     // MARK: - Initializer
 

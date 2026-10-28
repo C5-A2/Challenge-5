@@ -396,7 +396,8 @@ Challenge-5/
 │   │   ├── BodyPoseEstimatorProtocol.swift
 │   │   ├── SkinColorAnalyzerProtocol.swift
 │   │   ├── RecommendationEngineProtocol.swift
-│   │   └── GarmentCroppingProtocol.swift         # (Natalie) Store garment crop
+│   │   ├── GarmentCroppingProtocol.swift         # (Natalie) Store garment crop
+│   │   └── SavedLookStorageProtocol.swift        # Save / unsave looks + fetch saved looks
 │   ├── Camera/
 │   │   ├── CameraService.swift                    # AVFoundation session management
 │   │   └── LightingAnalyzer.swift                 # Real-time luminance / EV analysis
@@ -420,7 +421,10 @@ Challenge-5/
 │   │   └── Prompts/
 │   │       └── PromptTemplates.swift              # System prompt builder for 5-look generation
 │   └── Storage/
-│       └── SwiftDataStack.swift                   # ModelContainer + query helpers
+│       ├── SwiftDataStack.swift                   # ModelContainer + query helpers
+│       ├── SavedLookStorageService.swift          # SwiftData saved looks + mock for previews
+│       ├── SavedLookStorageError.swift            # Saved look fetch / save errors
+│       └── SavedLookSampleData.swift              # In-memory sample (occasion + 5 looks) for previews
 │
 ├── Shared/                                        # Reusable Design System
 │   ├── Theme/
@@ -1436,7 +1440,7 @@ final class OccasionItem {
     var createdAt: Date = Date()
     var isCompleted: Bool = false
     
-    @Relationship(deleteRule: .cascade)
+    @Relationship(deleteRule: .cascade, inverse: \OutfitLook.occasion)
     var generatedLooks: [OutfitLook] = []
     
     var isUpcoming: Bool { date > Date() }
@@ -1468,7 +1472,8 @@ import SwiftData
 final class OutfitLook {
     @Attribute(.unique) var id: UUID = UUID()
     var lookIndex: Int                      // 0..4 for 5 AI-generated looks
-    var isBookmarked: Bool = false
+    var isBookmarked: Bool = false          // true = saved to the Library
+    var savedAt: Date?                      // when it was saved, nil when not saved
     
     // 3-Fits compliance scores (0.0 to 1.0)
     var bodyShapeScore: Double
@@ -1482,6 +1487,9 @@ final class OutfitLook {
     
     @Relationship(deleteRule: .cascade, inverse: \GarmentItem.outfitLook)
     var garments: [GarmentItem] = []
+    
+    /// The occasion this look was generated for (Library card title, dresscode).
+    var occasion: OccasionItem?
     
     init(
         lookIndex: Int,
@@ -1824,6 +1832,17 @@ nonisolated struct GarmentCrop: Sendable {
 
 nonisolated protocol GarmentCroppingProtocol: Sendable {
     func makeGarmentCrop(for request: GarmentCropRequest) async throws -> GarmentCrop
+}
+```
+
+```swift
+// Services/Protocols/SavedLookStorageProtocol.swift
+@MainActor
+protocol SavedLookStoring {
+    /// Saved (bookmarked) looks, newest first.
+    func fetchSavedLooks() throws -> [OutfitLook]
+    /// Saves or unsaves a look. Inserts the look first if it is not stored yet.
+    func setSaved(_ isSaved: Bool, for look: OutfitLook) throws
 }
 ```
 
