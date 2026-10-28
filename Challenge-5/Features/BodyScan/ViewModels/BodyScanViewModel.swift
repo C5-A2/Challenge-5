@@ -62,16 +62,20 @@ public final class BodyScanViewModel {
 
     // MARK: - Review Checklists
 
+    public var isShowingDiscardDialog: Bool = false
+
+    public var isFrontAngleConfirmed: Bool = false
     public var isFrontPostureConfirmed: Bool = false
     public var isFrontFittedClothingConfirmed: Bool = false
     public var canConfirmFrontPhoto: Bool {
-        frontImageData != nil && isFrontPostureConfirmed && isFrontFittedClothingConfirmed
+        frontImageData != nil && isFrontAngleConfirmed && isFrontPostureConfirmed && isFrontFittedClothingConfirmed
     }
 
+    public var isSideAngleConfirmed: Bool = false
     public var isSidePostureConfirmed: Bool = false
     public var isSideFittedClothingConfirmed: Bool = false
     public var canConfirmSidePhoto: Bool {
-        sideImageData != nil && isSidePostureConfirmed && isSideFittedClothingConfirmed
+        sideImageData != nil && isSideAngleConfirmed && isSidePostureConfirmed && isSideFittedClothingConfirmed
     }
 
     // MARK: - Physical Metrics Input (Form Validation)
@@ -135,16 +139,18 @@ public final class BodyScanViewModel {
     public func setFrontPhoto(_ image: UIImage) {
         self.frontImage = image
         self.frontImageData = image.jpegData(compressionQuality: 0.85)
-        self.isFrontPostureConfirmed = false
-        self.isFrontFittedClothingConfirmed = false
+        self.isFrontAngleConfirmed = isDeviceVertical
+        self.isFrontPostureConfirmed = isDeviceVertical
+        self.isFrontFittedClothingConfirmed = true
         self.currentStep = .frontReview
     }
 
     public func setSidePhoto(_ image: UIImage) {
         self.sideImage = image
         self.sideImageData = image.jpegData(compressionQuality: 0.85)
-        self.isSidePostureConfirmed = false
-        self.isSideFittedClothingConfirmed = false
+        self.isSideAngleConfirmed = isDeviceVertical
+        self.isSidePostureConfirmed = isDeviceVertical
+        self.isSideFittedClothingConfirmed = true
         self.currentStep = .sideReview
     }
     #endif
@@ -163,6 +169,36 @@ public final class BodyScanViewModel {
         #endif
         sideImageData = nil
         currentStep = .sideCamera
+    }
+
+    public func confirmFrontPhotoAndProceed() {
+        currentStep = .sideGuide
+    }
+
+    public func confirmSidePhotoAndProceed() {
+        currentStep = .metricsInput
+    }
+
+    public func discardFrontPhoto() {
+        #if canImport(UIKit)
+        frontImage = nil
+        #endif
+        frontImageData = nil
+        isFrontAngleConfirmed = false
+        isFrontPostureConfirmed = false
+        isFrontFittedClothingConfirmed = false
+        currentStep = .frontGuide
+    }
+
+    public func discardSidePhoto() {
+        #if canImport(UIKit)
+        sideImage = nil
+        #endif
+        sideImageData = nil
+        isSideAngleConfirmed = false
+        isSidePostureConfirmed = false
+        isSideFittedClothingConfirmed = false
+        currentStep = .sideGuide
     }
 
     public func startCamera() {

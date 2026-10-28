@@ -314,13 +314,13 @@ private struct BodyScanFlowHostView: View {
             case .frontCamera:
                 FrontBodyCameraView(viewModel: viewModel)
             case .frontReview:
-                Color.black.overlay(Text("Front Review").foregroundColor(.white))
+                FrontBodyReviewView(viewModel: viewModel)
             case .sideGuide:
                 SideBodyGuideView(viewModel: viewModel, onDismiss: { dismiss() })
             case .sideCamera:
                 SideBodyCameraView(viewModel: viewModel)
             case .sideReview:
-                Color.black.overlay(Text("Side Review").foregroundColor(.white))
+                SideBodyReviewView(viewModel: viewModel)
             case .metricsInput:
                 Color.black.overlay(Text("Metrics").foregroundColor(.white))
             case .analysisResult:
