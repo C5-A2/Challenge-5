@@ -151,7 +151,9 @@ public actor LLaMAEngine {
         self.model = loadedModel
         
         var contextParams = llama_context_default_params()
-        contextParams.n_ctx = 2048 // 2048 token context window for Llama-3.2-1B
+        // The outfit system prompt alone is ~2600 tokens; allow 1024 tokens of output headroom.
+        // Llama-3.2-1B supports up to 131072 context tokens — 4096 is comfortably within limits.
+        contextParams.n_ctx = 4096
         contextParams.n_batch = 512
         
         guard let loadedContext = llama_init_from_model(loadedModel, contextParams) else {
@@ -207,24 +209,31 @@ public actor LLaMAEngine {
         }
         
         let vocab = llama_model_get_vocab(model)
-        
-        // Format prompt using Llama-3.2 Instruct format
-        let systemPrompt = "You are an expert haute-couture fashion styling system. Return only clean advice without markdown code fences."
-        let formattedPrompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\(systemPrompt)<|eot_id|><|start_header_id|>user<|end_header_id|>\n\(prompt)<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
-        
-        // Tokenize input prompt
+
+        // Clear the KV cache so each new generation starts from a clean state.
+        // Without this, the singleton context retains positions from the previous call
+        // and llama_decode rejects the next batch with "inconsistent sequence positions".
+        llama_kv_cache_clear(context)
+
+        // The pipeline passes a fully-formatted Llama 3.2 chat prompt that already contains
+        // <|begin_of_text|>, <|start_header_id|>, and <|eot_id|> tokens.
+        // Do NOT add another system wrapper here — just use the prompt as-is.
+        let formattedPrompt = prompt
+
+        // Tokenize — add_special = false because <|begin_of_text|> is already in the string.
+        // parse_special = true so the tokenizer recognises the <|...|> control tokens.
         let promptCString = formattedPrompt.cString(using: .utf8)!
         let maxPromptTokens = Int32(formattedPrompt.utf8.count + 64)
         var tokens = [llama_token](repeating: 0, count: Int(maxPromptTokens))
-        
+
         let nTokens = llama_tokenize(
             vocab,
             promptCString,
             Int32(formattedPrompt.utf8.count),
             &tokens,
             maxPromptTokens,
-            true, // add_special
-            true  // parse_special
+            false, // add_special = false — BOS already present in the chat template
+            true   // parse_special = true  — recognise <|begin_of_text|> etc.
         )
         
         guard nTokens > 0 else {

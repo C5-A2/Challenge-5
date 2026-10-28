@@ -92,34 +92,49 @@ final class OccasionOutputViewModel {
         occasion: OccasionItem,
         looks: [OutfitLook] = [],
         selectedLookIndex: Int = 0,
-        savedLookStorage: (any SavedLookStoring)? = nil
+        savedLookStorage: (any SavedLookStoring)? = nil,
         profile: UserProfile? = nil
     ) {
         self.occasion = occasion
-        let storedLooks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
-        let initialLooks = looks.isEmpty ? storedLooks : looks
-        self.looks = initialLooks.isEmpty ? OccasionOutputViewModel.makeMockLooks() : initialLooks
         self.profile = profile
-        if !looks.isEmpty {
-            self.looks = looks
-        } else if !occasion.generatedLooks.isEmpty {
-            self.looks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
-        } else {
-            do {
-                let activeProfile = profile ?? UserProfile.mockSample
-                self.looks = try OutfitGenerationPipeline.shared.generateLooksSync(
-                    for: occasion,
-                    profile: activeProfile
-                )
-            } catch {
-                let errorMsg = error.localizedDescription
-                print("\n❌ [OccasionOutputViewModel] LLaMA CANNOT BE USED: \(errorMsg)\n")
-                self.errorMessage = errorMsg
-                self.isShowingErrorAlert = true
-            }
-        }
         self.selectedLookIndex = selectedLookIndex
         self.injectedSavedLookStorage = savedLookStorage
+
+        if !looks.isEmpty {
+            // Caller-supplied looks (e.g. injected for tests/previews): use them directly.
+            self.looks = looks
+        } else if !occasion.generatedLooks.isEmpty {
+            // Previously generated and stored looks: restore them.
+            self.looks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
+        } else {
+            // No looks yet — show mock placeholders and kick off real async LLaMA generation.
+            // generateLooksSync now throws to prevent silent static-template fallback.
+            self.looks = OccasionOutputViewModel.makeMockLooks()
+            self.isLoading = true
+            Task { [weak self] in
+                guard let self else { return }
+                let activeProfile = profile ?? UserProfile.mockSample
+                do {
+                    let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(
+                        for: occasion,
+                        profile: activeProfile
+                    )
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                        self.looks = newLooks
+                        self.selectedLookIndex = 0
+                        self.isLoading = false
+                    }
+                } catch {
+                    let errorMsg = error.localizedDescription
+                    print("\n❌ [OccasionOutputViewModel] LLaMA inference failed: \(errorMsg)\n")
+                    withAnimation {
+                        self.errorMessage = errorMsg
+                        self.isShowingErrorAlert = true
+                        self.isLoading = false
+                    }
+                }
+            }
+        }
     }
     
     

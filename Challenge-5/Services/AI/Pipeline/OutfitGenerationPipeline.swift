@@ -83,22 +83,52 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         for occasion: OccasionItem,
         profile: UserProfile
     ) async throws -> [OutfitLook] {
-        return try generateLooksSync(for: occasion, profile: profile)
+        // Validate the GGUF model file is present before attempting inference.
+        try LLaMAResource.validateModelAvailability()
+
+        // 1. Injected JSON short-circuit (prompt testing / UI previews).
+        if let injectedJSON = OutfitGenerationPipeline.injectedLLMResponseJSON, !injectedJSON.isEmpty {
+            if let looks = try? parseLooks(from: injectedJSON), !looks.isEmpty {
+                print("✅ [OutfitGenerationPipeline] Using \(looks.count) injected looks.")
+                return looks
+            }
+        }
+
+        // 2. Build the fully-formatted Llama 3.2 chat prompt (system + user turns with
+        //    <|begin_of_text|> / <|start_header_id|> / <|eot_id|> control tokens).
+        //    LLaMAEngine.generate() uses this as-is — it does NOT add another wrapper.
+        let prompt = promptBuilder.buildLlamaFormattedPrompt(occasion: occasion, profile: profile)
+        print("🔧 [OutfitGenerationPipeline] Prompt built (\(prompt.count) chars). Starting LLaMA inference…")
+
+        // 3. Run on-device LLaMA inference — no silent fallback. Throws on failure.
+        //    maxTokens = 1024: enough for 5 looks × ~200 tokens of JSON each.
+        //    The 4096 context window minus ~2600 prompt tokens leaves ~1400 for output.
+        let rawJSON = try await LLaMAEngine.shared.generate(
+            prompt: prompt,
+            maxTokens: 1024,
+            temperature: 0.2
+        )
+
+        print("✅ [OutfitGenerationPipeline] LLaMA raw output (\(rawJSON.count) chars):\n\(rawJSON.prefix(300))")
+
+        // 4. Parse the structured JSON from the LLM output. Throws if malformed.
+        let looks = try parseLooks(from: rawJSON)
+        guard !looks.isEmpty else {
+            throw LLaMAError.invalidOutput("LLaMA returned a valid JSON but with 0 looks.")
+        }
+        return looks
     }
 
     /// Synchronous generation for seamless instant UI transitions upon form submit.
+    ///
+    /// > Note: This path is only used when LLaMA cannot be called synchronously (e.g. from `init`).
+    /// > The primary async path via `generateLooks(for:profile:)` runs real LLaMA inference.
     func generateLooksSync(
         for occasion: OccasionItem,
         profile: UserProfile
     ) throws -> [OutfitLook] {
         // Validate that LLaMA can be used. Throws LLaMAError if model is missing or unreadable.
         try LLaMAResource.validateModelAvailability()
-
-        // Build dynamic conditional prompt for Llama 3.2 (prints running system prompt to terminal for debugging)
-        let _ = promptBuilder.buildSystemPrompt(
-            occasion: occasion,
-            profile: profile
-        )
 
         // 1. If an injected LLM response JSON is available (prompt testing), decode directly:
         if let injectedJSON = OutfitGenerationPipeline.injectedLLMResponseJSON, !injectedJSON.isEmpty {
@@ -108,16 +138,9 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        let bodyType = profile.bodyType ?? .hourglass
-        let torsoBalance = profile.torsoBalance ?? .balanced
-        let colorSeason = profile.colorSeason ?? .trueAutumn
-
-        return synthesizeLooks(
-            for: occasion,
-            bodyType: bodyType,
-            torsoBalance: torsoBalance,
-            colorSeason: colorSeason
-        )
+        // LLaMA cannot run synchronously from an init context — throw so the caller shows an error
+        // instead of silently producing identical static looks.
+        throw LLaMAError.modelNotFound("LLaMA inference requires the async generateLooks(for:profile:) call path.")
     }
 
     // MARK: - LLM Response JSON Parser
