@@ -217,7 +217,7 @@ public final class BodyScanViewModel {
 
     // MARK: - Analysis Execution
 
-    /// Execute body pose estimation, dimension calculations, and body/torso classification.
+    /// Execute body pose estimation, dimension calculations, and body/torso classification (C5-92 & C5-93).
     public func runBodyAnalysis() async {
         guard canProceedWithMetrics, frontImageData != nil, sideImageData != nil else { return }
 
@@ -225,8 +225,56 @@ public final class BodyScanViewModel {
         analysisProgressText = "Estimating body landmarks and proportions..."
         errorMessage = nil
 
-        // Simulated brief processing pause for Apple Vision Framework analysis
-        try? await Task.sleep(nanoseconds: 800_000_000)
+        #if canImport(UIKit)
+        if let frontImg = frontImage ?? (frontImageData != nil ? UIImage(data: frontImageData!) : nil) {
+            analysisProgressText = "Detecting anatomical pose landmarks..."
+            if let frontPose = try? await BodyPoseAnalyzer.analyzePose(image: frontImg) {
+                let sideImg = sideImage ?? (sideImageData != nil ? UIImage(data: sideImageData!) : nil)
+                var sidePose: PoseAnalysisResult? = nil
+                if let sideImg = sideImg {
+                    sidePose = try? await BodyPoseAnalyzer.analyzePose(image: sideImg)
+                }
+
+                analysisProgressText = "Extracting silhouette cross-sections & circumferences..."
+                let dimensions = await BodyDimensionCalculator.calculateDimensions(
+                    frontImage: frontImg,
+                    sideImage: sideImg,
+                    enteredHeightCm: heightCm,
+                    frontPose: frontPose,
+                    sidePose: sidePose
+                )
+
+                self.shoulderWidthCm = dimensions.shoulderWidthCm
+                self.bustCircumferenceCm = dimensions.bustCircumferenceCm
+                self.waistCircumferenceCm = dimensions.waistCircumferenceCm
+                self.hipCircumferenceCm = dimensions.hipCircumferenceCm
+                self.computedTorsoToHeightRatio = dimensions.torsoToHeightRatio
+                self.classifiedTorsoBalance = TorsoBalance.classify(torsoToHeightRatio: dimensions.torsoToHeightRatio)
+
+                let bRatio = dimensions.bustCircumferenceCm / max(1.0, dimensions.waistCircumferenceCm)
+                let hRatio = dimensions.hipCircumferenceCm / max(1.0, dimensions.waistCircumferenceCm)
+
+                if bRatio > 1.24 && hRatio > 1.20 {
+                    self.classifiedBodyType = .hourglass
+                } else if hRatio > 1.22 && bRatio <= 1.22 {
+                    self.classifiedBodyType = .pear
+                } else if bRatio > 1.24 && hRatio <= 1.15 {
+                    self.classifiedBodyType = .invertedTriangle
+                } else if bRatio < 1.18 && hRatio < 1.18 {
+                    self.classifiedBodyType = .rectangle
+                } else {
+                    self.classifiedBodyType = .apple
+                }
+
+                self.isAnalyzing = false
+                self.currentStep = .analysisResult
+                return
+            }
+        }
+        #endif
+
+        // Simulated brief processing pause for fallback / preview baseline
+        try? await Task.sleep(nanoseconds: 600_000_000)
 
         // Estimated anthropometric values scaled by height (deterministic baseline from CobaBodyScan)
         let shoulder = round((heightCm * 0.235) * 10) / 10
