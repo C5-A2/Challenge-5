@@ -18,10 +18,6 @@ final class OutfitLook {
     var lookIndex: Int                      // 0..4 for 5 AI-generated looks
     var isBookmarked: Bool = false
 
-    // 3-Fits compliance scores (0.0 to 1.0)
-    var bodyShapeScore: Double
-    var colorHarmonyScore: Double
-    var torsoBalanceScore: Double
     var fitRationale: String
 
     /// Image of the user wearing this look, shown on the result stage.
@@ -35,17 +31,11 @@ final class OutfitLook {
 
     init(
         lookIndex: Int,
-        bodyShapeScore: Double = 0.0,
-        colorHarmonyScore: Double = 0.0,
-        torsoBalanceScore: Double = 0.0,
         fitRationale: String = "",
         isBookmarked: Bool = false,
         lookImageData: Data? = nil
     ) {
         self.lookIndex = lookIndex
-        self.bodyShapeScore = bodyShapeScore
-        self.colorHarmonyScore = colorHarmonyScore
-        self.torsoBalanceScore = torsoBalanceScore
         self.fitRationale = fitRationale
         self.isBookmarked = isBookmarked
         self.lookImageData = lookImageData

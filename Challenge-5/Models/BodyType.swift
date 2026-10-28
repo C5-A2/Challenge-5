@@ -10,7 +10,7 @@ import Foundation
 /// Primary body shape classification based on shoulder, bust, waist, and hip proportions.
 ///
 /// Serves as the core domain type for the body scanning flow (`BodyAnalysisResultView`)
-/// and the recommendation engine's Body Shape Fit score (`bodyShapeScore`).
+/// and the recommendation engine.
 public enum BodyType: String, Codable, CaseIterable, Identifiable, Sendable {
     case pear = "Pear"
     case hourglass = "Hourglass"

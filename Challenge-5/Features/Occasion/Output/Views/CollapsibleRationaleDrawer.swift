@@ -6,17 +6,40 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct CollapsibleRationaleDrawer: View {
     
+    // MARK: - SwiftData Query & ViewModel
     
+    @Query private var userProfiles: [UserProfile]
     var viewModel: OccasionOutputViewModel
     
+    // MARK: - Computed Active Profile Helpers
+    
+    private var activeProfile: UserProfile {
+        viewModel.profile ?? userProfiles.first ?? UserProfile.mockSample
+    }
+    
+    private var activeBodyType: BodyType {
+        activeProfile.bodyType ?? .hourglass
+    }
+    
+    private var activeTorsoBalance: TorsoBalance {
+        activeProfile.torsoBalance ?? .balanced
+    }
+    
+    private var activeColorSeason: ColorSeason {
+        activeProfile.colorSeason ?? .trueAutumn
+    }
+    
+    // MARK: - Initializer
     
     init(viewModel: OccasionOutputViewModel) {
         self.viewModel = viewModel
     }
     
+    // MARK: - Body
     
     var body: some View {
         VStack(spacing: 0) {
@@ -56,6 +79,7 @@ struct CollapsibleRationaleDrawer: View {
         )
     }
     
+    // MARK: - Subviews: Header
     
     private var headerSection: some View {
         Text("Details")
@@ -63,6 +87,7 @@ struct CollapsibleRationaleDrawer: View {
             .foregroundStyle(AppColors.espressoTitle)
     }
     
+    // MARK: - Subviews: Body Shape Tab
     
     private var bodyShapeContent: some View {
         VStack(spacing: 14) {
@@ -72,10 +97,11 @@ struct CollapsibleRationaleDrawer: View {
                     .frame(width: 105, height: 125)
                 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Inverted Triangle")
+                    Text(activeBodyType.displayName)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(AppColors.espressoTitle)
                     
+                    // Dummy metrics preserved per design requirement
                     metricBadge(title: "Shoulder", value: "70 Cm")
                     metricBadge(title: "Waist", value: "50 Cm")
                     metricBadge(title: "Hips", value: "40 Cm")
@@ -102,33 +128,52 @@ struct CollapsibleRationaleDrawer: View {
     }
     
     private var bodyIllustration: some View {
-        Group {
-            if let uiImage = UIImage(named: "mock_body_type_inverted_triangle") {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            } else {
-                fallbackSilhouetteVector
-            }
-        }
-    }
-    
-    private var fallbackSilhouetteVector: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(hex: "#FAF6F0"))
             
-            VStack(spacing: 4) {
-                Image(systemName: "triangle.fill")
-                    .rotationEffect(.degrees(180))
-                    .font(.system(size: 38))
+            VStack(spacing: 6) {
+                bodyTypeIcon
+                    .font(.system(size: 36))
                     .foregroundStyle(AppColors.pastelPeach)
                 
-                Text("Bahu Lebar")
+                Text(bodyTypeSubtitle)
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(AppColors.mutedCaption)
             }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
+    @ViewBuilder
+    private var bodyTypeIcon: some View {
+        switch activeBodyType {
+        case .hourglass:
+            Image(systemName: "hourglass")
+        case .pear:
+            Image(systemName: "triangle.fill")
+        case .rectangle:
+            Image(systemName: "rectangle.portrait.fill")
+        case .invertedTriangle:
+            Image(systemName: "triangle.fill")
+                .rotationEffect(.degrees(180))
+        case .apple:
+            Image(systemName: "circle.fill")
+        }
+    }
+    
+    private var bodyTypeSubtitle: String {
+        switch activeBodyType {
+        case .hourglass:
+            return "Curved Waist"
+        case .pear:
+            return "Wider Hips"
+        case .rectangle:
+            return "Balanced Frame"
+        case .invertedTriangle:
+            return "Bahu Lebar"
+        case .apple:
+            return "Round Curve"
         }
     }
     
@@ -205,6 +250,7 @@ struct CollapsibleRationaleDrawer: View {
         }
     }
     
+    // MARK: - Subviews: Color Analyze Tab
     
     private var colorAnalyzeContent: some View {
         VStack(spacing: 14) {
@@ -213,21 +259,21 @@ struct CollapsibleRationaleDrawer: View {
                     .frame(width: 105, height: 125)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Deep Winter")
+                    Text(activeColorSeason.rawValue)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(AppColors.espressoTitle)
                     
-                    metricBadge(title: "Tone", value: "Cool Undertone")
-                    metricBadge(title: "Value", value: "Deep / Dark")
-                    metricBadge(title: "Contrast", value: "High Contrast")
+                    metricBadge(title: "Tone", value: activeColorSeason.hue)
+                    metricBadge(title: "Value", value: activeColorSeason.value)
+                    metricBadge(title: "Contrast", value: activeColorSeason.chroma)
                 }
                 Spacer()
             }
             .padding(.vertical, 2)
             
             garmentColorRationaleCard(
-                paletteName: "Curated Seasonal Harmony",
-                rationale: "Deep Winter thrives in deep, saturated jewel tones paired with clean neutrals. The dark polo creates striking contrast while plum trousers maintain grounded depth."
+                paletteName: "\(activeColorSeason.rawValue) Harmony",
+                rationale: activeColorSeason.definition
             )
         }
     }
@@ -237,9 +283,17 @@ struct CollapsibleRationaleDrawer: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(hex: "#FAF6F0"))
             
-            ColorSeasonWheelView(selectedSeasonName: "Deep\nWinter", wheelDiameter: 96)
+            ColorSeasonWheelView(selectedSeasonName: colorSeasonWheelLabel, wheelDiameter: 96)
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
+    private var colorSeasonWheelLabel: String {
+        let words = activeColorSeason.rawValue.split(separator: " ")
+        if words.count == 2 {
+            return "\(words[0])\n\(words[1])"
+        }
+        return activeColorSeason.rawValue
     }
     
     private func garmentColorRationaleCard(paletteName: String, rationale: String) -> some View {
@@ -260,7 +314,7 @@ struct CollapsibleRationaleDrawer: View {
             }
             
             ColorPaletteSwatchRow(
-                hexColors: ["#1A1A1A", "#4A2234", "#EAE6DF", "#3A5589"],
+                hexColors: activeColorSeason.sampleSwatches.map(\.hex),
                 dotSize: 22
             )
             .padding(.vertical, 2)
@@ -303,6 +357,7 @@ struct CollapsibleRationaleDrawer: View {
         }
     }
     
+    // MARK: - Subviews: Torso Balance Tab
     
     private var torsoBalanceContent: some View {
         VStack(spacing: 14) {
@@ -311,10 +366,11 @@ struct CollapsibleRationaleDrawer: View {
                     .frame(width: 105, height: 125)
                 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Balanced Torso")
+                    Text(activeTorsoBalance.displayName)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(AppColors.espressoTitle)
                     
+                    // Dummy metrics preserved per design requirement
                     metricBadge(title: "Upper Body", value: "38 Cm")
                     metricBadge(title: "Leg Length", value: "79 Cm")
                     metricBadge(title: "Torso Ratio", value: "32% (Balanced)")
@@ -325,7 +381,7 @@ struct CollapsibleRationaleDrawer: View {
             
             garmentTorsoRationaleCard(
                 proportionTitle: "Optimal Waist Placement",
-                rationale: "With a balanced 32% torso ratio, your upper body and legs sit in a harmonious proportion. Regular-fit tops hitting cleanly at the hip bone preserve your natural silhouette."
+                rationale: "\(activeTorsoBalance.suitableGarments.top) \(activeTorsoBalance.suitableGarments.bottom)"
             )
         }
     }
@@ -344,19 +400,41 @@ struct CollapsibleRationaleDrawer: View {
                     Rectangle()
                         .fill(Color(hex: "#007AFF"))
                         .frame(width: 62, height: 1.5)
-                        .offset(y: 6)
+                        .offset(y: torsoLineOffset)
                     
                     Image(systemName: "figure.stand")
                         .font(.system(size: 38))
                         .foregroundStyle(AppColors.espressoTitle.opacity(0.75))
                 }
                 
-                Text("1:1 Balance")
+                Text(torsoBalanceTag)
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(AppColors.mutedCaption)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
+    private var torsoLineOffset: CGFloat {
+        switch activeTorsoBalance {
+        case .shortTorso:
+            return -8
+        case .balanced:
+            return 0
+        case .longTorso:
+            return 8
+        }
+    }
+    
+    private var torsoBalanceTag: String {
+        switch activeTorsoBalance {
+        case .shortTorso:
+            return "High Rise"
+        case .balanced:
+            return "1:1 Balance"
+        case .longTorso:
+            return "Low Rise"
+        }
     }
     
     private func garmentTorsoRationaleCard(proportionTitle: String, rationale: String) -> some View {
@@ -415,7 +493,10 @@ struct CollapsibleRationaleDrawer: View {
     }
 }
 
+// MARK: - Preview
+
 #Preview("Details Drawer") {
     CollapsibleRationaleDrawer(viewModel: .mock())
         .background(Color.black.opacity(0.2))
+        .modelContainer(for: [UserProfile.self, OccasionItem.self], inMemory: true)
 }

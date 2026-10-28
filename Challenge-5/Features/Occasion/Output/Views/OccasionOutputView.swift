@@ -13,12 +13,14 @@ struct OccasionOutputView: View {
     
     
     @Environment(\.dismiss) private var dismiss
+    @Query private var userProfiles: [UserProfile]
     @State var viewModel: OccasionOutputViewModel
     
     
     @State private var isShowingDetailsSheet: Bool = false
     @State private var isShowingMoreMenu: Bool = false
     @State private var isShowingEditSheet: Bool = false
+    @State private var isShowingProfileSheet: Bool = false
     
     
     var onDismiss: (() -> Void)? = nil
@@ -40,11 +42,12 @@ struct OccasionOutputView: View {
     
     init(
         occasion: OccasionItem,
+        profile: UserProfile? = nil,
         onDismiss: (() -> Void)? = nil,
         onEditOccasion: ((OccasionItem) -> Void)? = nil,
         onSelectGarment: ((GarmentItem) -> Void)? = nil
     ) {
-        _viewModel = State(initialValue: OccasionOutputViewModel(occasion: occasion))
+        _viewModel = State(initialValue: OccasionOutputViewModel(occasion: occasion, profile: profile))
         self.onDismiss = onDismiss
         self.onEditOccasion = onEditOccasion
         self.onSelectGarment = onSelectGarment
@@ -121,6 +124,14 @@ struct OccasionOutputView: View {
                 }
             )
         }
+        .sheet(isPresented: $isShowingProfileSheet) {
+            TemporaryProfileFormSheet()
+        }
+        .alert("LLaMA Error", isPresented: $viewModel.isShowingErrorAlert, presenting: viewModel.errorMessage) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { message in
+            Text(message)
+        }
     }
     
     
@@ -183,6 +194,61 @@ struct OccasionOutputView: View {
                 withAnimation(.easeInOut(duration: 0.15)) {
                     isShowingMoreMenu = false
                 }
+                isShowingProfileSheet = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.espressoTitle)
+                        .frame(width: 20)
+                    
+                    Text("Profile")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.espressoTitle)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            
+            Divider()
+                .background(Color.white.opacity(0.35))
+                .padding(.horizontal, 12)
+            
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isShowingMoreMenu = false
+                }
+                let activeProfile = userProfiles.first ?? UserProfile.mockSample
+                viewModel.regenerateLooks(profile: activeProfile)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.espressoTitle)
+                        .frame(width: 20)
+                    
+                    Text("Regenerate")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.espressoTitle)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            
+            Divider()
+                .background(Color.white.opacity(0.35))
+                .padding(.horizontal, 12)
+            
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isShowingMoreMenu = false
+                }
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "trash")
@@ -201,7 +267,7 @@ struct OccasionOutputView: View {
             }
             .buttonStyle(.plain)
         }
-        .frame(width: 145)
+        .frame(width: 165)
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -235,6 +301,6 @@ struct OccasionOutputView: View {
 
 #Preview("Alt 5 Copy - Menu Open") {
     let vm = OccasionOutputViewModel.mock()
-    var view = OccasionOutputView(viewModel: vm)
+    let view = OccasionOutputView(viewModel: vm)
     return view
 }

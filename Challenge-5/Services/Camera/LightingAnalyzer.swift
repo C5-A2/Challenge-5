@@ -13,7 +13,8 @@ import CoreImage
 /// Real-time analyzer that processes camera video sample buffers to evaluate
 /// scene luminance, detect facial presence, verify head pose alignment (direct angle),
 /// and drive dynamic camera guidance feedback (C5-83).
-public final class LightingAnalyzer: LightingAnalyzerProtocol, @unchecked Sendable {
+@MainActor
+public final class LightingAnalyzer: LightingAnalyzerProtocol {
 
     // MARK: - Configuration & Thresholds
 
@@ -35,7 +36,6 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol, @unchecked Sendab
     private var isProcessing: Bool = false
     private var lastAnalysisTimestamp: TimeInterval = 0
     private let analysisInterval: TimeInterval = 0.12
-    private let lock = NSLock()
 
     // MARK: - Initializer
 
@@ -54,24 +54,30 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol, @unchecked Sendab
         }
     }
 
+    private func shouldProcessNextFrame() -> Bool {
+        let now = Date().timeIntervalSince1970
+        if isProcessing || (now - lastAnalysisTimestamp < analysisInterval) {
+            return false
+        }
+        isProcessing = true
+        lastAnalysisTimestamp = now
+        return true
+    }
+
+    private func finishProcessing() {
+        isProcessing = false
+    }
+
     // MARK: - Full Real-Time Frame Analysis
 
     public func analyzeFrame(_ sampleBuffer: CMSampleBuffer) async -> RealTimeFaceAnalysisResult? {
         // Drop frame if another analysis is actively processing or within interval
-        let now = Date().timeIntervalSince1970
-        lock.lock()
-        if isProcessing || (now - lastAnalysisTimestamp < analysisInterval) {
-            lock.unlock()
+        guard shouldProcessNextFrame() else {
             return nil
         }
-        isProcessing = true
-        lastAnalysisTimestamp = now
-        lock.unlock()
 
         defer {
-            lock.lock()
-            isProcessing = false
-            lock.unlock()
+            finishProcessing()
         }
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {

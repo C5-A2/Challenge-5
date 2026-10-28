@@ -104,7 +104,7 @@ public struct LibraryView: View {
             HStack {
                 Spacer()
                 
-                CircularIconButton(systemName: "circle") {
+                CircularIconButton(systemName: "person.crop.circle") {
                     if let onProfileTap {
                         onProfileTap()
                     } else {

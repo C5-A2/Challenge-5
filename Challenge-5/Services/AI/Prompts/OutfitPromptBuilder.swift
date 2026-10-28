@@ -145,6 +145,9 @@ struct OutfitPromptBuilder: Sendable {
         CRITICAL REQUIREMENT - INDIVIDUAL GARMENT RATIONALE:
         For every garment item, you MUST provide a dedicated "rationale" explaining why this specific cut, neckline, rise, sleeve, or fabric flatters the user's body shape and torso ratio.
 
+        COLOR SELECTION DIRECTIVE (LLM-DECIDED COLORS):
+        You, the LLM, must intentionally choose and coordinate the exact color for each garment item ("colorName" and "hexColor") from the seasonal palette provided above. Intentionally coordinate harmonic pairings for each look (e.g. balancing foundational neutrals for bottoms/outerwear with flattering accent tones for tops near the face). Do NOT repeat identical color schemes across looks.
+
         ======================================================================
         STRICT OUTPUT SCHEMA (JSON ONLY)
         ======================================================================

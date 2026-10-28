@@ -20,6 +20,7 @@ enum FitRationaleTab: String, CaseIterable, Identifiable, Sendable {
 @MainActor
 final class OccasionOutputViewModel {
     
+    var profile: UserProfile? = nil
     
     var occasion: OccasionItem
     
@@ -38,6 +39,10 @@ final class OccasionOutputViewModel {
     var isShowingMoreMenu: Bool = false
     
     var isShowingAddLookModal: Bool = false
+    
+    var errorMessage: String? = nil
+    
+    var isShowingErrorAlert: Bool = false
     
     
     var currentLook: OutfitLook? {
@@ -72,18 +77,28 @@ final class OccasionOutputViewModel {
     init(
         occasion: OccasionItem,
         looks: [OutfitLook] = [],
-        selectedLookIndex: Int = 0
+        selectedLookIndex: Int = 0,
+        profile: UserProfile? = nil
     ) {
         self.occasion = occasion
+        self.profile = profile
         if !looks.isEmpty {
             self.looks = looks
         } else if !occasion.generatedLooks.isEmpty {
             self.looks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
         } else {
-            self.looks = OutfitGenerationPipeline.shared.generateLooksSync(
-                for: occasion,
-                profile: UserProfile.mockSample
-            )
+            do {
+                let activeProfile = profile ?? UserProfile.mockSample
+                self.looks = try OutfitGenerationPipeline.shared.generateLooksSync(
+                    for: occasion,
+                    profile: activeProfile
+                )
+            } catch {
+                let errorMsg = error.localizedDescription
+                print("\n❌ [OccasionOutputViewModel] LLaMA CANNOT BE USED: \(errorMsg)\n")
+                self.errorMessage = errorMsg
+                self.isShowingErrorAlert = true
+            }
         }
         self.selectedLookIndex = selectedLookIndex
     }
@@ -122,17 +137,26 @@ final class OccasionOutputViewModel {
     func regenerateLooks(profile: UserProfile? = nil) {
         guard !isLoading else { return }
         isLoading = true
+        errorMessage = nil
         
         Task {
             let activeProfile = profile ?? UserProfile.mockSample
-            let newLooks = (try? await OutfitGenerationPipeline.shared.generateLooks(for: occasion, profile: activeProfile))
-                ?? OutfitGenerationPipeline.shared.generateLooksSync(for: occasion, profile: activeProfile)
-            
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
-                self.looks = newLooks
-                self.occasion.generatedLooks = newLooks
-                self.selectedLookIndex = 0
-                self.isLoading = false
+            do {
+                let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(for: occasion, profile: activeProfile)
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    self.looks = newLooks
+                    self.occasion.generatedLooks = newLooks
+                    self.selectedLookIndex = 0
+                    self.isLoading = false
+                }
+            } catch {
+                let errorMsg = error.localizedDescription
+                print("\n❌ [OccasionOutputViewModel] LLaMA CANNOT BE USED: \(errorMsg)\n")
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    self.errorMessage = errorMsg
+                    self.isShowingErrorAlert = true
+                    self.isLoading = false
+                }
             }
         }
     }
@@ -153,9 +177,6 @@ extension OccasionOutputViewModel {
     static func makeMockLooks() -> [OutfitLook] {
         let look1 = OutfitLook(
             lookIndex: 0,
-            bodyShapeScore: 0.95,
-            colorHarmonyScore: 0.97,
-            torsoBalanceScore: 0.93,
             fitRationale: "The fitted dark knit with a clean neckline narrows shoulder breadth, while the elongated silhouette and statement necklace draw visual focus toward the vertical centerline.",
             isBookmarked: false
         )
@@ -184,9 +205,6 @@ extension OccasionOutputViewModel {
         
         let look2 = OutfitLook(
             lookIndex: 1,
-            bodyShapeScore: 0.92,
-            colorHarmonyScore: 0.94,
-            torsoBalanceScore: 0.90,
             fitRationale: "The warm terracotta long coat establishes a striking vertical column, balancing upper proportions with warm autumnal earth tones.",
             isBookmarked: true
         )
@@ -215,9 +233,6 @@ extension OccasionOutputViewModel {
         
         let look3 = OutfitLook(
             lookIndex: 2,
-            bodyShapeScore: 0.93,
-            colorHarmonyScore: 0.95,
-            torsoBalanceScore: 0.92,
             fitRationale: "Soft dusty rose tailoring softens angular shoulder lines, paired with draped fabrics that add gentle feminine fluidity for wedding guest elegance.",
             isBookmarked: false
         )
@@ -246,9 +261,6 @@ extension OccasionOutputViewModel {
         
         let look4 = OutfitLook(
             lookIndex: 3,
-            bodyShapeScore: 0.94,
-            colorHarmonyScore: 0.93,
-            torsoBalanceScore: 0.91,
             fitRationale: "Monochromatic dark tones create an uninterrupted vertical presence, elevating evening cocktail formality effortlessly.",
             isBookmarked: false
         )
@@ -256,9 +268,6 @@ extension OccasionOutputViewModel {
         
         let look5 = OutfitLook(
             lookIndex: 4,
-            bodyShapeScore: 0.91,
-            colorHarmonyScore: 0.96,
-            torsoBalanceScore: 0.93,
             fitRationale: "Vibrant warmth and tailored structure highlight personal color radiance while maintaining comfortable wedding movement.",
             isBookmarked: false
         )

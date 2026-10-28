@@ -20,6 +20,8 @@ final class HomeViewModel {
     var isShowingProfileSheet: Bool = false
     var selectedOccasion: OccasionItem? = nil
     var editingOccasion: OccasionItem? = nil
+    var errorMessage: String? = nil
+    var isShowingErrorAlert: Bool = false
     
     // MARK: - SwiftData Operations
     
@@ -34,13 +36,20 @@ final class HomeViewModel {
         
         // Generate the 5 outfit looks with individual garment rationales
         let activeProfile = profile ?? UserProfile.mockSample
-        let looks = OutfitGenerationPipeline.shared.generateLooksSync(for: newOccasion, profile: activeProfile)
-        newOccasion.generatedLooks = looks
-        for look in looks {
-            context.insert(look)
-            for garment in look.garments {
-                context.insert(garment)
+        do {
+            let looks = try OutfitGenerationPipeline.shared.generateLooksSync(for: newOccasion, profile: activeProfile)
+            newOccasion.generatedLooks = looks
+            for look in looks {
+                context.insert(look)
+                for garment in look.garments {
+                    context.insert(garment)
+                }
             }
+        } catch {
+            let errorMsg = error.localizedDescription
+            print("\n❌ [HomeViewModel] LLaMA CANNOT BE USED: \(errorMsg)\n")
+            self.errorMessage = errorMsg
+            self.isShowingErrorAlert = true
         }
         
         do {

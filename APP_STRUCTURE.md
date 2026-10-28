@@ -618,7 +618,6 @@ enum ColorSeason: String, Codable, CaseIterable, Identifiable, Sendable {
     
     struct ColorSwatch: Sendable, Hashable, Identifiable, Codable {
         let name: String
-        let pantoneCode: String
         let hex: String
     }
     
@@ -755,13 +754,13 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - Kefgen, M., & Touchie-Specht, P. (1986). *Individuality in Clothing Selection and Personal Appearance* (4th ed.). Macmillan.
   - Ernawati, Izwerni, & Nelmira, W. (2008). *Tata Busana Jilid 2*. Depdiknas.
 
-#### 5.1.3 Color Season — 12-Season Specification & Pantone TCX Swatches
+#### 5.1.3 Color Season — 12-Season Specification & Color Swatches
 
 > [!NOTE]
 > This specification serves as the team-wide Single Source of Truth for skin tone color analysis,
 > garment color matching, and recommendation rules (`colorHarmonyScore`).
 > Each season defines: Definition, Characteristics (Act), Color Combination Rules, Colors to Avoid,
-> Hue / Value / Chroma coordinates, and **35 curated Pantone TCX swatches** with exact hex codes.
+> Hue / Value / Chroma coordinates, and **35 curated swatches** with exact hex codes.
 
 ##### 1. Bright Spring
 - **Definition:** Bright Spring is the combination of bright and warm. The most prominent characteristic of Bright Springs is the clearness of their features, which gives them a bright, luminous, and fresh appearance.
@@ -772,42 +771,42 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Hue:** Warm (neutral-warm with yellow undertones).
   - **Value:** Medium leaning light (ranges from light to medium-dark, clustering around middle-light).
   - **Chroma:** High (intensely bright, vibrant, and clear).
-- **Color Palette (35 Pantone TCX Swatches):**
-  - `Snow White (11-0602 TCX): #F2F0EB`
-  - `Vanilla Ice (11-0104 TCX): #F0EADA`
-  - `Rutabaga (12-0806 TCX): #ECDDBE`
-  - `Summer Sand (12-0908 TCX): #D6CBBA`
-  - `Oatmeal (13-0401 TCX): #CBC3B4`
-  - `Silver Lining (14-4501 TCX): #BDB6AB`
-  - `Brindle (18-1110 TCX): #82776B`
-  - `Chimera (19-0406 TCX): #4D4C47`
-  - `Imperial Blue (19-4245 TCX): #005A92`
-  - `Déja Vu Blue (19-4041 TCX): #2E5283`
-  - `Aspen Gold (13-0850 TCX): #FFD662`
-  - `Pale Marigold (13-0945 TCX): #FFC66E`
-  - `Artisan’s Gold (15-1049 TCX): #F2AB46`
-  - `Buckskin (16-1342 TCX): #D18E54`
-  - `Aurora Red (18-1550 TCX): #B93A32`
-  - `Orchid Pink (13-2010 TCX): #F3BBCA`
-  - `Geranium Pink (15-1922 TCX): #F6909D`
-  - `Hot Pink (17-1937 TCX): #E55982`
-  - `Pink Lemonade (16-1735 TCX): #EE6D8A`
-  - `Geranium (17-1753 TCX): #DA3D58`
-  - `Fuchsia Pink (15-2718 TCX): #DF88B7`
-  - `Raspberry Rose (18-2333 TCX): #CC4385`
-  - `Raspberry Radiance (19-2432 TCX): #802A50`
-  - `Nouveau Navy (19-4054 TCX): #3A5589`
-  - `Mazarine Blue (19-3864 TCX): #273C76`
-  - `Blue Radiance (14-4816 TCX): #58C9D4`
-  - `Peacock Blue (16-4728 TCX): #00A0B0`
-  - `Tropical Green (18-4930 TCX): #008786`
-  - `Bachelor Button (14-4522 TCX): #4ABBD5`
-  - `Mosaic Blue (18-4528 TCX): #00758F`
-  - `Sharp Green (13-0535 TCX): #C6E67A`
-  - `Macaw Green (16-0230 TCX): #9BB53E`
-  - `Online Lime (17-0145 TCX): #44883C`
-  - `Rolling Hills (18-6028 TCX): #227949`
-  - `Formal Garden (19-6350 TCX): #1F5129`
+- **Color Palette (35 Swatches):**
+  - `Snow White: #F2F0EB`
+  - `Vanilla Ice: #F0EADA`
+  - `Rutabaga: #ECDDBE`
+  - `Summer Sand: #D6CBBA`
+  - `Oatmeal: #CBC3B4`
+  - `Silver Lining: #BDB6AB`
+  - `Brindle: #82776B`
+  - `Chimera: #4D4C47`
+  - `Imperial Blue: #005A92`
+  - `Déja Vu Blue: #2E5283`
+  - `Aspen Gold: #FFD662`
+  - `Pale Marigold: #FFC66E`
+  - `Artisan’s Gold: #F2AB46`
+  - `Buckskin: #D18E54`
+  - `Aurora Red: #B93A32`
+  - `Orchid Pink: #F3BBCA`
+  - `Geranium Pink: #F6909D`
+  - `Hot Pink: #E55982`
+  - `Pink Lemonade: #EE6D8A`
+  - `Geranium: #DA3D58`
+  - `Fuchsia Pink: #DF88B7`
+  - `Raspberry Rose: #CC4385`
+  - `Raspberry Radiance: #802A50`
+  - `Nouveau Navy: #3A5589`
+  - `Mazarine Blue: #273C76`
+  - `Blue Radiance: #58C9D4`
+  - `Peacock Blue: #00A0B0`
+  - `Tropical Green: #008786`
+  - `Bachelor Button: #4ABBD5`
+  - `Mosaic Blue: #00758F`
+  - `Sharp Green: #C6E67A`
+  - `Macaw Green: #9BB53E`
+  - `Online Lime: #44883C`
+  - `Rolling Hills: #227949`
+  - `Formal Garden: #1F5129`
 
 ##### 2. True Spring
 - **Definition:** True Spring is the combination of warm and bright. It is the original Spring season, characterized by a sunny, glowing appearance with no trace of coolness.
@@ -818,42 +817,42 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Hue:** Warm (pure warm, golden-yellow undertones with no blue).
   - **Value:** Medium-light (luminous, sunny depth).
   - **Chroma:** High (saturated, fresh, coloring-pencil vibrancy).
-- **Color Palette (35 Pantone TCX Swatches):**
-  - `Vanilla (12-0712 TCX): #F3E5C8`
-  - `Sun Kiss (12-0807 TCX): #EBDBC3`
-  - `Golden Fleece (12-0822 TCX): #F2D1A0`
-  - `Jojoba (14-0835 TCX): #DDBF7E`
-  - `Desert Mist (14-1127 TCX): #E0B589`
-  - `Golden Mist (13-0624 TCX): #D5CD94`
-  - `Moonstone (14-1026 TCX): #BEA987`
-  - `Pale Gold (15-0927 TCX): #BD9865`
-  - `Dachshund (18-1033 TCX): #704F3B`
-  - `Demitasse (19-0712 TCX): #40342B`
-  - `Impala (13-1025 TCX): #F8CE97`
-  - `Sunshine (12-0727 TCX): #FAD055`
-  - `Yarrow (12-0758 TCX): #F6C345`
-  - `Mimosa (14-0848 TCX): #F0A83B`
-  - `Amber (14-1045 TCX): #ECA349`
-  - `Burnt Coral (16-1529 TCX): #E9897E`
-  - `Emberglow (17-1547 TCX): #EA6759`
-  - `Cayenne (18-1651 TCX): #E04951`
-  - `Georgia Peach (16-1641 TCX): #F97272`
-  - `Hibiscus (18-1762 TCX): #DD3848`
-  - `Windsurfer (15-4031 TCX): #99B9DD`
-  - `Della Robbia Blue (16-4020 TCX): #7DA3C6`
-  - `Marina (17-4041 TCX): #4F84C4`
-  - `Directoire Blue (18-4244 TCX): #0061A3`
-  - `True Blue (19-4057 TCX): #1E3F66`
-  - `Spring Bouquet (14-6340 TCX): #70C68E`
-  - `Irish Green (15-6340 TCX): #3FAD67`
-  - `Biscay Green (15-5718 TCX): #55C6A9`
-  - `Holly Green (16-5932 TCX): #199B65`
-  - `Bosphorus (18-5633 TCX): #007558`
-  - `Daiquiri Green (12-0435 TCX): #C9E37A`
-  - `Bright Chartreuse (14-0445 TCX): #B3CE50`
-  - `Titanite (16-0229 TCX): #9AA639`
-  - `Salted Lime (17-0232 TCX): #687C39`
-  - `First Tee (18-6031 TCX): #156D3F`
+- **Color Palette (35 Swatches):**
+  - `Vanilla: #F3E5C8`
+  - `Sun Kiss: #EBDBC3`
+  - `Golden Fleece: #F2D1A0`
+  - `Jojoba: #DDBF7E`
+  - `Desert Mist: #E0B589`
+  - `Golden Mist: #D5CD94`
+  - `Moonstone: #BEA987`
+  - `Pale Gold: #BD9865`
+  - `Dachshund: #704F3B`
+  - `Demitasse: #40342B`
+  - `Impala: #F8CE97`
+  - `Sunshine: #FAD055`
+  - `Yarrow: #F6C345`
+  - `Mimosa: #F0A83B`
+  - `Amber: #ECA349`
+  - `Burnt Coral: #E9897E`
+  - `Emberglow: #EA6759`
+  - `Cayenne: #E04951`
+  - `Georgia Peach: #F97272`
+  - `Hibiscus: #DD3848`
+  - `Windsurfer: #99B9DD`
+  - `Della Robbia Blue: #7DA3C6`
+  - `Marina: #4F84C4`
+  - `Directoire Blue: #0061A3`
+  - `True Blue: #1E3F66`
+  - `Spring Bouquet: #70C68E`
+  - `Irish Green: #3FAD67`
+  - `Biscay Green: #55C6A9`
+  - `Holly Green: #199B65`
+  - `Bosphorus: #007558`
+  - `Daiquiri Green: #C9E37A`
+  - `Bright Chartreuse: #B3CE50`
+  - `Titanite: #9AA639`
+  - `Salted Lime: #687C39`
+  - `First Tee: #156D3F`
 
 ##### 3. Light Spring
 - **Definition:** Light Spring is the combination of light and warm. Flowing from Spring into Summer, it combines Spring warmth with Summer delicacy, featuring a colorful palette reminiscent of a box of sweets.
@@ -864,42 +863,42 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Hue:** Warm (neutral-warm, light golden undertones).
   - **Value:** Light (high on the value scale, no dark depth).
   - **Chroma:** Medium-bright (clear and colourful tints without being greyed out).
-- **Color Palette (35 Pantone TCX Swatches):**
-  - `Shortbread (12-0710 TCX): #F1DEC7`
-  - `Whitecap Gray (12-0304 TCX): #E3DACB`
-  - `Alabaster Gleam (12-0812 TCX): #F4E2C7`
-  - `Lamb's Wool (12-0910 TCX): #E8D0AE`
-  - `Boulder (14-1110 TCX): #D1BA9C`
-  - `Ancient Scroll (13-0404 TCX): #CBC3B7`
-  - `Agate Gray (15-6307 TCX): #B3B1A0`
-  - `Driftwood (18-1210 TCX): #887B75`
-  - `Bungee Cord (18-0513 TCX): #696256`
-  - `Chocolate Chip (19-0809 TCX): #5A4E44`
-  - `Lemon Verbena (12-0742 TCX): #F4E87C`
-  - `Lemon Drop (12-0736 TCX): #FDCE5B`
-  - `Beach Ball (14-0849 TCX): #F2B94A`
-  - `Golden Haze (12-0826 TCX): #F8D397`
-  - `Sunset Gold (13-0940 TCX): #F7BA5B`
-  - `Strawberry Cream (13-2005 TCX): #F4C4C2`
-  - `Blossom (14-1513 TCX): #F4B3B2`
-  - `Candlelight Peach (15-1621 TCX): #F89B93`
-  - `Peach Blossom (16-1626 TCX): #DE7879`
-  - `Sun Kissed Coral (17-1736 TCX): #EA5C6B`
-  - `Lavender (15-3817 TCX): #A99BC5`
-  - `Bougainvillea (17-3725 TCX): #987EA8`
-  - `Deep Lavender (18-3633 TCX): #734F82`
-  - `Natural (16-1310 TCX): #A8917F`
-  - `Raw Umber (17-1422 TCX): #926E5A`
-  - `Atomizer (14-4514 TCX): #99D1E9`
-  - `Baltic Sea (14-4320 TCX): #78B0D3`
-  - `Blue Topaz (14-4310 TCX): #73B4D3`
-  - `Blue Curacao (15-4825 TCX): #33B1C5`
-  - `Blue Moon (17-4328 TCX): #367D9C`
-  - `Lettuce Green (13-0324 TCX): #BED388`
-  - `Jade Lime (14-0232 TCX): #A1C66F`
-  - `Bud Green (15-6442 TCX): #73A75E`
-  - `Poison Green (16-6444 TCX): #4B9E5A`
-  - `Mint (16-5938 TCX): #009973`
+- **Color Palette (35 Swatches):**
+  - `Shortbread: #F1DEC7`
+  - `Whitecap Gray: #E3DACB`
+  - `Alabaster Gleam: #F4E2C7`
+  - `Lamb's Wool: #E8D0AE`
+  - `Boulder: #D1BA9C`
+  - `Ancient Scroll: #CBC3B7`
+  - `Agate Gray: #B3B1A0`
+  - `Driftwood: #887B75`
+  - `Bungee Cord: #696256`
+  - `Chocolate Chip: #5A4E44`
+  - `Lemon Verbena: #F4E87C`
+  - `Lemon Drop: #FDCE5B`
+  - `Beach Ball: #F2B94A`
+  - `Golden Haze: #F8D397`
+  - `Sunset Gold: #F7BA5B`
+  - `Strawberry Cream: #F4C4C2`
+  - `Blossom: #F4B3B2`
+  - `Candlelight Peach: #F89B93`
+  - `Peach Blossom: #DE7879`
+  - `Sun Kissed Coral: #EA5C6B`
+  - `Lavender: #A99BC5`
+  - `Bougainvillea: #987EA8`
+  - `Deep Lavender: #734F82`
+  - `Natural: #A8917F`
+  - `Raw Umber: #926E5A`
+  - `Atomizer: #99D1E9`
+  - `Baltic Sea: #78B0D3`
+  - `Blue Topaz: #73B4D3`
+  - `Blue Curacao: #33B1C5`
+  - `Blue Moon: #367D9C`
+  - `Lettuce Green: #BED388`
+  - `Jade Lime: #A1C66F`
+  - `Bud Green: #73A75E`
+  - `Poison Green: #4B9E5A`
+  - `Mint: #009973`
 
 ##### 4. Light Summer
 - **Definition:** Light Summer is the combination of light and cool. Flowing from Spring into Summer, it features neutral-cool, delicate, ice-cream-like colors.
@@ -910,42 +909,42 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Hue:** Cool (neutral-cool, blue undertones).
   - **Value:** Light (high value, delicate tints).
   - **Chroma:** Medium-muted / soft-bright (delicate ice-cream tones).
-- **Color Palette (35 Pantone TCX Swatches):**
-  - `Tofu (11-4801 TCX): #E7E5D9`
-  - `Bone White (12-0105 TCX): #D7D1C1`
-  - `Pelican (14-6305 TCX): #C2BCAC`
-  - `Atmosphere (16-1406 TCX): #A99C94`
-  - `Silent Storm (17-1508 TCX): #827D77`
-  - `Shadow Gray (16-1509 TCX): #BAA5A0`
-  - `Toadstool (17-2411 TCX): #967C7F`
-  - `Peppercorn (18-1409 TCX): #6B5655`
-  - `Plum Truffle (18-1506 TCX): #665858`
-  - `Catawba Grape (19-1621 TCX): #5C3B42`
-  - `Salmon Rose (15-1626 TCX): #FF8E94`
-  - `Dubarry (17-1647 TCX): #F25F67`
-  - `Sugar Coral (16-1640 TCX): #F56C73`
-  - `Paradise Pink (17-1755 TCX): #E4445E`
-  - `Winterberry (17-1640 TCX): #BD3950`
-  - `Candy Pink (14-1911 TCX): #F4B0BD`
-  - `Confetti (16-1723 TCX): #E6798E`
-  - `Sachet Pink (15-2216 TCX): #F28AAD`
-  - `Carmine Rose (17-2230 TCX): #E45B8F`
-  - `Lilac Rose (17-2227 TCX): #BD4376`
-  - `Open Air (15-3922 TCX): #93B2E0`
-  - `Vista Blue (15-3930 TCX): #80A0D3`
-  - `Granada Sky (16-4033 TCX): #5D81BD`
-  - `Star Sapphire (18-4041 TCX): #35619E`
-  - `Turkish Sea (19-4053 TCX): #1A528F`
-  - `Blue Elixir (14-4515 TCX): #8ECBDD`
-  - `River Blue (15-4720 TCX): #38AECC`
-  - `Capri (15-4722 TCX): #44BAC8`
-  - `Baltic (16-5123 TCX): #269E9F`
-  - `Pagoda Blue (17-4724 TCX): #1B7F8E`
-  - `Cabbage (13-5714 TCX): #63DBBF`
-  - `Mint Leaf (15-5728 TCX): #02B694`
-  - `Sea Green (16-5421 TCX): #149B88`
-  - `Simply Green (17-5936 TCX): #179E75`
-  - `Antique Green (18-5418 TCX): #2A685D`
+- **Color Palette (35 Swatches):**
+  - `Tofu: #E7E5D9`
+  - `Bone White: #D7D1C1`
+  - `Pelican: #C2BCAC`
+  - `Atmosphere: #A99C94`
+  - `Silent Storm: #827D77`
+  - `Shadow Gray: #BAA5A0`
+  - `Toadstool: #967C7F`
+  - `Peppercorn: #6B5655`
+  - `Plum Truffle: #665858`
+  - `Catawba Grape: #5C3B42`
+  - `Salmon Rose: #FF8E94`
+  - `Dubarry: #F25F67`
+  - `Sugar Coral: #F56C73`
+  - `Paradise Pink: #E4445E`
+  - `Winterberry: #BD3950`
+  - `Candy Pink: #F4B0BD`
+  - `Confetti: #E6798E`
+  - `Sachet Pink: #F28AAD`
+  - `Carmine Rose: #E45B8F`
+  - `Lilac Rose: #BD4376`
+  - `Open Air: #93B2E0`
+  - `Vista Blue: #80A0D3`
+  - `Granada Sky: #5D81BD`
+  - `Star Sapphire: #35619E`
+  - `Turkish Sea: #1A528F`
+  - `Blue Elixir: #8ECBDD`
+  - `River Blue: #38AECC`
+  - `Capri: #44BAC8`
+  - `Baltic: #269E9F`
+  - `Pagoda Blue: #1B7F8E`
+  - `Cabbage: #63DBBF`
+  - `Mint Leaf: #02B694`
+  - `Sea Green: #149B88`
+  - `Simply Green: #179E75`
+  - `Antique Green: #2A685D`
 
 ##### 5. True Summer
 - **Definition:** True Summer is the combination of cool and muted. As the coolest season of the Summer family, features lack any warmth and are overlaid with a gentle, watery coolness.
@@ -956,42 +955,42 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Hue:** Cool (pure cool, blue undertones).
   - **Value:** Medium-light to Medium (soft water-like depth).
   - **Chroma:** Medium-low / Muted (toned down, greyed out).
-- **Color Palette (35 Pantone TCX Swatches):**
-  - `Light Gray (12-0404 TCX): #DAD9CB`
-  - `Perfectly Pale (13-0003 TCX): #D2C9C0`
-  - `Silver Cloud (15-4502 TCX): #BDB7B2`
-  - `Rock Ridge (17-0207 TCX): #96918C`
-  - `Major Brown (19-0810 TCX): #625955`
-  - `Lunar Rock (14-4201 TCX): #C6C6C6`
-  - `Ashes of Roses (15-0703 TCX): #B7ADAD`
-  - `Purple Dove (16-1606 TCX): #A08D94`
-  - `Moonscape (17-1708 TCX): #76636C`
-  - `Forged Iron (19-3907 TCX): #454348`
-  - `Dusty Blue (16-4010 TCX): #8FA0B0`
-  - `Troposphere (17-3926 TCX): #7B8AA4`
-  - `Gray Mist (15-4706 TCX): #9EB5B3`
-  - `Trooper (18-4510 TCX): #6B7F80`
-  - `Turbulence (19-4215 TCX): #4E535A`
-  - `Sea Pink (15-1912 TCX): #D994A7`
-  - `Chateau Rose (17-2120 TCX): #CE7290`
-  - `Bubblegum (17-1928 TCX): #E96F8C`
-  - `Carmine (17-1831 TCX): #BA456B`
-  - `Anemone (19-2033 TCX): #812B49`
-  - `Baby Lavender (16-3923 TCX): #A4ACD4`
-  - `Deep Periwinkle (17-3932 TCX): #7F86BD`
-  - `Corsican Blue (18-3828 TCX): #625D91`
-  - `Orient Blue (19-3947 TCX): #494679`
-  - `Blue Ribbon (19-3839 TCX): #39385F`
-  - `Crystal Seas (15-4428 TCX): #5DB1C9`
-  - `Wave Ride (17-4129 TCX): #3084A6`
-  - `Ipanema (15-4716 TCX): #61B9C0`
-  - `Larkspur (17-4421 TCX): #3E7F90`
-  - `Saxony Blue (18-4225 TCX): #21667D`
-  - `Neptune Green (14-6017 TCX): #81BDA4`
-  - `Ming Green (16-5930 TCX): #39A17E`
-  - `Ivy (18-5620 TCX): #226B62`
-  - `Teal (17-4919 TCX): #4A8588`
-  - `Chesapeake Bay (19-4534 TCX): #15545C`
+- **Color Palette (35 Swatches):**
+  - `Light Gray: #DAD9CB`
+  - `Perfectly Pale: #D2C9C0`
+  - `Silver Cloud: #BDB7B2`
+  - `Rock Ridge: #96918C`
+  - `Major Brown: #625955`
+  - `Lunar Rock: #C6C6C6`
+  - `Ashes of Roses: #B7ADAD`
+  - `Purple Dove: #A08D94`
+  - `Moonscape: #76636C`
+  - `Forged Iron: #454348`
+  - `Dusty Blue: #8FA0B0`
+  - `Troposphere: #7B8AA4`
+  - `Gray Mist: #9EB5B3`
+  - `Trooper: #6B7F80`
+  - `Turbulence: #4E535A`
+  - `Sea Pink: #D994A7`
+  - `Chateau Rose: #CE7290`
+  - `Bubblegum: #E96F8C`
+  - `Carmine: #BA456B`
+  - `Anemone: #812B49`
+  - `Baby Lavender: #A4ACD4`
+  - `Deep Periwinkle: #7F86BD`
+  - `Corsican Blue: #625D91`
+  - `Orient Blue: #494679`
+  - `Blue Ribbon: #39385F`
+  - `Crystal Seas: #5DB1C9`
+  - `Wave Ride: #3084A6`
+  - `Ipanema: #61B9C0`
+  - `Larkspur: #3E7F90`
+  - `Saxony Blue: #21667D`
+  - `Neptune Green: #81BDA4`
+  - `Ming Green: #39A17E`
+  - `Ivy: #226B62`
+  - `Teal: #4A8588`
+  - `Chesapeake Bay: #15545C`
 
 ##### 6. Soft Summer
 - **Definition:** Soft Summer is the combination of muted and cool. Flowing from Summer into Autumn, features are gently greyed out, giving a blended, understated appearance.
@@ -1002,42 +1001,42 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Hue:** Cool (neutral-cool, greyed blue undertones).
   - **Value:** Medium (mid-range value, balanced depth).
   - **Chroma:** Low (extremely muted, greyed out).
-- **Color Palette (35 Pantone TCX Swatches):**
-  - `Icicle (12-5201 TCX): #D9DCD1`
-  - `Birch (13-0905 TCX): #DED6C8`
-  - `Chateau Gray (15-4503 TCX): #BDB3AB`
-  - `Satellite (16-3800 TCX): #9A908D`
-  - `Iron (18-1306 TCX): #766762`
-  - `Mirage Gray (15-4703 TCX): #AEB4B2`
-  - `Sedona Sage (18-5105 TCX): #696F6D`
-  - `Gray Quill (17-4013 TCX): #827E80`
-  - `Thunderstorm (18-5206 TCX): #5B585B`
-  - `Raven (19-0000 TCX): #3F3D3D`
-  - `English Rose (13-1310 TCX): #F3C6C3`
-  - `Quartz Pink (14-1714 TCX): #ECA1A7`
-  - `Flowering Ginger (15-1915 TCX): #E6878E`
-  - `Slate Rose (18-1635 TCX): #B45667`
-  - `Earth Red (18-1631 TCX): #93414F`
-  - `Cameo Pink (14-2307 TCX): #D9A7B5`
-  - `Wild Rose (16-1715 TCX): #C98095`
-  - `Mesa Rose (17-1609 TCX): #A96D7C`
-  - `Hawthorn Rose (18-1718 TCX): #854A5D`
-  - `Blackberry Wine (19-2816 TCX): #4C3044`
-  - `Icelandic Blue (15-3908 TCX): #A9ADC2`
-  - `Purple Impression (17-3919 TCX): #858FB1`
-  - `Lavender Violet (17-3924 TCX): #777CA6`
-  - `Heron (18-3817 TCX): #615F7C`
-  - `Mood Indigo (19-4025 TCX): #34394D`
-  - `Leisure Time (14-4815 TCX): #80BEC2`
-  - `Porcelain (16-4719 TCX): #5C9DA3`
-  - `Hydro (18-4718 TCX): #426B74`
-  - `Arctic (17-4911 TCX): #648589`
-  - `Atlantic Deep (19-4726 TCX): #244D53`
-  - `Meadow (14-6319 TCX): #8BBF9A`
-  - `Beryl Green (16-5515 TCX): #61948A`
-  - `Hunter Green (19-5511 TCX): #315548`
-  - `Garden Glade (13-0614 TCX): #DFDDAA`
-  - `Shadow Green (14-0627 TCX): #CEC68A`
+- **Color Palette (35 Swatches):**
+  - `Icicle: #D9DCD1`
+  - `Birch: #DED6C8`
+  - `Chateau Gray: #BDB3AB`
+  - `Satellite: #9A908D`
+  - `Iron: #766762`
+  - `Mirage Gray: #AEB4B2`
+  - `Sedona Sage: #696F6D`
+  - `Gray Quill: #827E80`
+  - `Thunderstorm: #5B585B`
+  - `Raven: #3F3D3D`
+  - `English Rose: #F3C6C3`
+  - `Quartz Pink: #ECA1A7`
+  - `Flowering Ginger: #E6878E`
+  - `Slate Rose: #B45667`
+  - `Earth Red: #93414F`
+  - `Cameo Pink: #D9A7B5`
+  - `Wild Rose: #C98095`
+  - `Mesa Rose: #A96D7C`
+  - `Hawthorn Rose: #854A5D`
+  - `Blackberry Wine: #4C3044`
+  - `Icelandic Blue: #A9ADC2`
+  - `Purple Impression: #858FB1`
+  - `Lavender Violet: #777CA6`
+  - `Heron: #615F7C`
+  - `Mood Indigo: #34394D`
+  - `Leisure Time: #80BEC2`
+  - `Porcelain: #5C9DA3`
+  - `Hydro: #426B74`
+  - `Arctic: #648589`
+  - `Atlantic Deep: #244D53`
+  - `Meadow: #8BBF9A`
+  - `Beryl Green: #61948A`
+  - `Hunter Green: #315548`
+  - `Garden Glade: #DFDDAA`
+  - `Shadow Green: #CEC68A`
 
 ##### 7. Soft Autumn
 - **Definition:** Soft Autumn is the combination of muted and warm. Flowing from Summer into Autumn, features are soft, greyed/walnut-tinted, understated, and gentle.
@@ -1048,42 +1047,42 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Hue:** Warm (neutral-warm, olive/walnut undertones).
   - **Value:** Medium (rich yet softened value).
   - **Chroma:** Low (extremely muted, desaturated).
-- **Color Palette (35 Pantone TCX Swatches):**
-  - `Sweet Corn (11-0106 TCX): #F0ECD7`
-  - `White Asparagus (12-0104 TCX): #E1DCCB`
-  - `Turtledove (12-5202 TCX): #DCD6C7`
-  - `Overcast (14-0105 TCX): #C3BEAC`
-  - `Bog (14-0418 TCX): #B9B69A`
-  - `Sage Green (15-0318 TCX): #ACAD8A`
-  - `Aloe (17-0620 TCX): #827D63`
-  - `Olive Night (19-0515 TCX): #514F3E`
-  - `Sage (16-0421 TCX): #969777`
-  - `Beetle (19-0312 TCX): #55574A`
-  - `Burlwood (17-1516 TCX): #9D736D`
-  - `Russet (18-1235 TCX): #936152`
-  - `Carob Brown (18-1229 TCX): #865E4D`
-  - `Hot Chocolate (19-1325 TCX): #673B3A`
-  - `Rum Raisin (19-1321 TCX): #573432`
-  - `Coral Almond (16-1434 TCX): #E59B90`
-  - `Tea Rose (16-1620 TCX): #D96F79`
-  - `Holly Berry (17-1633 TCX): #B44D60`
-  - `Crabapple (16-1532 TCX): #D77E70`
-  - `Cardinal (18-1643 TCX): #AD3D4A`
-  - `Crystal Rose (12-1708 TCX): #F9C1C5`
-  - `Murex Shell (15-1712 TCX): #F39DA2`
-  - `Faded Rose (18-1629 TCX): #BE6263`
-  - `Baroque Rose (18-1634 TCX): #AD5665`
-  - `Tibetan Red (19-1934 TCX): #762A3A`
-  - `Dusk Blue (16-4120 TCX): #7DA3C1`
-  - `Blue Jasper (18-4033 TCX): #507DA7`
-  - `High Tide (18-4022 TCX): #345D87`
-  - `Deep Dive (19-4126 TCX): #254655`
-  - `Estate Blue (19-4027 TCX): #233656`
-  - `Ocean Wave (14-5711 TCX): #8DC3B6`
-  - `Dusty Jade Green (15-5711 TCX): #7FB5A5`
-  - `Bottle Green (17-5722 TCX): #417D6D`
-  - `Bristol Blue (17-4818 TCX): #548D91`
-  - `Mallard Green (19-4818 TCX): #3D5B58`
+- **Color Palette (35 Swatches):**
+  - `Sweet Corn: #F0ECD7`
+  - `White Asparagus: #E1DCCB`
+  - `Turtledove: #DCD6C7`
+  - `Overcast: #C3BEAC`
+  - `Bog: #B9B69A`
+  - `Sage Green: #ACAD8A`
+  - `Aloe: #827D63`
+  - `Olive Night: #514F3E`
+  - `Sage: #969777`
+  - `Beetle: #55574A`
+  - `Burlwood: #9D736D`
+  - `Russet: #936152`
+  - `Carob Brown: #865E4D`
+  - `Hot Chocolate: #673B3A`
+  - `Rum Raisin: #573432`
+  - `Coral Almond: #E59B90`
+  - `Tea Rose: #D96F79`
+  - `Holly Berry: #B44D60`
+  - `Crabapple: #D77E70`
+  - `Cardinal: #AD3D4A`
+  - `Crystal Rose: #F9C1C5`
+  - `Murex Shell: #F39DA2`
+  - `Faded Rose: #BE6263`
+  - `Baroque Rose: #AD5665`
+  - `Tibetan Red: #762A3A`
+  - `Dusk Blue: #7DA3C1`
+  - `Blue Jasper: #507DA7`
+  - `High Tide: #345D87`
+  - `Deep Dive: #254655`
+  - `Estate Blue: #233656`
+  - `Ocean Wave: #8DC3B6`
+  - `Dusty Jade Green: #7FB5A5`
+  - `Bottle Green: #417D6D`
+  - `Bristol Blue: #548D91`
+  - `Mallard Green: #3D5B58`
 
 ##### 8. True Autumn
 - **Definition:** True Autumn is the combination of warm and muted. Being the warmest season of the Autumn family, True Autumn features comprise rich, earthy foliage-like colors.
@@ -1094,42 +1093,42 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Hue:** Warm (pure warm, golden-red undertones).
   - **Value:** Medium to Dark (deep foliage richness).
   - **Chroma:** Medium-low / Muted (rich, non-bright saturation).
-- **Color Palette (35 Pantone TCX Swatches):**
-  - `Seedpearl (12-0703 TCX): #E6DCC5`
-  - `Angora (12-0605 TCX): #DFD0BB`
-  - `Fog (13-0607 TCX): #CEC5B2`
-  - `Double Cream (12-0715 TCX): #F4E1AD`
-  - `Straw (13-0922 TCX): #E1CA94`
-  - `Tidal Foam (14-0210 TCX): #C2BDA7`
-  - `Oil Green (17-0115 TCX): #838873`
-  - `Lead Gray (17-1118 TCX): #8F7D66`
-  - `Stone Gray (18-0615 TCX): #6B6151`
-  - `Deep Depths (19-0413 TCX): #414438`
-  - `Peach Nougat (14-1220 TCX): #E7AE91`
-  - `Peach Bloom (15-1327 TCX): #D99A7D`
-  - `Cedar Wood (17-1525 TCX): #A36A5E`
-  - `Henna (19-1334 TCX): #7D403A`
-  - `Chicory Coffee (19-1419 TCX): #49312D`
-  - `Muskmelon (15-1242 TCX): #ED9560`
-  - `Amberglow (16-1350 TCX): #DF793D`
-  - `Orange Rust (18-1447 TCX): #C35A3B`
-  - `Summer Fig (17-1450 TCX): #BF4C3A`
-  - `Picante (19-1250 TCX): #8C3D2C`
-  - `Peach Amber (15-1423 TCX): #F99F91`
-  - `Porcelain Rose (17-1643 TCX): #E9686A`
-  - `American Beauty (19-1759 TCX): #A82F40`
-  - `Merlot (19-1534 TCX): #76272E`
-  - `Maroon Banner (19-1528 TCX): #592A37`
-  - `Sea Jet (15-4713 TCX): #55B0BB`
-  - `Bayou (18-5121 TCX): #216D6B`
-  - `Blue Mist (16-4421 TCX): #5AAEC2`
-  - `Biscay Bay (18-4726 TCX): #087D87`
-  - `Deep Teal (19-4914 TCX): #19474A`
-  - `Beechnut (14-0425 TCX): #C3C294`
-  - `Fern (16-0430 TCX): #9BA16A`
-  - `Split Pea (16-0545 TCX): #9D9B3E`
-  - `Fir Green (18-0627 TCX): #6A592A`
-  - `Forest Night (19-0414 TCX): #414136`
+- **Color Palette (35 Swatches):**
+  - `Seedpearl: #E6DCC5`
+  - `Angora: #DFD0BB`
+  - `Fog: #CEC5B2`
+  - `Double Cream: #F4E1AD`
+  - `Straw: #E1CA94`
+  - `Tidal Foam: #C2BDA7`
+  - `Oil Green: #838873`
+  - `Lead Gray: #8F7D66`
+  - `Stone Gray: #6B6151`
+  - `Deep Depths: #414438`
+  - `Peach Nougat: #E7AE91`
+  - `Peach Bloom: #D99A7D`
+  - `Cedar Wood: #A36A5E`
+  - `Henna: #7D403A`
+  - `Chicory Coffee: #49312D`
+  - `Muskmelon: #ED9560`
+  - `Amberglow: #DF793D`
+  - `Orange Rust: #C35A3B`
+  - `Summer Fig: #BF4C3A`
+  - `Picante: #8C3D2C`
+  - `Peach Amber: #F99F91`
+  - `Porcelain Rose: #E9686A`
+  - `American Beauty: #A82F40`
+  - `Merlot: #76272E`
+  - `Maroon Banner: #592A37`
+  - `Sea Jet: #55B0BB`
+  - `Bayou: #216D6B`
+  - `Blue Mist: #5AAEC2`
+  - `Biscay Bay: #087D87`
+  - `Deep Teal: #19474A`
+  - `Beechnut: #C3C294`
+  - `Fern: #9BA16A`
+  - `Split Pea: #9D9B3E`
+  - `Fir Green: #6A592A`
+  - `Forest Night: #414136`
 
 ##### 9. Dark Autumn
 - **Definition:** Dark Autumn is the combination of dark and warm. Flowing from Autumn into Winter, it combines deep, bronzy warmth with mysterious dark depth.
@@ -1140,41 +1139,41 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Hue:** Warm (neutral-warm, golden-bronze undertones).
   - **Value:** Dark (deep value scale).
   - **Chroma:** Medium (rich, slightly brightened deep tones).
-- **Color Palette (35 Pantone TCX Swatches):**
-  - `White Swan (12-0000 TCX): #E4D8C7`
-  - `Smoke Gray (14-1209 TCX): #CDBBAA`
-  - `Summer Melon (13-0814 TCX): #EBD3AD`
-  - `Autumn Blonde (12-0813 TCX): #F0D0AE`
-  - `Lattè (15-1220 TCX): #C6A585`
-  - `French Oak (13-0400 TCX): #C9C0B4`
-  - `Elephant Skin (17-0205 TCX): #918B85`
-  - `Tarmac (19-0822 TCX): #5B5448`
-  - `Savannah Tan (16-1213 TCX): #AB9785`
-  - `Pavement (19-3900 TCX): #514C50`
-  - `Ochre (14-1036 TCX): #D7B066`
-  - `Mustard Gold (16-1133 TCX): #AD8E50`
-  - `Cathay Spice (18-0950 TCX): #99632D`
-  - `Butternum (16-1341 TCX): #C89169`
-  - `Sunburn (16-1429 TCX): #B5745B`
-  - `Blooming Dahlia (15-1520 TCX): #ED9588`
-  - `Burnt Sienna (17-1544 TCX): #C65D53`
-  - `Cranberry (17-1545 TCX): #B8474F`
-  - `Burnt Russet (19-1530 TCX): #7C3940`
-  - `Pomegranate (19-1930 TCX): #672830`
-  - `Pastel Lavender (14-3209 TCX): #D6A0C3`
-  - `Spring Crocus (17-3020 TCX): #B6659E`
-  - `Rosé Sorbet (18-2615 TCX): #A0467C`
-  - `Plum Caspia (19-2429 TCX): #5B2147`
-  - `Titan (19-4128 TCX): #283D53`
-  - `Bermuda (14-5416 TCX): #60C4B1`
-  - `Lagoon (16-5418 TCX): #4D9E9B`
-  - `Frosty Spruce (18-5622 TCX): #568271`
-  - `Evergreen (19-5420 TCX): #105448`
-  - `Green Gables (19-4806 TCX): #344343`
-  - `Willow (16-0632 TCX): #9C8F4F`
-  - `Plantation (18-0832 TCX): #79612F`
-  - `Military Olive (19-0622 TCX): #5F523B`
-  - `Wren (19-0614 TCX): #494039`
+- **Color Palette (35 Swatches):**
+  - `White Swan: #E4D8C7`
+  - `Smoke Gray: #CDBBAA`
+  - `Summer Melon: #EBD3AD`
+  - `Autumn Blonde: #F0D0AE`
+  - `Lattè: #C6A585`
+  - `French Oak: #C9C0B4`
+  - `Elephant Skin: #918B85`
+  - `Tarmac: #5B5448`
+  - `Savannah Tan: #AB9785`
+  - `Pavement: #514C50`
+  - `Ochre: #D7B066`
+  - `Mustard Gold: #AD8E50`
+  - `Cathay Spice: #99632D`
+  - `Butternum: #C89169`
+  - `Sunburn: #B5745B`
+  - `Blooming Dahlia: #ED9588`
+  - `Burnt Sienna: #C65D53`
+  - `Cranberry: #B8474F`
+  - `Burnt Russet: #7C3940`
+  - `Pomegranate: #672830`
+  - `Pastel Lavender: #D6A0C3`
+  - `Spring Crocus: #B6659E`
+  - `Rosé Sorbet: #A0467C`
+  - `Plum Caspia: #5B2147`
+  - `Titan: #283D53`
+  - `Bermuda: #60C4B1`
+  - `Lagoon: #4D9E9B`
+  - `Frosty Spruce: #568271`
+  - `Evergreen: #105448`
+  - `Green Gables: #344343`
+  - `Willow: #9C8F4F`
+  - `Plantation: #79612F`
+  - `Military Olive: #5F523B`
+  - `Wren: #494039`
   - `Glamour Gold (20-0033 TPM): #C3A06B`
 
 ##### 10. Dark Winter
@@ -1186,42 +1185,42 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Hue:** Cool (neutral-cool, blue undertones).
   - **Value:** Dark (low on the value scale, deep value).
   - **Chroma:** Medium-high (intense, brilliant dark shades).
-- **Color Palette (35 Pantone TCX Swatches):**
-  - `Lucent White (11-0700 TCX): #F2F5FC`
-  - `Vaporous Gray (12-4302 TCX): #DEDDD7`
-  - `Pumice Stone (14-0002 TCX): #C9C3BA`
-  - `Ghost Gray (16-4703 TCX): #9D9D9B`
-  - `Charcoal Gray (18-0601 TCX): #6D696A`
-  - `Lemonade (12-0721 TCX): #F0E69C`
-  - `Ballet Slipper (13-2808 TCX): #EBCDD4`
-  - `Bay (12-5507 TCX): #B7E4D6`
-  - `Spun Sugar (12-4401 TCX): #B3DDE8`
-  - `Purple Heather (14-3911 TCX): #B8B5D0`
-  - `Plumeria (15-1822 TCX): #F58DA1`
-  - `Fruit Dove (17-1926 TCX): #D05776`
+- **Color Palette (35 Swatches):**
+  - `Lucent White: #F2F5FC`
+  - `Vaporous Gray: #DEDDD7`
+  - `Pumice Stone: #C9C3BA`
+  - `Ghost Gray: #9D9D9B`
+  - `Charcoal Gray: #6D696A`
+  - `Lemonade: #F0E69C`
+  - `Ballet Slipper: #EBCDD4`
+  - `Bay: #B7E4D6`
+  - `Spun Sugar: #B3DDE8`
+  - `Purple Heather: #B8B5D0`
+  - `Plumeria: #F58DA1`
+  - `Fruit Dove: #D05776`
   - `Bossy Pink (18-2054 TSX): #CF3566`
-  - `Innuendo (18-2042 TCX): #C32F62`
-  - `Red Bud (19-1850 TCX): #922C4A`
-  - `Lipstick Red (19-1764 TCX): #B51D3D`
-  - `Scarlet Smile (19-1558 TCX): #9E253A`
-  - `Rio Red (19-1656 TCX): #862336`
-  - `Rhubarb (19-1652 TCX): #76212F`
-  - `Zinfandel (19-1522 TCX): #582833`
-  - `African Violet (16-3520 TCX): #B184B7`
-  - `Bellflower (18-3628 TCX): #94649D`
-  - `Plum Jam (18-3521 TCX): #633F78`
-  - `Grape Royale (19-3518 TCX): #512D52`
-  - `Baritone Blue (19-3812 TCX): #252633`
-  - `Splish Splash (16-4520 TCX): #67B9D8`
-  - `Mediterranean Blue (18-4334 TCX): #147BA4`
-  - `Moroccan Blue (19-4241 TCX): #104F67`
-  - `Deep Water (18-4032 TCX): #28688D`
-  - `Pageant Blue (19-4111 TCX): #202D46`
-  - `Marine Green (16-5721 TCX): #3EA38F`
-  - `Lush Meadow (18-5845 TCX): #007257`
-  - `Forest Biome (19-5230 TCX): #194C47`
-  - `Ponderosa Pine (19-5320 TCX): #1F3F3F`
-  - `Tap Shoe (19-4004 TCX): #29292B`
+  - `Innuendo: #C32F62`
+  - `Red Bud: #922C4A`
+  - `Lipstick Red: #B51D3D`
+  - `Scarlet Smile: #9E253A`
+  - `Rio Red: #862336`
+  - `Rhubarb: #76212F`
+  - `Zinfandel: #582833`
+  - `African Violet: #B184B7`
+  - `Bellflower: #94649D`
+  - `Plum Jam: #633F78`
+  - `Grape Royale: #512D52`
+  - `Baritone Blue: #252633`
+  - `Splish Splash: #67B9D8`
+  - `Mediterranean Blue: #147BA4`
+  - `Moroccan Blue: #104F67`
+  - `Deep Water: #28688D`
+  - `Pageant Blue: #202D46`
+  - `Marine Green: #3EA38F`
+  - `Lush Meadow: #007257`
+  - `Forest Biome: #194C47`
+  - `Ponderosa Pine: #1F3F3F`
+  - `Tap Shoe: #29292B`
 
 ##### 11. True Winter
 - **Definition:** True Winter is the combination of cool and bright. As the coolest Winter sub-season, features have a frost-like coolness and striking, brilliant contrast.
@@ -1232,42 +1231,42 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Hue:** Cool (pure cool, blue undertones).
   - **Value:** Dark & Light extremes (high value contrast range).
   - **Chroma:** High (intensely bright, clear, icy).
-- **Color Palette (35 Pantone TCX Swatches):**
-  - `Brilliant White (11-4001 TCX): #EEF1FF`
-  - `Lily White (11-4301 TCX): #E3E3DB`
-  - `Silver Birch (13-4403 TCX): #D1D0C5`
-  - `Mourning Dove (16-4400 TCX): #99948F`
-  - `Brushed Nickel (18-5102 TCX): #706E6D`
-  - `Tender Touch (12-2807 TCX): #F2D5DF`
-  - `Elfin Yellow (11-0626 TCX): #F0E99A`
-  - `Misty Jade (13-6008 TCX): #B8D8C8`
-  - `Spa Retreat (13-4808 TCX): #B1E4E9`
-  - `Halogen Blue (13-3920 TCX): #BBC5DC`
-  - `Pirouette (14-3205 TCX): #E9B9D9`
-  - `Bonbon (15-2213 TCX): #EDA0CC`
-  - `Strawberry Moon (17-2619 TCX): #D7659F`
-  - `Very Berry (18-2336 TCX): #B72F75`
-  - `Wild Aster (19-2630 TCX): #8F2E70`
-  - `Lilac Chiffon (15-2913 TCX): #D995C1`
-  - `Violet (16-3320 TCX): #BB80B7`
-  - `Radiant Orchid (18-3224 TCX): #A75A98`
-  - `Hollyhock (19-2924 TCX): #80336F`
-  - `Charisma (18-3340 TCX): #62295F`
-  - `Persian Jewel (17-3934 TCX): #7184C1`
-  - `Amparo Blue (18-3945 TCX): #4B61A4`
-  - `Surf the Web (19-3952 TCX): #233F7E`
-  - `Bellwether Blue (19-3943 TCX): #25345F`
-  - `Ocean Cavern (19-3937 TCX): #252940`
-  - `Cyan Blue (16-4529 TCX): #12A2C3`
-  - `Faience (18-4232 TCX): #2D6F8E`
-  - `Spectra Green (17-5335 TCX): #009B8E`
-  - `Tidepool (18-5619 TCX): #08736C`
-  - `Green Heron (19-4727 TCX): #285258`
-  - `Gentian Violet (19-3730 TCX): #514071`
-  - `Navy Blue (19-3832 TCX): #3D3D70`
-  - `Medieval Blue (19-3933 TCX): #292F50`
-  - `Bracken (19-1015 TCX): #4D3D39`
-  - `Môle (19-1106 TCX): #382B2A`
+- **Color Palette (35 Swatches):**
+  - `Brilliant White: #EEF1FF`
+  - `Lily White: #E3E3DB`
+  - `Silver Birch: #D1D0C5`
+  - `Mourning Dove: #99948F`
+  - `Brushed Nickel: #706E6D`
+  - `Tender Touch: #F2D5DF`
+  - `Elfin Yellow: #F0E99A`
+  - `Misty Jade: #B8D8C8`
+  - `Spa Retreat: #B1E4E9`
+  - `Halogen Blue: #BBC5DC`
+  - `Pirouette: #E9B9D9`
+  - `Bonbon: #EDA0CC`
+  - `Strawberry Moon: #D7659F`
+  - `Very Berry: #B72F75`
+  - `Wild Aster: #8F2E70`
+  - `Lilac Chiffon: #D995C1`
+  - `Violet: #BB80B7`
+  - `Radiant Orchid: #A75A98`
+  - `Hollyhock: #80336F`
+  - `Charisma: #62295F`
+  - `Persian Jewel: #7184C1`
+  - `Amparo Blue: #4B61A4`
+  - `Surf the Web: #233F7E`
+  - `Bellwether Blue: #25345F`
+  - `Ocean Cavern: #252940`
+  - `Cyan Blue: #12A2C3`
+  - `Faience: #2D6F8E`
+  - `Spectra Green: #009B8E`
+  - `Tidepool: #08736C`
+  - `Green Heron: #285258`
+  - `Gentian Violet: #514071`
+  - `Navy Blue: #3D3D70`
+  - `Medieval Blue: #292F50`
+  - `Bracken: #4D3D39`
+  - `Môle: #382B2A`
 
 ##### 12. Bright Winter
 - **Definition:** Bright Winter is the combination of bright and cool. Flowing from Winter into Spring, it features clear, striking, highly saturated features with a frosted brilliance.
@@ -1278,42 +1277,42 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Hue:** Cool (neutral-cool, icy blue undertones).
   - **Value:** Medium to Dark (with icy light support).
   - **Chroma:** High (maximum vibrancy and saturation).
-- **Color Palette (35 Pantone TCX Swatches):**
-  - `Bright White (11-0601 TCX): #F3F8FF`
-  - `Arctic Wolf (12-0602 TCX): #E6DFCE`
-  - `Abbey Stone (14-6408 TCX): #ADA99B`
-  - `Steeple Gray (17-1500 TCX): #858180`
-  - `Steel Gray (18-4005 TCX): #747273`
-  - `Pastel Yellow (11-0616 TCX): #F2E7B0`
-  - `Pink Dogwood (12-1706 TCX): #F5D0D1`
-  - `Fair Aqua (12-5409 TCX): #B8E2DC`
-  - `Festival Bloom (12-2908 TCX): #F2D5E5`
-  - `Pastel Lilac (14-3812 TCX): #BFB3CA`
+- **Color Palette (35 Swatches):**
+  - `Bright White: #F3F8FF`
+  - `Arctic Wolf: #E6DFCE`
+  - `Abbey Stone: #ADA99B`
+  - `Steeple Gray: #858180`
+  - `Steel Gray: #747273`
+  - `Pastel Yellow: #F2E7B0`
+  - `Pink Dogwood: #F5D0D1`
+  - `Fair Aqua: #B8E2DC`
+  - `Festival Bloom: #F2D5E5`
+  - `Pastel Lilac: #BFB3CA`
   - `Ranunculus (16-1634 TSX): #EC898D`
-  - `Honeysuckle (18-2120 TCX): #D74770`
-  - `Raspberry Sorbet (18-2043 TCX): #D03168`
-  - `Vivacious (19-2045 TCX): #A32658`
-  - `Red Plum (19-2025 TCX): #762744`
-  - `Fuchsia Purple (18-2436 TCX): #D12F79`
-  - `Fuchsia Fedora (18-2330 TCX): #C63F87`
-  - `Fuchsia Red (18-2328 TCX): #A83276`
-  - `Rose Violet (17-2624 TCX): #BD428B`
-  - `Purple Wine (18-2929 TCX): #853675`
-  - `Iolite (17-3940 TCX): #737DB7`
-  - `Blue Iris (18-3943 TCX): #5B5B9B`
-  - `Bluing (19-3954 TCX): #303F82`
-  - `Ultramarine (17-4037 TCX): #5B7DBD`
-  - `Dazzling Blue (18-3949 TCX): #38539D`
+  - `Honeysuckle: #D74770`
+  - `Raspberry Sorbet: #D03168`
+  - `Vivacious: #A32658`
+  - `Red Plum: #762744`
+  - `Fuchsia Purple: #D12F79`
+  - `Fuchsia Fedora: #C63F87`
+  - `Fuchsia Red: #A83276`
+  - `Rose Violet: #BD428B`
+  - `Purple Wine: #853675`
+  - `Iolite: #737DB7`
+  - `Blue Iris: #5B5B9B`
+  - `Bluing: #303F82`
+  - `Ultramarine: #5B7DBD`
+  - `Dazzling Blue: #38539D`
   - `Aged Copper (14-4434 TSX): #5BC5D0`
-  - `Viridian Green (17-5126 TCX): #009697`
+  - `Viridian Green: #009697`
   - `Blue Blossom (15-4535 TSX): #2DA8D3`
-  - `Blithe (17-4336 TCX): #0085B8`
-  - `Turkish Tile (18-4432 TCX): #006C87`
-  - `Black Iris (19-3921 TCX): #2C3043`
-  - `Black Ink (19-0506 TCX): #45413D`
-  - `Blackened Pearl (19-3917 TCX): #4E4B50`
-  - `Pirate Black (19-4305 TCX): #343636`
-  - `Anthracite (19-4007 TCX): #26262B`
+  - `Blithe: #0085B8`
+  - `Turkish Tile: #006C87`
+  - `Black Iris: #2C3043`
+  - `Black Ink: #45413D`
+  - `Blackened Pearl: #4E4B50`
+  - `Pirate Black: #343636`
+  - `Anthracite: #26262B`
 
 #### 5.1.4 Style Vision — 12 Outfit Mood / Vibe Reference (Alphabetical Order A–Z)
 
