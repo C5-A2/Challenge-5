@@ -1517,6 +1517,7 @@ final class GarmentItem {
     var material: String                    // e.g. "French Terry Cotton"
     var colorName: String                   // e.g. "Burgundy red"
     var hexColor: String                    // e.g. "#800020"
+    var rationale: String = ""              // Explains why this specific garment cut works on user's body silhouette
     
     /// The look this garment belongs to. Lets the store flow read the look image for cropping.
     var outfitLook: OutfitLook?
@@ -1526,7 +1527,8 @@ final class GarmentItem {
         name: String,
         material: String,
         colorName: String,
-        hexColor: String
+        hexColor: String,
+        rationale: String = ""
     ) {
         self.category = category
         self.name = name

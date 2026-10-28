@@ -75,7 +75,16 @@ final class OccasionOutputViewModel {
         selectedLookIndex: Int = 0
     ) {
         self.occasion = occasion
-        self.looks = looks.isEmpty ? OccasionOutputViewModel.makeMockLooks() : looks
+        if !looks.isEmpty {
+            self.looks = looks
+        } else if !occasion.generatedLooks.isEmpty {
+            self.looks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
+        } else {
+            self.looks = OutfitGenerationPipeline.shared.generateLooksSync(
+                for: occasion,
+                profile: UserProfile.mockSample
+            )
+        }
         self.selectedLookIndex = selectedLookIndex
     }
     
@@ -110,15 +119,21 @@ final class OccasionOutputViewModel {
         }
     }
     
-    func regenerateLooks() {
+    func regenerateLooks(profile: UserProfile? = nil) {
         guard !isLoading else { return }
         isLoading = true
         
         Task {
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            self.looks = OccasionOutputViewModel.makeMockLooks()
-            self.selectedLookIndex = 0
-            self.isLoading = false
+            let activeProfile = profile ?? UserProfile.mockSample
+            let newLooks = (try? await OutfitGenerationPipeline.shared.generateLooks(for: occasion, profile: activeProfile))
+                ?? OutfitGenerationPipeline.shared.generateLooksSync(for: occasion, profile: activeProfile)
+            
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                self.looks = newLooks
+                self.occasion.generatedLooks = newLooks
+                self.selectedLookIndex = 0
+                self.isLoading = false
+            }
         }
     }
 }

@@ -84,11 +84,20 @@ struct CollapsibleRationaleDrawer: View {
             }
             .padding(.vertical, 2)
             
-            garmentCutRationaleCard(
-                garmentName: "Polo Shirt slimfit cut",
-                rationale: viewModel.currentLook?.fitRationale
-                    ?? "The slim-fit polo with a sharp collar softens the broad shoulder line without adding upper bulk. Paired with straight-leg burgundy trousers, it draws the gaze downward to create a well-balanced silhouette."
-            )
+            if !viewModel.currentGarments.isEmpty {
+                ForEach(viewModel.currentGarments) { garment in
+                    garmentCutRationaleCard(
+                        garmentName: "\(garment.name) (\(garment.category.rawValue))",
+                        rationale: !garment.rationale.isEmpty ? garment.rationale : (viewModel.currentLook?.fitRationale ?? "Specially selected to complement your body silhouette and balance proportions.")
+                    )
+                }
+            } else {
+                garmentCutRationaleCard(
+                    garmentName: "AI Recommended Fit",
+                    rationale: viewModel.currentLook?.fitRationale
+                        ?? "The slim-fit polo with a sharp collar softens the broad shoulder line without adding upper bulk. Paired with straight-leg burgundy trousers, it draws the gaze downward to create a well-balanced silhouette."
+                )
+            }
         }
     }
     

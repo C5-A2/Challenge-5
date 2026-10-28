@@ -24,6 +24,7 @@ struct OccasionsHomeView: View {
     
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \OccasionItem.date, order: .forward) private var occasions: [OccasionItem]
+    @Query private var userProfiles: [UserProfile]
     
     // MARK: - Navigation & Tab State
     
@@ -220,7 +221,12 @@ struct OccasionsHomeView: View {
         .padding(.bottom, AppDimensions.tabBarHeight + 28)
         .sheet(isPresented: $viewModel.isShowingNewOccasionSheet) {
             OccasionFormSheet { occasionDetail in
-                let createdOccasion = viewModel.saveOccasion(from: occasionDetail, in: modelContext)
+                let activeProfile = userProfiles.first ?? UserProfile.mockSample
+                let createdOccasion = viewModel.saveOccasion(
+                    from: occasionDetail,
+                    profile: activeProfile,
+                    in: modelContext
+                )
                 viewModel.selectedOccasion = createdOccasion
             }
         }

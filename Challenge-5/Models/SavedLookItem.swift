@@ -120,6 +120,7 @@ public struct SavedGarmentItem: Identifiable, Hashable, Sendable {
     public var material: String
     public var colorName: String
     public var hexColor: String
+    public var rationale: String = ""
     
     public init(
         id: UUID = UUID(),
@@ -127,7 +128,8 @@ public struct SavedGarmentItem: Identifiable, Hashable, Sendable {
         name: String,
         material: String,
         colorName: String,
-        hexColor: String
+        hexColor: String,
+        rationale: String = ""
     ) {
         self.id = id
         self.category = category
@@ -135,6 +137,7 @@ public struct SavedGarmentItem: Identifiable, Hashable, Sendable {
         self.material = material
         self.colorName = colorName
         self.hexColor = hexColor
+        self.rationale = rationale
     }
     
     init(from garment: GarmentItem) {
@@ -144,6 +147,7 @@ public struct SavedGarmentItem: Identifiable, Hashable, Sendable {
         self.material = garment.material
         self.colorName = garment.colorName
         self.hexColor = garment.hexColor
+        self.rationale = garment.rationale
     }
 }
 

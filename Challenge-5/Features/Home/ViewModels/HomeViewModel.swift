@@ -24,9 +24,25 @@ final class HomeViewModel {
     // MARK: - SwiftData Operations
     
     @discardableResult
-    func saveOccasion(from detail: OccasionDetail, in context: ModelContext) -> OccasionItem {
+    func saveOccasion(
+        from detail: OccasionDetail,
+        profile: UserProfile? = nil,
+        in context: ModelContext
+    ) -> OccasionItem {
         let newOccasion = OccasionItem(from: detail)
         context.insert(newOccasion)
+        
+        // Generate the 5 outfit looks with individual garment rationales
+        let activeProfile = profile ?? UserProfile.mockSample
+        let looks = OutfitGenerationPipeline.shared.generateLooksSync(for: newOccasion, profile: activeProfile)
+        newOccasion.generatedLooks = looks
+        for look in looks {
+            context.insert(look)
+            for garment in look.garments {
+                context.insert(garment)
+            }
+        }
+        
         do {
             try context.save()
         } catch {
