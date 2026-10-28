@@ -130,7 +130,8 @@ public final class BodyScanViewModel {
     public var waistCircumferenceCm: Double?
     public var hipCircumferenceCm: Double?
 
-    /// Classification outputs.
+    /// Classification outputs (C5-94).
+    public var classificationResult: BodyClassificationResult?
     public var classifiedBodyType: BodyType?
     public var classifiedTorsoBalance: TorsoBalance?
     public var computedTorsoToHeightRatio: Double?
@@ -248,23 +249,19 @@ public final class BodyScanViewModel {
                 self.bustCircumferenceCm = dimensions.bustCircumferenceCm
                 self.waistCircumferenceCm = dimensions.waistCircumferenceCm
                 self.hipCircumferenceCm = dimensions.hipCircumferenceCm
-                self.computedTorsoToHeightRatio = dimensions.torsoToHeightRatio
-                self.classifiedTorsoBalance = TorsoBalance.classify(torsoToHeightRatio: dimensions.torsoToHeightRatio)
+                let classification = BodyClassifier.classify(
+                    bustCm: dimensions.bustCircumferenceCm,
+                    waistCm: dimensions.waistCircumferenceCm,
+                    hipCm: dimensions.hipCircumferenceCm,
+                    shoulderWidthCm: dimensions.shoulderWidthCm,
+                    enteredHeightCm: heightCm,
+                    torsoLengthCm: dimensions.torsoLengthCm
+                )
 
-                let bRatio = dimensions.bustCircumferenceCm / max(1.0, dimensions.waistCircumferenceCm)
-                let hRatio = dimensions.hipCircumferenceCm / max(1.0, dimensions.waistCircumferenceCm)
-
-                if bRatio > 1.24 && hRatio > 1.20 {
-                    self.classifiedBodyType = .hourglass
-                } else if hRatio > 1.22 && bRatio <= 1.22 {
-                    self.classifiedBodyType = .pear
-                } else if bRatio > 1.24 && hRatio <= 1.15 {
-                    self.classifiedBodyType = .invertedTriangle
-                } else if bRatio < 1.18 && hRatio < 1.18 {
-                    self.classifiedBodyType = .rectangle
-                } else {
-                    self.classifiedBodyType = .apple
-                }
+                self.classificationResult = classification
+                self.classifiedBodyType = classification.bodyType
+                self.classifiedTorsoBalance = classification.torsoBalance
+                self.computedTorsoToHeightRatio = classification.torsoToHeightRatio
 
                 self.isAnalyzing = false
                 self.currentStep = .analysisResult
@@ -281,33 +278,26 @@ public final class BodyScanViewModel {
         let bust = round((heightCm * 0.53) * 10) / 10
         let waist = round((heightCm * 0.41) * 10) / 10
         let hip = round((heightCm * 0.56) * 10) / 10
+        let estimatedTorsoLength = heightCm * 0.315
 
         self.shoulderWidthCm = shoulder
         self.bustCircumferenceCm = bust
         self.waistCircumferenceCm = waist
         self.hipCircumferenceCm = hip
 
-        // Torso-to-Height Ratio (THR) calculation
-        let estimatedTorsoLength = heightCm * 0.315
-        let thr = (estimatedTorsoLength / heightCm) * 100.0
-        self.computedTorsoToHeightRatio = thr
-        self.classifiedTorsoBalance = TorsoBalance.classify(torsoToHeightRatio: thr)
+        let fallbackClassification = BodyClassifier.classify(
+            bustCm: bust,
+            waistCm: waist,
+            hipCm: hip,
+            shoulderWidthCm: shoulder,
+            enteredHeightCm: heightCm,
+            torsoLengthCm: estimatedTorsoLength
+        )
 
-        // Body shape morphotype classification (Bust-to-Waist and Hip-to-Waist ratios)
-        let bRatio = bust / waist
-        let hRatio = hip / waist
-
-        if bRatio > 1.24 && hRatio > 1.20 {
-            self.classifiedBodyType = .hourglass
-        } else if hRatio > 1.22 && bRatio <= 1.22 {
-            self.classifiedBodyType = .pear
-        } else if bRatio > 1.24 && hRatio <= 1.15 {
-            self.classifiedBodyType = .invertedTriangle
-        } else if bRatio < 1.18 && hRatio < 1.18 {
-            self.classifiedBodyType = .rectangle
-        } else {
-            self.classifiedBodyType = .apple
-        }
+        self.classificationResult = fallbackClassification
+        self.classifiedBodyType = fallbackClassification.bodyType
+        self.classifiedTorsoBalance = fallbackClassification.torsoBalance
+        self.computedTorsoToHeightRatio = fallbackClassification.torsoToHeightRatio
 
         self.isAnalyzing = false
         self.currentStep = .analysisResult
@@ -321,6 +311,20 @@ public final class BodyScanViewModel {
         if let bust = bust { self.bustCircumferenceCm = bust }
         if let waist = waist { self.waistCircumferenceCm = waist }
         if let hip = hip { self.hipCircumferenceCm = hip }
+
+        if let b = bustCircumferenceCm, let w = waistCircumferenceCm, let h = hipCircumferenceCm {
+            let reclassified = BodyClassifier.classify(
+                bustCm: b,
+                waistCm: w,
+                hipCm: h,
+                shoulderWidthCm: shoulderWidthCm,
+                enteredHeightCm: heightCm,
+                torsoLengthCm: (computedTorsoToHeightRatio != nil) ? (computedTorsoToHeightRatio! * heightCm / 100.0) : nil
+            )
+            self.classificationResult = reclassified
+            self.classifiedBodyType = reclassified.bodyType
+            self.classifiedTorsoBalance = reclassified.torsoBalance
+        }
     }
 
     /// Save completed measurements and body scan results to the persistent UserProfile.
