@@ -588,7 +588,7 @@ enum TorsoBalance: String, Codable, CaseIterable, Identifiable, Sendable {
 }
 
 // Models/ColorSeason.swift
-enum ColorSeason: String, Codable, CaseIterable, Identifiable {
+enum ColorSeason: String, Codable, CaseIterable, Identifiable, Sendable {
     case brightSpring = "Bright Spring"
     case trueSpring = "True Spring"
     case lightSpring = "Light Spring"
@@ -603,6 +603,30 @@ enum ColorSeason: String, Codable, CaseIterable, Identifiable {
     case brightWinter = "Bright Winter"
     
     var id: String { rawValue }
+    var definition: String
+    var act: String
+    var colorCombinationRules: String
+    var colorsToAvoid: String
+    var tonalCoordinates: TonalCoordinates
+    var hue: String
+    var value: String
+    var chroma: String
+    var palette: [ColorSwatch]
+    var sampleSwatches: [ColorSwatch]
+    var systemPrompt: String
+    var llmPromptContext: String
+    
+    struct ColorSwatch: Sendable, Hashable, Identifiable, Codable {
+        let name: String
+        let pantoneCode: String
+        let hex: String
+    }
+    
+    struct TonalCoordinates: Sendable, Hashable, Codable {
+        let hue: String
+        let value: String
+        let chroma: String
+    }
 }
 
 // Models/StyleVision.swift
@@ -841,41 +865,41 @@ enum StyleVision: String, Codable, CaseIterable, Identifiable {
   - **Value:** Light (high on the value scale, no dark depth).
   - **Chroma:** Medium-bright (clear and colourful tints without being greyed out).
 - **Color Palette (35 Pantone TCX Swatches):**
-  - `Vanilla (12-0712 TCX): #F3E5C8`
-  - `Sun Kiss (12-0807 TCX): #EBDBC3`
-  - `Golden Fleece (12-0822 TCX): #F2D1A0`
-  - `Jojoba (14-0835 TCX): #DDBF7E`
-  - `Desert Mist (14-1127 TCX): #E0B589`
-  - `Golden Mist (13-0624 TCX): #D5CD94`
-  - `Moonstone (14-1026 TCX): #BEA987`
-  - `Pale Gold (15-0927 TCX): #BD9865`
-  - `Dachshund (18-1033 TCX): #704F3B`
-  - `Demitasse (19-0712 TCX): #40342B`
-  - `Impala (13-1025 TCX): #F8CE97`
-  - `Sunshine (12-0727 TCX): #FAD055`
-  - `Yarrow (12-0758 TCX): #F6C345`
-  - `Mimosa (14-0848 TCX): #F0A83B`
-  - `Amber (14-1045 TCX): #ECA349`
-  - `Burnt Coral (16-1529 TCX): #E9897E`
-  - `Emberglow (17-1547 TCX): #EA6759`
-  - `Cayenne (18-1651 TCX): #E04951`
-  - `Georgia Peach (16-1641 TCX): #F97272`
-  - `Hibiscus (18-1762 TCX): #DD3848`
-  - `Windsurfer (15-4031 TCX): #99B9DD`
-  - `Della Robbia Blue (16-4020 TCX): #7DA3C6`
-  - `Marina (17-4041 TCX): #4F84C4`
-  - `Directoire Blue (18-4244 TCX): #0061A3`
-  - `True Blue (19-4057 TCX): #1E3F66`
-  - `Spring Bouquet (14-6340 TCX): #70C68E`
-  - `Irish Green (15-6340 TCX): #3FAD67`
-  - `Biscay Green (15-5718 TCX): #55C6A9`
-  - `Holly Green (16-5932 TCX): #199B65`
-  - `Bosphorus (18-5633 TCX): #007558`
-  - `Daiquiri Green (12-0435 TCX): #C9E37A`
-  - `Bright Chartreuse (14-0445 TCX): #B3CE50`
-  - `Titanite (16-0229 TCX): #9AA639`
-  - `Salted Lime (17-0232 TCX): #687C39`
-  - `First Tee (18-6031 TCX): #156D3F`
+  - `Shortbread (12-0710 TCX): #F1DEC7`
+  - `Whitecap Gray (12-0304 TCX): #E3DACB`
+  - `Alabaster Gleam (12-0812 TCX): #F4E2C7`
+  - `Lamb's Wool (12-0910 TCX): #E8D0AE`
+  - `Boulder (14-1110 TCX): #D1BA9C`
+  - `Ancient Scroll (13-0404 TCX): #CBC3B7`
+  - `Agate Gray (15-6307 TCX): #B3B1A0`
+  - `Driftwood (18-1210 TCX): #887B75`
+  - `Bungee Cord (18-0513 TCX): #696256`
+  - `Chocolate Chip (19-0809 TCX): #5A4E44`
+  - `Lemon Verbena (12-0742 TCX): #F4E87C`
+  - `Lemon Drop (12-0736 TCX): #FDCE5B`
+  - `Beach Ball (14-0849 TCX): #F2B94A`
+  - `Golden Haze (12-0826 TCX): #F8D397`
+  - `Sunset Gold (13-0940 TCX): #F7BA5B`
+  - `Strawberry Cream (13-2005 TCX): #F4C4C2`
+  - `Blossom (14-1513 TCX): #F4B3B2`
+  - `Candlelight Peach (15-1621 TCX): #F89B93`
+  - `Peach Blossom (16-1626 TCX): #DE7879`
+  - `Sun Kissed Coral (17-1736 TCX): #EA5C6B`
+  - `Lavender (15-3817 TCX): #A99BC5`
+  - `Bougainvillea (17-3725 TCX): #987EA8`
+  - `Deep Lavender (18-3633 TCX): #734F82`
+  - `Natural (16-1310 TCX): #A8917F`
+  - `Raw Umber (17-1422 TCX): #926E5A`
+  - `Atomizer (14-4514 TCX): #99D1E9`
+  - `Baltic Sea (14-4320 TCX): #78B0D3`
+  - `Blue Topaz (14-4310 TCX): #73B4D3`
+  - `Blue Curacao (15-4825 TCX): #33B1C5`
+  - `Blue Moon (17-4328 TCX): #367D9C`
+  - `Lettuce Green (13-0324 TCX): #BED388`
+  - `Jade Lime (14-0232 TCX): #A1C66F`
+  - `Bud Green (15-6442 TCX): #73A75E`
+  - `Poison Green (16-6444 TCX): #4B9E5A`
+  - `Mint (16-5938 TCX): #009973`
 
 ##### 4. Light Summer
 - **Definition:** Light Summer is the combination of light and cool. Flowing from Spring into Summer, it features neutral-cool, delicate, ice-cream-like colors.
