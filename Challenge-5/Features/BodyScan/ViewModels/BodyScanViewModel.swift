@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Observation
+import Vision
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -60,22 +61,40 @@ public final class BodyScanViewModel {
         isDeviceVertical && isPersonFullyVisible && !isCountingDown
     }
 
-    // MARK: - Review Checklists
+    // MARK: - Review Checklists & AI Validation
 
     public var isShowingDiscardDialog: Bool = false
 
+    public var isFrontValidating: Bool = false
+    public var frontValidationResult: HumanDetectionResult?
     public var isFrontAngleConfirmed: Bool = false
     public var isFrontPostureConfirmed: Bool = false
     public var isFrontFittedClothingConfirmed: Bool = false
     public var canConfirmFrontPhoto: Bool {
-        frontImageData != nil && isFrontAngleConfirmed && isFrontPostureConfirmed && isFrontFittedClothingConfirmed
+        guard let result = frontValidationResult else { return false }
+        return frontImageData != nil &&
+               result.isHumanPresent &&
+               result.isFullBody &&
+               result.isOrientationMatch &&
+               isFrontAngleConfirmed &&
+               isFrontPostureConfirmed &&
+               isFrontFittedClothingConfirmed
     }
 
+    public var isSideValidating: Bool = false
+    public var sideValidationResult: HumanDetectionResult?
     public var isSideAngleConfirmed: Bool = false
     public var isSidePostureConfirmed: Bool = false
     public var isSideFittedClothingConfirmed: Bool = false
     public var canConfirmSidePhoto: Bool {
-        sideImageData != nil && isSideAngleConfirmed && isSidePostureConfirmed && isSideFittedClothingConfirmed
+        guard let result = sideValidationResult else { return false }
+        return sideImageData != nil &&
+               result.isHumanPresent &&
+               result.isFullBody &&
+               result.isOrientationMatch &&
+               isSideAngleConfirmed &&
+               isSidePostureConfirmed &&
+               isSideFittedClothingConfirmed
     }
 
     // MARK: - Physical Metrics Input (Form Validation - C5-91)
@@ -143,6 +162,17 @@ public final class BodyScanViewModel {
     public var classifiedTorsoBalance: TorsoBalance?
     public var computedTorsoToHeightRatio: Double?
 
+    /// Vision-detected vertical anatomical level lines on the photo (normalized [0, 1] for UIKit / SwiftUI)
+    public var detectedShoulderY: Double?
+    public var detectedBustY: Double?
+    public var detectedWaistY: Double?
+    public var detectedHipY: Double?
+
+    /// Torso Proportion metrics (CobaBodyScan Section 6)
+    public var torsoLengthCm: Double?
+    public var torsoRatioPercent: Double?
+    public var lowerBodyRatioPercent: Double?
+
     // MARK: - Initializer
 
     public init() {}
@@ -153,19 +183,61 @@ public final class BodyScanViewModel {
     public func setFrontPhoto(_ image: UIImage) {
         self.frontImage = image
         self.frontImageData = image.jpegData(compressionQuality: 0.85)
-        self.isFrontAngleConfirmed = isDeviceVertical
-        self.isFrontPostureConfirmed = isDeviceVertical
-        self.isFrontFittedClothingConfirmed = true
+        self.isFrontValidating = true
+        self.frontValidationResult = nil
+        self.isFrontAngleConfirmed = false
+        self.isFrontPostureConfirmed = false
+        self.isFrontFittedClothingConfirmed = false
         self.currentStep = .frontReview
+
+        Task { [image] in
+            let result = await HumanDetector.detectHuman(image: image, expectedType: .front)
+            await MainActor.run {
+                self.frontValidationResult = result
+                self.isFrontValidating = false
+                if result.isHumanPresent && result.isFullBody && result.isOrientationMatch {
+                    self.isFrontAngleConfirmed = true
+                    self.isFrontPostureConfirmed = true
+                    self.isFrontFittedClothingConfirmed = true
+                    self.errorMessage = nil
+                } else {
+                    self.isFrontAngleConfirmed = false
+                    self.isFrontPostureConfirmed = false
+                    self.isFrontFittedClothingConfirmed = false
+                    self.errorMessage = result.message
+                }
+            }
+        }
     }
 
     public func setSidePhoto(_ image: UIImage) {
         self.sideImage = image
         self.sideImageData = image.jpegData(compressionQuality: 0.85)
-        self.isSideAngleConfirmed = isDeviceVertical
-        self.isSidePostureConfirmed = isDeviceVertical
-        self.isSideFittedClothingConfirmed = true
+        self.isSideValidating = true
+        self.sideValidationResult = nil
+        self.isSideAngleConfirmed = false
+        self.isSidePostureConfirmed = false
+        self.isSideFittedClothingConfirmed = false
         self.currentStep = .sideReview
+
+        Task { [image] in
+            let result = await HumanDetector.detectHuman(image: image, expectedType: .side)
+            await MainActor.run {
+                self.sideValidationResult = result
+                self.isSideValidating = false
+                if result.isHumanPresent && result.isFullBody && result.isOrientationMatch {
+                    self.isSideAngleConfirmed = true
+                    self.isSidePostureConfirmed = true
+                    self.isSideFittedClothingConfirmed = true
+                    self.errorMessage = nil
+                } else {
+                    self.isSideAngleConfirmed = false
+                    self.isSidePostureConfirmed = false
+                    self.isSideFittedClothingConfirmed = false
+                    self.errorMessage = result.message
+                }
+            }
+        }
     }
     #endif
 
@@ -174,6 +246,11 @@ public final class BodyScanViewModel {
         frontImage = nil
         #endif
         frontImageData = nil
+        frontValidationResult = nil
+        isFrontValidating = false
+        isFrontAngleConfirmed = false
+        isFrontPostureConfirmed = false
+        isFrontFittedClothingConfirmed = false
         currentStep = .frontCamera
     }
 
@@ -182,6 +259,11 @@ public final class BodyScanViewModel {
         sideImage = nil
         #endif
         sideImageData = nil
+        sideValidationResult = nil
+        isSideValidating = false
+        isSideAngleConfirmed = false
+        isSidePostureConfirmed = false
+        isSideFittedClothingConfirmed = false
         currentStep = .sideCamera
     }
 
@@ -198,6 +280,8 @@ public final class BodyScanViewModel {
         frontImage = nil
         #endif
         frontImageData = nil
+        frontValidationResult = nil
+        isFrontValidating = false
         isFrontAngleConfirmed = false
         isFrontPostureConfirmed = false
         isFrontFittedClothingConfirmed = false
@@ -209,6 +293,8 @@ public final class BodyScanViewModel {
         sideImage = nil
         #endif
         sideImageData = nil
+        sideValidationResult = nil
+        isSideValidating = false
         isSideAngleConfirmed = false
         isSidePostureConfirmed = false
         isSideFittedClothingConfirmed = false
@@ -230,97 +316,109 @@ public final class BodyScanViewModel {
         guard canProceedWithMetrics, frontImageData != nil, sideImageData != nil else { return }
 
         isAnalyzing = true
-        analysisProgressText = "Estimating body landmarks and proportions..."
+        analysisProgressText = "Memverifikasi foto postur tubuh..."
         errorMessage = nil
 
         #if canImport(UIKit)
-        if let frontImg = frontImage ?? (frontImageData != nil ? UIImage(data: frontImageData!) : nil) {
-            analysisProgressText = "Detecting anatomical pose landmarks..."
-            if let frontPose = try? await BodyPoseAnalyzer.analyzePose(image: frontImg) {
-                let sideImg = sideImage ?? (sideImageData != nil ? UIImage(data: sideImageData!) : nil)
-                var sidePose: PoseAnalysisResult? = nil
-                if let sideImg = sideImg {
-                    sidePose = try? await BodyPoseAnalyzer.analyzePose(image: sideImg)
-                }
-
-                analysisProgressText = "Extracting silhouette cross-sections & circumferences..."
-                let dimensions = await BodyDimensionCalculator.calculateDimensions(
-                    frontImage: frontImg,
-                    sideImage: sideImg,
-                    enteredHeightCm: heightCm,
-                    frontPose: frontPose,
-                    sidePose: sidePose
-                )
-
-                self.shoulderWidthCm = dimensions.shoulderWidthCm
-                self.bustCircumferenceCm = dimensions.bustCircumferenceCm
-                self.waistCircumferenceCm = dimensions.waistCircumferenceCm
-                self.hipCircumferenceCm = dimensions.hipCircumferenceCm
-
-                self.originalShoulderWidthCm = dimensions.shoulderWidthCm
-                self.originalBustCircumferenceCm = dimensions.bustCircumferenceCm
-                self.originalWaistCircumferenceCm = dimensions.waistCircumferenceCm
-                self.originalHipCircumferenceCm = dimensions.hipCircumferenceCm
-                self.isMeasurementsEdited = false
-
-                let classification = BodyClassifier.classify(
-                    bustCm: dimensions.bustCircumferenceCm,
-                    waistCm: dimensions.waistCircumferenceCm,
-                    hipCm: dimensions.hipCircumferenceCm,
-                    shoulderWidthCm: dimensions.shoulderWidthCm,
-                    enteredHeightCm: heightCm,
-                    torsoLengthCm: dimensions.torsoLengthCm
-                )
-
-                self.classificationResult = classification
-                self.classifiedBodyType = classification.bodyType
-                self.classifiedTorsoBalance = classification.torsoBalance
-                self.computedTorsoToHeightRatio = classification.torsoToHeightRatio
-
-                self.isAnalyzing = false
-                self.currentStep = .analysisResult
-                return
-            }
+        guard let frontImg = frontImage ?? (frontImageData != nil ? UIImage(data: frontImageData!) : nil),
+              let sideImg = sideImage ?? (sideImageData != nil ? UIImage(data: sideImageData!) : nil) else {
+            isAnalyzing = false
+            errorMessage = "Foto tampak depan dan samping harus tersedia."
+            return
         }
-        #endif
 
-        // Simulated brief processing pause for fallback / preview baseline
-        try? await Task.sleep(nanoseconds: 600_000_000)
+        // 1. Verifikasi Validitas Foto Depan (Human, Full Body, Front Orientation)
+        let frontCheck = await HumanDetector.detectHuman(image: frontImg, expectedType: .front)
+        guard frontCheck.isHumanPresent && frontCheck.isFullBody && frontCheck.isOrientationMatch else {
+            self.isAnalyzing = false
+            self.errorMessage = "Foto Depan Gagal: \(frontCheck.message)"
+            return
+        }
 
-        // Estimated anthropometric values scaled by height (deterministic baseline from CobaBodyScan)
-        let shoulder = round((heightCm * 0.235) * 10) / 10
-        let bust = round((heightCm * 0.53) * 10) / 10
-        let waist = round((heightCm * 0.41) * 10) / 10
-        let hip = round((heightCm * 0.56) * 10) / 10
-        let estimatedTorsoLength = heightCm * 0.315
+        // 2. Verifikasi Validitas Foto Samping (Human, Full Body, Side Orientation)
+        let sideCheck = await HumanDetector.detectHuman(image: sideImg, expectedType: .side)
+        guard sideCheck.isHumanPresent && sideCheck.isFullBody && sideCheck.isOrientationMatch else {
+            self.isAnalyzing = false
+            self.errorMessage = "Foto Samping Gagal: \(sideCheck.message)"
+            return
+        }
 
-        self.shoulderWidthCm = shoulder
-        self.bustCircumferenceCm = bust
-        self.waistCircumferenceCm = waist
-        self.hipCircumferenceCm = hip
+        do {
+            analysisProgressText = "Mendeteksi landmark anatomis kerangka tubuh..."
+            let frontPose = try await BodyPoseAnalyzer.analyzePose(image: frontImg)
+            let sidePose = try? await BodyPoseAnalyzer.analyzePose(image: sideImg)
 
-        self.originalShoulderWidthCm = shoulder
-        self.originalBustCircumferenceCm = bust
-        self.originalWaistCircumferenceCm = waist
-        self.originalHipCircumferenceCm = hip
-        self.isMeasurementsEdited = false
+            analysisProgressText = "Mengekstrak siluet dan mengestimasi lingkar dimensi..."
+            let dimensions = await BodyDimensionCalculator.calculateDimensions(
+                frontImage: frontImg,
+                sideImage: sideImg,
+                enteredHeightCm: heightCm,
+                frontPose: frontPose,
+                sidePose: sidePose
+            )
 
-        let fallbackClassification = BodyClassifier.classify(
-            bustCm: bust,
-            waistCm: waist,
-            hipCm: hip,
-            shoulderWidthCm: shoulder,
-            enteredHeightCm: heightCm,
-            torsoLengthCm: estimatedTorsoLength
-        )
+            self.shoulderWidthCm = dimensions.shoulderWidthCm
+            self.bustCircumferenceCm = dimensions.bustCircumferenceCm
+            self.waistCircumferenceCm = dimensions.waistCircumferenceCm
+            self.hipCircumferenceCm = dimensions.hipCircumferenceCm
 
-        self.classificationResult = fallbackClassification
-        self.classifiedBodyType = fallbackClassification.bodyType
-        self.classifiedTorsoBalance = fallbackClassification.torsoBalance
-        self.computedTorsoToHeightRatio = fallbackClassification.torsoToHeightRatio
+            self.originalShoulderWidthCm = dimensions.shoulderWidthCm
+            self.originalBustCircumferenceCm = dimensions.bustCircumferenceCm
+            self.originalWaistCircumferenceCm = dimensions.waistCircumferenceCm
+            self.originalHipCircumferenceCm = dimensions.hipCircumferenceCm
+            self.isMeasurementsEdited = false
 
+            // Extract Vision-detected vertical level lines for photo overlay
+            let shoulderY: Double = {
+                if let ls = frontPose.joints[.leftShoulder], let rs = frontPose.joints[.rightShoulder] {
+                    return Double(ls.normalizedLocation.y + rs.normalizedLocation.y) / 2.0
+                } else if let s = frontPose.joints[.leftShoulder] ?? frontPose.joints[.rightShoulder] {
+                    return Double(s.normalizedLocation.y)
+                }
+                return max(0.1, frontPose.chestLevelUIKitY - 0.08)
+            }()
+
+            self.detectedShoulderY = shoulderY
+            self.detectedBustY = frontPose.chestLevelUIKitY
+            self.detectedWaistY = frontPose.waistLevelUIKitY
+            self.detectedHipY = frontPose.hipLevelUIKitY
+
+            // Calculate Torso Proportion (CobaBodyScan Section 6)
+            let neckY = frontPose.joints[.neck]?.normalizedLocation.y ?? CGFloat(frontPose.chestLevelUIKitY - 0.05)
+            let hipJointY = frontPose.joints[.leftHip]?.normalizedLocation.y ?? CGFloat(frontPose.waistLevelUIKitY)
+            let totalHeightNorm = max(0.3, frontPose.feetBottomUIKitY - frontPose.headTopUIKitY)
+            let torsoFraction = abs(Double(hipJointY - neckY)) / totalHeightNorm
+            let torsoLenCm = torsoFraction * heightCm
+            let torsoPct = (torsoLenCm / heightCm) * 100.0
+
+            self.torsoLengthCm = round(torsoLenCm * 10) / 10
+            self.torsoRatioPercent = round(torsoPct * 10) / 10
+            self.lowerBodyRatioPercent = round((100.0 - torsoPct) * 10) / 10
+
+            let classification = BodyClassifier.classify(
+                bustCm: dimensions.bustCircumferenceCm,
+                waistCm: dimensions.waistCircumferenceCm,
+                hipCm: dimensions.hipCircumferenceCm,
+                shoulderWidthCm: dimensions.shoulderWidthCm,
+                enteredHeightCm: heightCm,
+                torsoLengthCm: dimensions.torsoLengthCm
+            )
+
+            self.classificationResult = classification
+            self.classifiedBodyType = classification.bodyType
+            self.classifiedTorsoBalance = classification.torsoBalance
+            self.computedTorsoToHeightRatio = classification.torsoToHeightRatio
+
+            self.isAnalyzing = false
+            self.currentStep = .analysisResult
+        } catch {
+            self.isAnalyzing = false
+            self.errorMessage = error.localizedDescription
+        }
+        #else
         self.isAnalyzing = false
-        self.currentStep = .analysisResult
+        self.errorMessage = "Platform tidak mendukung UIKit / Vision Framework."
+        #endif
     }
 
     // MARK: - Fine-Tuning & Persistence (C5-96)

@@ -74,6 +74,17 @@ struct PhysicalMetricsInputView: View {
         .onAppear {
             syncInitialValues()
         }
+        .alert(
+            "Gagal Memproses Pemindaian",
+            isPresented: Binding<Bool>(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.errorMessage ?? "")
+        }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()

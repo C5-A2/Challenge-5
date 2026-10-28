@@ -26,6 +26,7 @@ struct BodyAnalysisResultView: View {
     var onComplete: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @State private var isShowingFineTune: Bool = false
 
     // MARK: - Computed Properties
 
@@ -71,13 +72,17 @@ struct BodyAnalysisResultView: View {
                     VStack(spacing: AppDimensions.sectionSpacing) {
                         bodyContourPosterCard
 
-                        EditableMeasurementsCard(viewModel: viewModel)
+                        measuredDimensionsSummaryCard
+
+                        torsoProportionCard
 
                         bodyTypeCard
 
                         torsoBalanceCard
 
                         stylingPrincipleCard
+
+                        fineTuneDisclosureSection
 
                         Spacer(minLength: 16)
                     }
@@ -185,11 +190,11 @@ struct BodyAnalysisResultView: View {
             let w = geometry.size.width
             let h = geometry.size.height
 
-            // Landmark levels proportional to height
-            let shoulderY = h * 0.22
-            let bustY = h * 0.35
-            let waistY = h * 0.49
-            let hipY = h * 0.63
+            // Landmark levels automatically extracted by Apple Vision Framework
+            let shoulderY = h * (viewModel.detectedShoulderY ?? 0.22)
+            let bustY = h * (viewModel.detectedBustY ?? 0.35)
+            let waistY = h * (viewModel.detectedWaistY ?? 0.49)
+            let hipY = h * (viewModel.detectedHipY ?? 0.63)
 
             ZStack {
                 // 1. Shoulder Contour Line
@@ -558,6 +563,280 @@ struct BodyAnalysisResultView: View {
                 .font(AppTypography.caption)
                 .foregroundStyle(AppColors.bodyText)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Auto-Detected Measurements Summary Card
+
+    private var measuredDimensionsSummaryCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppColors.primaryBlue)
+
+                        Text("DIMENSI TUBUH 3D")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AppColors.primaryBlue)
+                    }
+
+                    Text("Hasil Pemindaian AI")
+                        .font(AppTypography.cardHeadline)
+                        .foregroundStyle(AppColors.espressoTitle)
+                }
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 12))
+                    Text("Ramanujan Ellipse")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundStyle(Color(hex: "#009688"))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color(hex: "#009688").opacity(0.12))
+                .clipShape(Capsule())
+            }
+
+            Text("Ukuran lingkar dada, pinggang, dan pinggul dihitung otomatis menggunakan rekonstruksi elips 3D dari siluet tampak depan dan samping.")
+                .font(AppTypography.caption)
+                .foregroundStyle(AppColors.mutedCaption)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // 4 Grid Dimension Cards
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                dimensionStatCard(
+                    title: "Lingkar Dada",
+                    subtitle: "Bust Circumference",
+                    value: String(format: "%.1f cm", bustCm),
+                    color: Color(hex: "#2196F3"),
+                    icon: "circle.circle"
+                )
+
+                dimensionStatCard(
+                    title: "Lingkar Pinggang",
+                    subtitle: "Waist Circumference",
+                    value: String(format: "%.1f cm", waistCm),
+                    color: Color(hex: "#FF9800"),
+                    icon: "circle.dotted"
+                )
+
+                dimensionStatCard(
+                    title: "Lingkar Pinggul",
+                    subtitle: "Hip Circumference",
+                    value: String(format: "%.1f cm", hipCm),
+                    color: Color(hex: "#9C27B0"),
+                    icon: "oval.portrait"
+                )
+
+                dimensionStatCard(
+                    title: "Lebar Bahu",
+                    subtitle: "Shoulder Width",
+                    value: String(format: "%.1f cm", shoulderCm),
+                    color: Color(hex: "#009688"),
+                    icon: "arrow.left.and.right"
+                )
+            }
+
+            // Ratio summary
+            HStack(spacing: 12) {
+                HStack(spacing: 6) {
+                    Text("Rasio B/W:")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.mutedCaption)
+                    Text(String(format: "%.2f", bustCm / max(1.0, waistCm)))
+                        .font(AppTypography.caption.weight(.bold))
+                        .foregroundStyle(AppColors.espressoTitle)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.03))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                HStack(spacing: 6) {
+                    Text("Rasio H/W:")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.mutedCaption)
+                    Text(String(format: "%.2f", hipCm / max(1.0, waistCm)))
+                        .font(AppTypography.caption.weight(.bold))
+                        .foregroundStyle(AppColors.espressoTitle)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.03))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding(AppDimensions.cardInternalPadding)
+        .background(AppColors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius)
+                .stroke(AppColors.subtleBorder, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.04), radius: 8, y: 3)
+    }
+
+    private func dimensionStatCard(
+        title: String,
+        subtitle: String,
+        value: String,
+        color: Color,
+        icon: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundStyle(color)
+                Spacer()
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AppColors.mutedCaption)
+            }
+
+            Text(value)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundStyle(AppColors.espressoTitle)
+
+            Text(subtitle)
+                .font(.system(size: 10))
+                .foregroundStyle(AppColors.mutedCaption)
+        }
+        .padding(12)
+        .background(color.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: AppDimensions.chipCornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppDimensions.chipCornerRadius)
+                .stroke(color.opacity(0.2), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Torso Proportion & Height Percentage Card (Section 6)
+
+    private var torsoProportionCard: some View {
+        let torsoPct = viewModel.torsoRatioPercent ?? 58.0
+        let lowerPct = viewModel.lowerBodyRatioPercent ?? (100.0 - torsoPct)
+        let torsoLen = viewModel.torsoLengthCm ?? round(viewModel.heightCm * 0.58)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("PROPORSI TORSO & TINGGI BADAN")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppColors.primaryBlue)
+
+                Spacer()
+
+                Text(activeTorsoBalance.rawValue)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppColors.primaryBlue)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(AppColors.primaryBlue.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+
+            // Headline banner from Section 6.2 format:
+            // "Torsomu 60.5% dari badanmu (Panjang torso 96.8 cm dari total tinggi 160.0 cm)"
+            Text(LocalizedStringKey("Torsomu **\(String(format: "%.1f", torsoPct))%** dari badanmu (Panjang torso **\(String(format: "%.1f", torsoLen)) cm** dari total tinggi **\(Int(viewModel.heightCm)) cm**)"))
+                .font(AppTypography.cardHeadline)
+                .foregroundStyle(AppColors.espressoTitle)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Split visual proportion bar
+            VStack(spacing: 6) {
+                GeometryReader { geo in
+                    let barW = geo.size.width
+                    let torsoW = barW * (CGFloat(torsoPct) / 100.0)
+                    let lowerW = max(CGFloat(0), barW - torsoW)
+
+                    HStack(spacing: 2) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(AppColors.primaryBlue)
+                            .frame(width: max(CGFloat(10), torsoW))
+                            .overlay(
+                                Text(String(format: "%.0f%% Torso", torsoPct))
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                            )
+
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(hex: "#009688"))
+                            .frame(width: max(CGFloat(10), lowerW))
+                            .overlay(
+                                Text(String(format: "%.0f%% Kaki", lowerPct))
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                            )
+                    }
+                }
+                .frame(height: 26)
+
+                HStack {
+                    Text("Torso: \(String(format: "%.1f", torsoLen)) cm")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppColors.primaryBlue)
+
+                    Spacer()
+
+                    Text("Kaki & Tubuh Bawah: \(String(format: "%.1f", viewModel.heightCm - torsoLen)) cm")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color(hex: "#009688"))
+                }
+            }
+        }
+        .padding(AppDimensions.cardInternalPadding)
+        .background(AppColors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius)
+                .stroke(AppColors.subtleBorder, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.04), radius: 8, y: 3)
+    }
+
+    // MARK: - Optional Fine-Tuning Section (C5-96)
+
+    private var fineTuneDisclosureSection: some View {
+        VStack(spacing: 10) {
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    isShowingFineTune.toggle()
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppColors.mutedCaption)
+
+                    Text(isShowingFineTune ? "Sembunyikan Penyesuaian Ukuran" : "Sesuaikan Ukuran Manual (Opsional)")
+                        .font(AppTypography.caption.weight(.medium))
+                        .foregroundStyle(AppColors.espressoTitle)
+
+                    Spacer()
+
+                    Image(systemName: isShowingFineTune ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.mutedCaption)
+                }
+                .padding(14)
+                .background(AppColors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: AppDimensions.chipCornerRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppDimensions.chipCornerRadius)
+                        .stroke(AppColors.subtleBorder, lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+
+            if isShowingFineTune {
+                EditableMeasurementsCard(viewModel: viewModel)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
 

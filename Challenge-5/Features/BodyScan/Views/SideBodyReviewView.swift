@@ -31,8 +31,10 @@ struct SideBodyReviewView: View {
                 headerBar
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
+                    VStack(spacing: 16) {
                         photoCard
+
+                        validationStatusCard
 
                         checklistSection
 
@@ -52,6 +54,13 @@ struct SideBodyReviewView: View {
             message: "Discarding will remove the side body photo and return to the guidance instructions."
         ) {
             viewModel.discardSidePhoto()
+        }
+        .task {
+            #if canImport(UIKit)
+            if viewModel.sideValidationResult == nil, !viewModel.isSideValidating, let img = viewModel.sideImage {
+                viewModel.setSidePhoto(img)
+            }
+            #endif
         }
     }
 
@@ -117,6 +126,69 @@ struct SideBodyReviewView: View {
                 }
             )
             .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
+    }
+
+    // MARK: - AI Human & Orientation Validation Card
+
+    @ViewBuilder
+    private var validationStatusCard: some View {
+        if viewModel.isSideValidating {
+            HStack(spacing: 10) {
+                ProgressView()
+                    .scaleEffect(0.85)
+                Text("Memverifikasi pose & seluruh tubuh...")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.espressoTitle)
+                Spacer()
+            }
+            .padding(12)
+            .background(AppColors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: AppDimensions.chipCornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppDimensions.chipCornerRadius)
+                    .stroke(AppColors.subtleBorder, lineWidth: 1)
+            )
+        } else if let result = viewModel.sideValidationResult {
+            if result.isHumanPresent && result.isFullBody && result.isOrientationMatch {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text(result.message)
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.bodyText)
+                    Spacer()
+                }
+                .padding(10)
+                .background(Color.green.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: AppDimensions.chipCornerRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppDimensions.chipCornerRadius)
+                        .stroke(Color.green.opacity(0.3), lineWidth: 1)
+                )
+            } else {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Foto Tidak Sesuai")
+                            .font(AppTypography.cardHeadline)
+                            .foregroundStyle(AppColors.espressoTitle)
+                        Text(result.message)
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.bodyText)
+                    }
+                    Spacer()
+                }
+                .padding(12)
+                .background(Color.orange.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: AppDimensions.chipCornerRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppDimensions.chipCornerRadius)
+                        .stroke(Color.orange.opacity(0.35), lineWidth: 1)
+                )
+            }
+        }
     }
 
     // MARK: - Posture Verification Checklist Section

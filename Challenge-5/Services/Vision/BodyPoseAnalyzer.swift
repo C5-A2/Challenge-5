@@ -220,7 +220,11 @@ public final class BodyPoseAnalyzer: BodyPoseAnalyzerProtocol, Sendable {
         let isFullBody = hasUpper && hasMid && hasLower
 
         if !isFullBody {
-            warnings.append("Full body not completely detected. Check lighting, distance, and framing.")
+            throw NSError(
+                domain: "BodyPoseAnalyzer",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "Pastikan seluruh tubuh terlihat dari kepala hingga kaki, bukan selfie atau setengah badan."]
+            )
         }
 
         return PoseAnalysisResult(
