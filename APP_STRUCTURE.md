@@ -541,12 +541,28 @@ enum BodyType: String, Codable, CaseIterable, Identifiable {
 }
 
 // Models/TorsoBalance.swift
-enum TorsoBalance: String, Codable, CaseIterable, Identifiable {
+enum TorsoBalance: String, Codable, CaseIterable, Identifiable, Sendable {
     case shortTorso = "Short Torso"
     case balanced = "Balanced"
     case longTorso = "Long Torso"
     
     var id: String { rawValue }
+    var displayName: String
+    var definition: String
+    var thrThresholdDescription: String
+    var anatomicalDescription: String
+    var act: String
+    var actPrinciple: String
+    var suitableGarments: SuitableGarments
+    var suitableTops: String
+    var suitableBottoms: String
+    var systemPrompt: String
+    var llmPromptContext: String
+    
+    struct SuitableGarments: Sendable, Hashable, Codable {
+        let top: String
+        let bottom: String
+    }
 }
 
 // Models/ColorSeason.swift

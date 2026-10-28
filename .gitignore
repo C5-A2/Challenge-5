@@ -71,3 +71,7 @@ fastlane/test_output
 ._*
 .Spotlight-V100
 .Trashes
+
+# Large Language Models / GGUF Weights
+*.gguf
+
