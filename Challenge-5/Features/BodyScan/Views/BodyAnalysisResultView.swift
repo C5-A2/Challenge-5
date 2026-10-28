@@ -71,6 +71,8 @@ struct BodyAnalysisResultView: View {
                     VStack(spacing: AppDimensions.sectionSpacing) {
                         bodyContourPosterCard
 
+                        EditableMeasurementsCard(viewModel: viewModel)
+
                         bodyTypeCard
 
                         torsoBalanceCard

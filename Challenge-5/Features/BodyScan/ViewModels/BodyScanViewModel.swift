@@ -124,11 +124,18 @@ public final class BodyScanViewModel {
     public var analysisProgressText: String = ""
     public var errorMessage: String? = nil
 
-    /// Calculated measurements (fine-tunable by user on BodyAnalysisResultView).
+    /// Calculated measurements (fine-tunable by user on BodyAnalysisResultView - C5-96).
     public var shoulderWidthCm: Double?
     public var bustCircumferenceCm: Double?
     public var waistCircumferenceCm: Double?
     public var hipCircumferenceCm: Double?
+
+    /// Original vision-estimated baselines for reset support (C5-96).
+    public var originalShoulderWidthCm: Double?
+    public var originalBustCircumferenceCm: Double?
+    public var originalWaistCircumferenceCm: Double?
+    public var originalHipCircumferenceCm: Double?
+    public var isMeasurementsEdited: Bool = false
 
     /// Classification outputs (C5-94).
     public var classificationResult: BodyClassificationResult?
@@ -249,6 +256,13 @@ public final class BodyScanViewModel {
                 self.bustCircumferenceCm = dimensions.bustCircumferenceCm
                 self.waistCircumferenceCm = dimensions.waistCircumferenceCm
                 self.hipCircumferenceCm = dimensions.hipCircumferenceCm
+
+                self.originalShoulderWidthCm = dimensions.shoulderWidthCm
+                self.originalBustCircumferenceCm = dimensions.bustCircumferenceCm
+                self.originalWaistCircumferenceCm = dimensions.waistCircumferenceCm
+                self.originalHipCircumferenceCm = dimensions.hipCircumferenceCm
+                self.isMeasurementsEdited = false
+
                 let classification = BodyClassifier.classify(
                     bustCm: dimensions.bustCircumferenceCm,
                     waistCm: dimensions.waistCircumferenceCm,
@@ -285,6 +299,12 @@ public final class BodyScanViewModel {
         self.waistCircumferenceCm = waist
         self.hipCircumferenceCm = hip
 
+        self.originalShoulderWidthCm = shoulder
+        self.originalBustCircumferenceCm = bust
+        self.originalWaistCircumferenceCm = waist
+        self.originalHipCircumferenceCm = hip
+        self.isMeasurementsEdited = false
+
         let fallbackClassification = BodyClassifier.classify(
             bustCm: bust,
             waistCm: waist,
@@ -303,15 +323,31 @@ public final class BodyScanViewModel {
         self.currentStep = .analysisResult
     }
 
-    // MARK: - Fine-Tuning & Persistence
+    // MARK: - Fine-Tuning & Persistence (C5-96)
 
-    /// Allow user to manually adjust calculated measurements in C5-96.
+    /// Allow user to manually adjust calculated measurements via sliders / steppers in C5-96.
     public func updateMeasurement(shoulder: Double?, bust: Double?, waist: Double?, hip: Double?) {
-        if let shoulder = shoulder { self.shoulderWidthCm = shoulder }
-        if let bust = bust { self.bustCircumferenceCm = bust }
-        if let waist = waist { self.waistCircumferenceCm = waist }
-        if let hip = hip { self.hipCircumferenceCm = hip }
+        if let shoulder = shoulder { self.shoulderWidthCm = round(shoulder * 10) / 10 }
+        if let bust = bust { self.bustCircumferenceCm = round(bust * 10) / 10 }
+        if let waist = waist { self.waistCircumferenceCm = round(waist * 10) / 10 }
+        if let hip = hip { self.hipCircumferenceCm = round(hip * 10) / 10 }
 
+        self.isMeasurementsEdited = true
+        reclassifyCurrentMeasurements()
+    }
+
+    /// Reset fine-tuned measurements back to initial Vision-extracted baselines (C5-96).
+    public func resetMeasurementsToBaseline() {
+        if let origS = originalShoulderWidthCm { shoulderWidthCm = origS }
+        if let origB = originalBustCircumferenceCm { bustCircumferenceCm = origB }
+        if let origW = originalWaistCircumferenceCm { waistCircumferenceCm = origW }
+        if let origH = originalHipCircumferenceCm { hipCircumferenceCm = origH }
+
+        self.isMeasurementsEdited = false
+        reclassifyCurrentMeasurements()
+    }
+
+    private func reclassifyCurrentMeasurements() {
         if let b = bustCircumferenceCm, let w = waistCircumferenceCm, let h = hipCircumferenceCm {
             let reclassified = BodyClassifier.classify(
                 bustCm: b,
