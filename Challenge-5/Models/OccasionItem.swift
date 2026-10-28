@@ -28,7 +28,7 @@ final class OccasionItem {
     var createdAt: Date = Date()
     var isCompleted: Bool = false
     
-    @Relationship(deleteRule: .cascade)
+    @Relationship(deleteRule: .cascade, inverse: \OutfitLook.occasion)
     var generatedLooks: [OutfitLook] = []
     
     // MARK: - Computed Properties

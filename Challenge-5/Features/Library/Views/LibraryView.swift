@@ -19,6 +19,8 @@ public struct LibraryView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: LibraryViewModel
     @State private var selectedOccasionForOutput: OccasionItem? = nil
+    /// Which look the Output opens on (the tapped saved look).
+    @State private var selectedLookIndexForOutput: Int = 0
     @Binding public var selectedTab: CapsuleTabItem
     
     // Action callbacks
@@ -88,9 +90,14 @@ public struct LibraryView: View {
         }
         .fullScreenCover(item: $selectedOccasionForOutput) { occasion in
             OccasionOutputView(
-                occasion: occasion,
+                viewModel: OccasionOutputViewModel(
+                    occasion: occasion,
+                    selectedLookIndex: selectedLookIndexForOutput
+                ),
                 onDismiss: {
                     selectedOccasionForOutput = nil
+                    // A look may have been unsaved in the Output, so reload the Library.
+                    viewModel.fetchSavedLooksFromContext(modelContext)
                 }
             )
         }
@@ -129,6 +136,13 @@ public struct LibraryView: View {
                         onSelectLook(look)
                     } else {
                         // Navigate to OccasionOutputView
+                        if let destination = viewModel.outputDestination(for: look) {
+                            selectedLookIndexForOutput = destination.lookIndex
+                            selectedOccasionForOutput = destination.occasion
+                            return
+                        }
+                        // Sample looks have no stored occasion: open a temporary one.
+                        selectedLookIndexForOutput = 0
                         selectedOccasionForOutput = OccasionItem(
                             title: look.occasionTitle.isEmpty ? "My Occasion" : look.occasionTitle,
                             date: look.date,
@@ -152,6 +166,15 @@ public struct LibraryView: View {
         selectedTab: .constant(.library),
         initialLooks: SavedLookItem.samples
     )
+}
+
+/// Looks loaded from SwiftData (2 saved looks with images, newest first).
+#Preview("Library View - SwiftData") {
+    LibraryView(
+        selectedTab: .constant(.library),
+        initialLooks: []
+    )
+    .modelContainer(SavedLookSampleData.makeContainer())
 }
 
 #Preview("Library View Empty State") {

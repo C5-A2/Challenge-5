@@ -179,10 +179,9 @@ struct OccasionsHistoryView: View {
         occasion.date = detail.date
         occasion.dresscode = detail.dresscode
         occasion.visionKeywords = detail.visions.map(\.rawValue)
-        if !detail.referenceImages.isEmpty {
-            occasion.referenceImagesData = detail.referenceImages
-            occasion.referenceImageData = detail.referenceImages.first
-        }
+        // Always update, so removing every reference photo is saved too.
+        occasion.referenceImagesData = detail.referenceImages
+        occasion.referenceImageData = detail.referenceImages.first
         do {
             try modelContext.save()
         } catch {
