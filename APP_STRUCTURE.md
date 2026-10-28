@@ -530,7 +530,7 @@ enum ClothingSize: String, Codable, CaseIterable, Identifiable {
 
 ```swift
 // Models/BodyType.swift
-enum BodyType: String, Codable, CaseIterable, Identifiable {
+enum BodyType: String, Codable, CaseIterable, Identifiable, Sendable {
     case pear = "Pear"
     case hourglass = "Hourglass"
     case rectangle = "Rectangle"
@@ -538,6 +538,28 @@ enum BodyType: String, Codable, CaseIterable, Identifiable {
     case apple = "Apple"
     
     var id: String { rawValue }
+    var displayName: String
+    var definition: String
+    var act: String
+    var actPrinciple: String
+    var suitableGarments: SuitableGarments
+    var suitableNecklines: String
+    var suitableSleeves: String
+    var suitableTopsAndJackets: String
+    var suitableBottoms: String
+    var suitableSkirtsAndDresses: String
+    var suitableShortsAndJumpsuits: String
+    var systemPrompt: String
+    var llmPromptContext: String
+    
+    struct SuitableGarments: Sendable, Hashable, Codable {
+        let necklines: String
+        let sleeves: String
+        let topsAndJackets: String
+        let bottoms: String
+        let skirtsAndDresses: String
+        let shortsAndJumpsuits: String
+    }
 }
 
 // Models/TorsoBalance.swift
