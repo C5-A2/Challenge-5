@@ -151,7 +151,7 @@ struct OccasionOutputView: View {
         .sheet(isPresented: $isShowingProfileSheet) {
             TemporaryProfileFormSheet()
         }
-        .alert("LLaMA Error", isPresented: $viewModel.isShowingErrorAlert, presenting: viewModel.errorMessage) { _ in
+        .alert("AI Generation Error", isPresented: $viewModel.isShowingErrorAlert, presenting: viewModel.errorMessage) { _ in
             Button("OK", role: .cancel) {}
         } message: { message in
             Text(message)

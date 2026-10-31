@@ -84,7 +84,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         profile: UserProfile
     ) async throws -> [OutfitLook] {
         // Validate the GGUF model file is present before attempting inference.
-        try LLaMAResource.validateModelAvailability()
+        try LLMResource.validateModelAvailability()
 
         // 1. Injected JSON short-circuit (prompt testing / UI previews).
         if let injectedJSON = OutfitGenerationPipeline.injectedLLMResponseJSON, !injectedJSON.isEmpty {
@@ -94,7 +94,16 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        // 2. Sequential generation: one LLM call = one look.
+        // 2. Approach 1: Analyze user reference photos via Apple Vision on Neural Engine
+        let allImageData = occasion.referenceImagesData.isEmpty
+            ? (occasion.referenceImageData.map { [$0] } ?? [])
+            : occasion.referenceImagesData
+        let analyzedImageStyle = await ReferenceImageStyleAnalyzer.shared.analyzeStyle(from: allImageData)
+        if let style = analyzedImageStyle {
+            print("👁️ [OutfitGenerationPipeline] Reference images analyzed via Apple Vision: \"\(style)\"")
+        }
+
+        // 3. Sequential generation: one LLM call = one look.
         //    After each look is parsed, its garment summary is appended to the next call's
         //    system prompt so the model aims for variety across looks.
         let totalLooks = 5
@@ -110,20 +119,21 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             let temperature = temperatures[lookIndex]
             print("🔧 [OutfitGenerationPipeline] Building prompt for look \(lookIndex)/\(totalLooks - 1) (temp: \(temperature))…")
 
-            // Build a single-look prompt, injecting summaries of all previously generated looks.
-            let prompt = promptBuilder.buildLlamaFormattedPrompt(
+            // Build a single-look prompt, injecting summaries of all previously generated looks and Vision cues.
+            let prompt = promptBuilder.buildFormattedPrompt(
                 occasion: occasion,
                 profile: profile,
                 lookIndex: lookIndex,
-                previousLooks: previousSummaries
+                previousLooks: previousSummaries,
+                analyzedImageStyle: analyzedImageStyle
             )
-            print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) prompt built (\(prompt.count) chars). Running LLaMA…")
+            print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) prompt built (\(prompt.count) chars). Running \(LLMResource.activeModelFilename)…")
 
             // One LLM call — generates exactly one look's JSON.
             // maxTokens = 4096: the model tends to be verbose (~2100 tokens observed for one look),
             // so 4096 gives a safe ceiling with no truncation risk.
             // The model stops naturally at its EOG token well before this limit.
-            let rawOutput = try await LLaMAEngine.shared.generate(
+            let rawOutput = try await LLMEngine.shared.generate(
                 prompt: prompt,
                 maxTokens: 4096,
                 temperature: temperature
@@ -135,7 +145,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             let rawClean = rawOutput.trimmingCharacters(in: .whitespacesAndNewlines)
             let parsedLooks = try parseLooks(from: rawClean, colorSeason: profile.colorSeason)
             guard let parsedLook = parsedLooks.first else {
-                throw LLaMAError.invalidOutput("LLaMA returned 0 looks for look index \(lookIndex).")
+                throw LLMError.invalidOutput("LLM returned 0 looks for look index \(lookIndex).")
             }
 
             // Enforce the correct lookIndex regardless of what the model output.
@@ -153,14 +163,14 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
     /// Synchronous generation for seamless instant UI transitions upon form submit.
     ///
-    /// > Note: This path is only used when LLaMA cannot be called synchronously (e.g. from `init`).
-    /// > The primary async path via `generateLooks(for:profile:)` runs real LLaMA inference.
+    /// > Note: Real LLM inference runs asynchronously via `generateLooks(for:profile:)` in `OccasionOutputViewModel`.
+    /// > If no pre-injected test JSON is provided, this returns an empty array so the async task can run.
     func generateLooksSync(
         for occasion: OccasionItem,
         profile: UserProfile
     ) throws -> [OutfitLook] {
-        // Validate that LLaMA can be used. Throws LLaMAError if model is missing or unreadable.
-        try LLaMAResource.validateModelAvailability()
+        // Validate that LLM can be used. Throws LLMError if model is missing or unreadable.
+        try LLMResource.validateModelAvailability()
 
         // 1. If an injected LLM response JSON is available (prompt testing), decode directly:
         if let injectedJSON = OutfitGenerationPipeline.injectedLLMResponseJSON, !injectedJSON.isEmpty {
@@ -170,9 +180,8 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        // LLaMA cannot run synchronously from an init context — throw so the caller shows an error
-        // instead of silently producing identical static looks.
-        throw LLaMAError.modelNotFound("LLaMA inference requires the async generateLooks(for:profile:) call path.")
+        // Return empty so OccasionOutputViewModel asynchronously generates the looks on screen appear.
+        return []
     }
 
     // MARK: - LLM Response JSON Parser
@@ -258,7 +267,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
 
         // All strategies failed — throw with the raw output for debugging
-        throw LLaMAError.invalidOutput("Could not parse JSON from LLaMA output (\(cleanJSON.count) chars):\n\(cleanJSON)")
+        throw LLMError.invalidOutput("Could not parse JSON from LLM output (\(cleanJSON.count) chars):\n\(cleanJSON)")
     }
 
     // MARK: - LLM JSON Sanitization & Resilient Fallback
@@ -393,7 +402,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
     private func decodeLooks(from jsonString: String, colorSeason: ColorSeason? = nil) throws -> [OutfitLook] {
         guard let data = jsonString.data(using: .utf8) else {
-            throw LLaMAError.invalidOutput("Unable to convert JSON string to UTF-8 data")
+            throw LLMError.invalidOutput("Unable to convert JSON string to UTF-8 data")
         }
         
         // Flexible decoding: handle {"looks": [...]}, single look {...}, or array [...]
@@ -405,7 +414,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         } else if let lookArray = try? JSONDecoder().decode([LLMOutfitGenerationResponse.LookDTO].self, from: data) {
             lookDTOs = lookArray
         } else {
-            throw LLaMAError.invalidOutput("Unable to decode looks from JSON")
+            throw LLMError.invalidOutput("Unable to decode looks from JSON")
         }
 
         let palette = colorSeason?.palette ?? []

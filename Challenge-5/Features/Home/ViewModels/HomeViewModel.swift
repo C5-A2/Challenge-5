@@ -38,16 +38,18 @@ final class HomeViewModel {
         let activeProfile = profile ?? UserProfile.mockSample
         do {
             let looks = try OutfitGenerationPipeline.shared.generateLooksSync(for: newOccasion, profile: activeProfile)
-            newOccasion.generatedLooks = looks
-            for look in looks {
-                context.insert(look)
-                for garment in look.garments {
-                    context.insert(garment)
+            if !looks.isEmpty {
+                newOccasion.generatedLooks = looks
+                for look in looks {
+                    context.insert(look)
+                    for garment in look.garments {
+                        context.insert(garment)
+                    }
                 }
             }
         } catch {
             let errorMsg = error.localizedDescription
-            print("\n❌ [HomeViewModel] LLaMA CANNOT BE USED: \(errorMsg)\n")
+            print("\n❌ [HomeViewModel] Model unavailable: \(errorMsg)\n")
             self.errorMessage = errorMsg
             self.isShowingErrorAlert = true
         }

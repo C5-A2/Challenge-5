@@ -111,7 +111,7 @@ final class OccasionOutputViewModel {
             self.isUsingMockPlaceholders = false
             self.isLoading = false
         } else {
-            // Show mock placeholders while awaiting LLaMA generation via .task in the view.
+            // Show mock placeholders while awaiting on-device LLM generation via .task in the view.
             self.looks = OccasionOutputViewModel.makeMockLooks()
             self.isUsingMockPlaceholders = true
             self.isLoading = true
@@ -121,7 +121,7 @@ final class OccasionOutputViewModel {
     private var isUsingMockPlaceholders = false
     private var hasStartedInitialGeneration = false
 
-    /// Triggered once when the view appears on screen via `.task` to run real LLaMA inference.
+    /// Triggered once when the view appears on screen via `.task` to run real LLM inference.
     func generateLooksIfNeeded(profile: UserProfile? = nil) async {
         guard !hasStartedInitialGeneration else { return }
 
@@ -155,7 +155,7 @@ final class OccasionOutputViewModel {
             }
         } catch {
             let errorMsg = error.localizedDescription
-            print("\n❌ [OccasionOutputViewModel] LLaMA inference failed: \(errorMsg)\n")
+            print("\n❌ [OccasionOutputViewModel] LLM inference failed (\(LLMResource.activeModelFilename)): \(errorMsg)\n")
             withAnimation {
                 self.errorMessage = errorMsg
                 self.isLoading = false
@@ -240,7 +240,7 @@ final class OccasionOutputViewModel {
                 }
             } catch {
                 let errorMsg = error.localizedDescription
-                print("\n❌ [OccasionOutputViewModel] LLaMA CANNOT BE USED: \(errorMsg)\n")
+                print("\n❌ [OccasionOutputViewModel] LLM CANNOT BE USED (\(LLMResource.activeModelFilename)): \(errorMsg)\n")
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                     self.errorMessage = errorMsg
                     self.isShowingErrorAlert = true

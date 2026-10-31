@@ -130,7 +130,7 @@ struct TemporaryProfileFormSheet: View {
                     .font(AppTypography.cardHeadline)
                     .foregroundStyle(AppColors.espressoTitle)
                 
-                Text("Select your physical attributes below. The LLaMA outfit prompt builder will immediately inject tailored rulesets and color hex palettes based on this profile.")
+                Text("Select your physical attributes below. The on-device outfit prompt builder will immediately inject tailored rulesets and color hex palettes based on this profile.")
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.bodyText.opacity(0.8))
                     .fixedSize(horizontal: false, vertical: true)
@@ -524,7 +524,7 @@ struct TemporaryProfileFormSheet: View {
         }
     }
     
-    /// Generates a snippet showing the exact directives LLaMA will receive.
+    /// Generates a snippet showing the exact directives the model will receive.
     private func generatePromptPreview() -> String {
         let sampleOccasion = OccasionItem(title: "Sample Occasion", date: Date())
         let sampleProfile = UserProfile(

@@ -273,29 +273,32 @@ struct OutfitPromptBuilder: Sendable {
         return lines.joined(separator: "\n")
     }
 
-    // MARK: - LLaMA 3.2 Formatted Chat Prompt (<|start_header_id|>)
+    // MARK: - LLaMA / Qwen Formatted Chat Prompt
 
     /// The JSON prefix that pre-fills the assistant turn for a **single-look** generation.
     /// Forces the model to output just one look object: `{"looks":[{...}]}`
     public static let assistantPrefill = "{\"looks\":["
 
-    /// Produces a ready-to-run Llama 3.2 chat-templated prompt for `Llama-3.2-1B-Instruct-Q4_K_M.gguf`.
+    /// Produces a ready-to-run chat-templated prompt, automatically formatted for Qwen (ChatML) or Llama 3.2.
     ///
     /// - Parameters:
     ///   - lookIndex: The 0-based index of the look to generate (0–4).
     ///   - previousLooks: Summaries of already-generated looks injected into the system prompt
     ///     so the model avoids repeating garment names, colors, and silhouettes.
-    public func buildLlamaFormattedPrompt(
+    ///   - analyzedImageStyle: Style descriptors extracted from user reference photos via Apple Vision.
+    public func buildFormattedPrompt(
         occasion: OccasionItem,
         profile: UserProfile?,
         lookIndex: Int = 0,
-        previousLooks: [GeneratedLookSummary] = []
+        previousLooks: [GeneratedLookSummary] = [],
+        analyzedImageStyle: String? = nil
     ) -> String {
         let system = buildSingleLookSystemPrompt(
             occasion: occasion,
             profile: profile,
             lookIndex: lookIndex,
-            previousLooks: previousLooks
+            previousLooks: previousLooks,
+            analyzedImageStyle: analyzedImageStyle
         )
         let user = buildSingleLookUserPrompt(
             occasion: occasion,
@@ -303,6 +306,19 @@ struct OutfitPromptBuilder: Sendable {
             lookIndex: lookIndex
         )
 
+        // Qwen 2.5 uses ChatML tokens (<|im_start|> ... <|im_end|>)
+        if LLMResource.isQwenActive {
+            return """
+            <|im_start|>system
+            \(system)<|im_end|>
+            <|im_start|>user
+            \(user)<|im_end|>
+            <|im_start|>assistant
+            \(OutfitPromptBuilder.assistantPrefill)
+            """
+        }
+
+        // Default Llama 3.2 chat tokens (<|begin_of_text|><|start_header_id|> ...)
         return """
         <|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
@@ -314,6 +330,23 @@ struct OutfitPromptBuilder: Sendable {
         """
     }
 
+    /// Backward compatibility alias
+    public func buildLlamaFormattedPrompt(
+        occasion: OccasionItem,
+        profile: UserProfile?,
+        lookIndex: Int = 0,
+        previousLooks: [GeneratedLookSummary] = [],
+        analyzedImageStyle: String? = nil
+    ) -> String {
+        buildFormattedPrompt(
+            occasion: occasion,
+            profile: profile,
+            lookIndex: lookIndex,
+            previousLooks: previousLooks,
+            analyzedImageStyle: analyzedImageStyle
+        )
+    }
+
     // MARK: - Single-Look System Prompt
 
     /// Builds a system prompt scoped to one look (`lookIndex`), with a "do not repeat" block
@@ -322,7 +355,8 @@ struct OutfitPromptBuilder: Sendable {
         occasion: OccasionItem,
         profile: UserProfile?,
         lookIndex: Int,
-        previousLooks: [GeneratedLookSummary]
+        previousLooks: [GeneratedLookSummary],
+        analyzedImageStyle: String? = nil
     ) -> String {
         var rules: [String] = []
 
@@ -370,11 +404,15 @@ struct OutfitPromptBuilder: Sendable {
             rules.append("STYLE VISION (reflect in garments):\n\(visionsDetails)")
         }
 
-        // Reference images
-        let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
-        if hasReferenceImages {
-            let count = occasion.referenceImagesData.isEmpty ? 1 : occasion.referenceImagesData.count
-            rules.append("REFERENCE IMAGES (\(count)): Subtly reflect the user's aesthetic vibe and textures.")
+        // Reference images (Approach 1: Injects Apple Vision analyzed descriptors)
+        if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
+            rules.append("USER REFERENCE PHOTO AESTHETIC (analyzed via on-device Vision): \(analyzedStyle). Incorporate these visual aesthetic cues, textures, and vibes into the outfit.")
+        } else {
+            let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
+            if hasReferenceImages {
+                let count = occasion.referenceImagesData.isEmpty ? 1 : occasion.referenceImagesData.count
+                rules.append("REFERENCE IMAGES (\(count)): Subtly reflect the user's aesthetic vibe and textures.")
+            }
         }
 
         // Previously generated looks
