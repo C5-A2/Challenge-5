@@ -13,12 +13,14 @@ struct OccasionOutputView: View {
     
     
     @Environment(\.dismiss) private var dismiss
+    @Query private var userProfiles: [UserProfile]
     @State var viewModel: OccasionOutputViewModel
     
     
     @State private var isShowingDetailsSheet: Bool = false
     @State private var isShowingMoreMenu: Bool = false
     @State private var isShowingEditSheet: Bool = false
+    @State private var isShowingProfileSheet: Bool = false
     
     
     var onDismiss: (() -> Void)? = nil
@@ -40,11 +42,12 @@ struct OccasionOutputView: View {
     
     init(
         occasion: OccasionItem,
+        profile: UserProfile? = nil,
         onDismiss: (() -> Void)? = nil,
         onEditOccasion: ((OccasionItem) -> Void)? = nil,
         onSelectGarment: ((GarmentItem) -> Void)? = nil
     ) {
-        _viewModel = State(initialValue: OccasionOutputViewModel(occasion: occasion))
+        _viewModel = State(initialValue: OccasionOutputViewModel(occasion: occasion, profile: profile))
         self.onDismiss = onDismiss
         self.onEditOccasion = onEditOccasion
         self.onSelectGarment = onSelectGarment
@@ -103,7 +106,14 @@ struct OccasionOutputView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .topTrailing)))
                     .zIndex(10)
             }
+
+            if viewModel.isLoading {
+                generationLoadingOverlay
+                    .transition(.opacity)
+                    .zIndex(20)
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.isLoading)
         .alert(
             "Couldn't Save Look",
             isPresented: Binding(
@@ -137,6 +147,18 @@ struct OccasionOutputView: View {
                     isShowingEditSheet = false
                 }
             )
+        }
+        .sheet(isPresented: $isShowingProfileSheet) {
+            TemporaryProfileFormSheet()
+        }
+        .alert("AI Generation Error", isPresented: $viewModel.isShowingErrorAlert, presenting: viewModel.errorMessage) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { message in
+            Text(message)
+        }
+        .task {
+            let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+            await viewModel.generateLooksIfNeeded(profile: activeProfile)
         }
     }
     
@@ -200,6 +222,61 @@ struct OccasionOutputView: View {
                 withAnimation(.easeInOut(duration: 0.15)) {
                     isShowingMoreMenu = false
                 }
+                isShowingProfileSheet = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.espressoTitle)
+                        .frame(width: 20)
+                    
+                    Text("Profile")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.espressoTitle)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            
+            Divider()
+                .background(Color.white.opacity(0.35))
+                .padding(.horizontal, 12)
+            
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isShowingMoreMenu = false
+                }
+                let activeProfile = userProfiles.first ?? UserProfile.mockSample
+                viewModel.regenerateLooks(profile: activeProfile)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.espressoTitle)
+                        .frame(width: 20)
+                    
+                    Text("Regenerate")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.espressoTitle)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            
+            Divider()
+                .background(Color.white.opacity(0.35))
+                .padding(.horizontal, 12)
+            
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isShowingMoreMenu = false
+                }
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "trash")
@@ -218,7 +295,7 @@ struct OccasionOutputView: View {
             }
             .buttonStyle(.plain)
         }
-        .frame(width: 145)
+        .frame(width: 165)
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -244,6 +321,52 @@ struct OccasionOutputView: View {
                 )
         )
     }
+    
+    // MARK: - Loading Overlay
+    
+    private var generationLoadingOverlay: some View {
+        ZStack {
+            AppColors.canvasBackground.opacity(0.88)
+                .ignoresSafeArea()
+                .background(.ultraThinMaterial)
+            
+            VStack(spacing: 20) {
+                ZStack {
+                    Circle()
+                        .stroke(AppColors.espressoTitle.opacity(0.12), lineWidth: 4)
+                        .frame(width: 64, height: 64)
+                    
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: AppColors.espressoTitle))
+                        .scaleEffect(1.3)
+                }
+                
+                VStack(spacing: 6) {
+                    Text("Curating Your Looks")
+                        .font(AppTypography.sfProSemiboldExtended(size: 19))
+                        .foregroundStyle(AppColors.espressoTitle)
+                    
+                    Text("Styling ensembles tailored to your silhouette and \(viewModel.occasion.title)...")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.mutedCaption)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 32)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(AppColors.glassmorphicFill)
+                    .shadow(color: Color.black.opacity(0.08), radius: 24, y: 12)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.8), lineWidth: 1)
+            )
+            .padding(.horizontal, 32)
+        }
+    }
 }
 
 #Preview("Alt 5 - Hero Output") {
@@ -252,7 +375,7 @@ struct OccasionOutputView: View {
 
 #Preview("Alt 5 Copy - Menu Open") {
     let vm = OccasionOutputViewModel.mock()
-    var view = OccasionOutputView(viewModel: vm)
+    let view = OccasionOutputView(viewModel: vm)
     return view
 }
 

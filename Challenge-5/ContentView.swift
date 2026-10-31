@@ -13,6 +13,7 @@ struct ContentView: View {
     // MARK: - Navigation & Tab State
     
     @State private var selectedTab: CapsuleTabItem = .occasions
+    @State private var isShowingProfileSheet: Bool = false
     
     // MARK: - Body
     
@@ -23,19 +24,20 @@ struct ContentView: View {
                 OccasionsHomeView(
                     selectedTab: $selectedTab,
                     onProfileTap: {
-                        // Profile view destination (empty objective for now)
-                        print("Profile view tapped")
+                        isShowingProfileSheet = true
                     }
                 )
             case .library:
                 LibraryView(
                     selectedTab: $selectedTab,
                     onProfileTap: {
-                        // Profile view destination (empty objective for now)
-                        print("Profile view tapped from Library")
+                        isShowingProfileSheet = true
                     }
                 )
             }
+        }
+        .sheet(isPresented: $isShowingProfileSheet) {
+            TemporaryProfileFormSheet()
         }
     }
 }
@@ -44,5 +46,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self], inMemory: true)
+        .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self, UserProfile.self], inMemory: true)
 }

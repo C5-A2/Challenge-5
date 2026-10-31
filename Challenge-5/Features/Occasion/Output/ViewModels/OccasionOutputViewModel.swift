@@ -20,6 +20,7 @@ enum FitRationaleTab: String, CaseIterable, Identifiable, Sendable {
 @MainActor
 final class OccasionOutputViewModel {
     
+    var profile: UserProfile? = nil
     
     var occasion: OccasionItem
     
@@ -52,6 +53,9 @@ final class OccasionOutputViewModel {
         }
         return occasion.modelContext.map { SavedLookStorageService(modelContext: $0) }
     }
+    var errorMessage: String? = nil
+    
+    var isShowingErrorAlert: Bool = false
     
     
     var currentLook: OutfitLook? {
@@ -88,14 +92,75 @@ final class OccasionOutputViewModel {
         occasion: OccasionItem,
         looks: [OutfitLook] = [],
         selectedLookIndex: Int = 0,
-        savedLookStorage: (any SavedLookStoring)? = nil
+        savedLookStorage: (any SavedLookStoring)? = nil,
+        profile: UserProfile? = nil
     ) {
         self.occasion = occasion
-        let storedLooks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
-        let initialLooks = looks.isEmpty ? storedLooks : looks
-        self.looks = initialLooks.isEmpty ? OccasionOutputViewModel.makeMockLooks() : initialLooks
+        self.profile = profile
         self.selectedLookIndex = selectedLookIndex
         self.injectedSavedLookStorage = savedLookStorage
+
+        if !looks.isEmpty {
+            // Caller-supplied looks (e.g. injected for tests/previews): use them directly.
+            self.looks = looks
+            self.isUsingMockPlaceholders = false
+            self.isLoading = false
+        } else if !occasion.generatedLooks.isEmpty {
+            // Previously generated and stored looks: restore them.
+            self.looks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
+            self.isUsingMockPlaceholders = false
+            self.isLoading = false
+        } else {
+            // Show mock placeholders while awaiting on-device LLM generation via .task in the view.
+            self.looks = OccasionOutputViewModel.makeMockLooks()
+            self.isUsingMockPlaceholders = true
+            self.isLoading = true
+        }
+    }
+    
+    private var isUsingMockPlaceholders = false
+    private var hasStartedInitialGeneration = false
+
+    /// Triggered once when the view appears on screen via `.task` to run real LLM inference.
+    func generateLooksIfNeeded(profile: UserProfile? = nil) async {
+        guard !hasStartedInitialGeneration else { return }
+
+        // If previously generated looks are already persisted, restore them.
+        if !occasion.generatedLooks.isEmpty {
+            self.looks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
+            self.isLoading = false
+            return
+        }
+
+        // If caller passed real non-mock looks, do not generate.
+        if !isUsingMockPlaceholders {
+            self.isLoading = false
+            return
+        }
+
+        hasStartedInitialGeneration = true
+        self.isLoading = true
+        let activeProfile = profile ?? self.profile ?? UserProfile.mockSample
+        do {
+            let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(
+                for: occasion,
+                profile: activeProfile
+            )
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                self.looks = newLooks
+                self.occasion.generatedLooks = newLooks
+                self.isUsingMockPlaceholders = false
+                self.selectedLookIndex = 0
+                self.isLoading = false
+            }
+        } catch {
+            let errorMsg = error.localizedDescription
+            print("\n❌ [OccasionOutputViewModel] LLM inference failed (\(LLMResource.activeModelFilename)): \(errorMsg)\n")
+            withAnimation {
+                self.errorMessage = errorMsg
+                self.isLoading = false
+            }
+        }
     }
     
     
@@ -158,15 +223,30 @@ final class OccasionOutputViewModel {
         }
     }
     
-    func regenerateLooks() {
+    func regenerateLooks(profile: UserProfile? = nil) {
         guard !isLoading else { return }
         isLoading = true
+        errorMessage = nil
         
         Task {
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            self.looks = OccasionOutputViewModel.makeMockLooks()
-            self.selectedLookIndex = 0
-            self.isLoading = false
+            let activeProfile = profile ?? UserProfile.mockSample
+            do {
+                let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(for: occasion, profile: activeProfile)
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    self.looks = newLooks
+                    self.occasion.generatedLooks = newLooks
+                    self.selectedLookIndex = 0
+                    self.isLoading = false
+                }
+            } catch {
+                let errorMsg = error.localizedDescription
+                print("\n❌ [OccasionOutputViewModel] LLM CANNOT BE USED (\(LLMResource.activeModelFilename)): \(errorMsg)\n")
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    self.errorMessage = errorMsg
+                    self.isShowingErrorAlert = true
+                    self.isLoading = false
+                }
+            }
         }
     }
 }
@@ -186,9 +266,6 @@ extension OccasionOutputViewModel {
     static func makeMockLooks() -> [OutfitLook] {
         let look1 = OutfitLook(
             lookIndex: 0,
-            bodyShapeScore: 0.95,
-            colorHarmonyScore: 0.97,
-            torsoBalanceScore: 0.93,
             fitRationale: "The fitted dark knit with a clean neckline narrows shoulder breadth, while the elongated silhouette and statement necklace draw visual focus toward the vertical centerline.",
             isBookmarked: false
         )
@@ -217,9 +294,6 @@ extension OccasionOutputViewModel {
         
         let look2 = OutfitLook(
             lookIndex: 1,
-            bodyShapeScore: 0.92,
-            colorHarmonyScore: 0.94,
-            torsoBalanceScore: 0.90,
             fitRationale: "The warm terracotta long coat establishes a striking vertical column, balancing upper proportions with warm autumnal earth tones.",
             isBookmarked: false
         )
@@ -248,9 +322,6 @@ extension OccasionOutputViewModel {
         
         let look3 = OutfitLook(
             lookIndex: 2,
-            bodyShapeScore: 0.93,
-            colorHarmonyScore: 0.95,
-            torsoBalanceScore: 0.92,
             fitRationale: "Soft dusty rose tailoring softens angular shoulder lines, paired with draped fabrics that add gentle feminine fluidity for wedding guest elegance.",
             isBookmarked: false
         )
@@ -279,9 +350,6 @@ extension OccasionOutputViewModel {
         
         let look4 = OutfitLook(
             lookIndex: 3,
-            bodyShapeScore: 0.94,
-            colorHarmonyScore: 0.93,
-            torsoBalanceScore: 0.91,
             fitRationale: "Monochromatic dark tones create an uninterrupted vertical presence, elevating evening cocktail formality effortlessly.",
             isBookmarked: false
         )
@@ -291,9 +359,6 @@ extension OccasionOutputViewModel {
         
         let look5 = OutfitLook(
             lookIndex: 4,
-            bodyShapeScore: 0.91,
-            colorHarmonyScore: 0.96,
-            torsoBalanceScore: 0.93,
             fitRationale: "Vibrant warmth and tailored structure highlight personal color radiance while maintaining comfortable wedding movement.",
             isBookmarked: false
         )

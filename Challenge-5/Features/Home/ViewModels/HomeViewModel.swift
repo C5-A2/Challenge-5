@@ -20,13 +20,40 @@ final class HomeViewModel {
     var isShowingProfileSheet: Bool = false
     var selectedOccasion: OccasionItem? = nil
     var editingOccasion: OccasionItem? = nil
+    var errorMessage: String? = nil
+    var isShowingErrorAlert: Bool = false
     
     // MARK: - SwiftData Operations
     
     @discardableResult
-    func saveOccasion(from detail: OccasionDetail, in context: ModelContext) -> OccasionItem {
+    func saveOccasion(
+        from detail: OccasionDetail,
+        profile: UserProfile? = nil,
+        in context: ModelContext
+    ) -> OccasionItem {
         let newOccasion = OccasionItem(from: detail)
         context.insert(newOccasion)
+        
+        // Generate the 5 outfit looks with individual garment rationales
+        let activeProfile = profile ?? UserProfile.mockSample
+        do {
+            let looks = try OutfitGenerationPipeline.shared.generateLooksSync(for: newOccasion, profile: activeProfile)
+            if !looks.isEmpty {
+                newOccasion.generatedLooks = looks
+                for look in looks {
+                    context.insert(look)
+                    for garment in look.garments {
+                        context.insert(garment)
+                    }
+                }
+            }
+        } catch {
+            let errorMsg = error.localizedDescription
+            print("\n❌ [HomeViewModel] Model unavailable: \(errorMsg)\n")
+            self.errorMessage = errorMsg
+            self.isShowingErrorAlert = true
+        }
+        
         do {
             try context.save()
         } catch {

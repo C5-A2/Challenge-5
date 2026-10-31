@@ -98,8 +98,8 @@ public struct OccasionFormSheet: View {
                                 displayedComponents: [.date]
                             )
                             .font(AppTypography.bodyRegular)
-                            .foregroundStyle(AppColors.espressoTitle)
-                            .tint(AppColors.espressoTitle)
+                            .foregroundStyle(AppColors.primaryBlack)
+                            .tint(AppColors.primaryBlack)
                             .pillInputContainer()
                             
                             // 3. Dresscode Section (Optional)
