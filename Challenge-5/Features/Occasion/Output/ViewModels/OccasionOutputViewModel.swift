@@ -103,37 +103,62 @@ final class OccasionOutputViewModel {
         if !looks.isEmpty {
             // Caller-supplied looks (e.g. injected for tests/previews): use them directly.
             self.looks = looks
+            self.isUsingMockPlaceholders = false
+            self.isLoading = false
         } else if !occasion.generatedLooks.isEmpty {
             // Previously generated and stored looks: restore them.
             self.looks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
+            self.isUsingMockPlaceholders = false
+            self.isLoading = false
         } else {
-            // No looks yet — show mock placeholders and kick off real async LLaMA generation.
-            // generateLooksSync now throws to prevent silent static-template fallback.
+            // Show mock placeholders while awaiting LLaMA generation via .task in the view.
             self.looks = OccasionOutputViewModel.makeMockLooks()
+            self.isUsingMockPlaceholders = true
             self.isLoading = true
-            Task { [weak self] in
-                guard let self else { return }
-                let activeProfile = profile ?? UserProfile.mockSample
-                do {
-                    let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(
-                        for: occasion,
-                        profile: activeProfile
-                    )
-                    withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
-                        self.looks = newLooks
-                        self.occasion.generatedLooks = newLooks
-                        self.selectedLookIndex = 0
-                        self.isLoading = false
-                    }
-                } catch {
-                    let errorMsg = error.localizedDescription
-                    print("\n❌ [OccasionOutputViewModel] LLaMA inference failed: \(errorMsg)\n")
-                    withAnimation {
-                        self.errorMessage = errorMsg
-                        self.isShowingErrorAlert = true
-                        self.isLoading = false
-                    }
-                }
+        }
+    }
+    
+    private var isUsingMockPlaceholders = false
+    private var hasStartedInitialGeneration = false
+
+    /// Triggered once when the view appears on screen via `.task` to run real LLaMA inference.
+    func generateLooksIfNeeded(profile: UserProfile? = nil) async {
+        guard !hasStartedInitialGeneration else { return }
+
+        // If previously generated looks are already persisted, restore them.
+        if !occasion.generatedLooks.isEmpty {
+            self.looks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
+            self.isLoading = false
+            return
+        }
+
+        // If caller passed real non-mock looks, do not generate.
+        if !isUsingMockPlaceholders {
+            self.isLoading = false
+            return
+        }
+
+        hasStartedInitialGeneration = true
+        self.isLoading = true
+        let activeProfile = profile ?? self.profile ?? UserProfile.mockSample
+        do {
+            let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(
+                for: occasion,
+                profile: activeProfile
+            )
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                self.looks = newLooks
+                self.occasion.generatedLooks = newLooks
+                self.isUsingMockPlaceholders = false
+                self.selectedLookIndex = 0
+                self.isLoading = false
+            }
+        } catch {
+            let errorMsg = error.localizedDescription
+            print("\n❌ [OccasionOutputViewModel] LLaMA inference failed: \(errorMsg)\n")
+            withAnimation {
+                self.errorMessage = errorMsg
+                self.isLoading = false
             }
         }
     }

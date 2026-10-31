@@ -60,6 +60,7 @@ public actor LLaMAEngine {
     private var context: OpaquePointer?
     #endif
     private var isBackendInitialized = false
+    private var isGenerating = false
     
     // Default model filename
     public static let defaultModelFileName = "Llama-3.2-1B-Instruct-Q4_K_M.gguf"
@@ -124,7 +125,7 @@ public actor LLaMAEngine {
         print("[LLaMAEngine] Simulator / Preview mode active: skipping C++ hardware initialization.")
         return
         #else
-        if model != nil && context != nil {
+        if model != nil {
             return
         }
         
@@ -203,19 +204,49 @@ public actor LLaMAEngine {
         A slim-fit navy blazer creates a structured, tapered V-shape that harmonizes with broad shoulders without adding unnecessary bulk. The deep navy tone visually anchors the torso, drawing the gaze inward and downward for a clean, balanced silhouette.
         """
         #else
+        guard !isGenerating else {
+            print("⚠️ [LLaMAEngine] Rejecting concurrent generate call: inference is already running.")
+            throw LLaMAEngineError.decodingFailed(-999)
+        }
+        isGenerating = true
+        defer {
+            if let ctx = self.context {
+                llama_free(ctx)
+                self.context = nil
+            }
+            isGenerating = false
+        }
+
         try loadModelIfNeeded()
         
-        guard let model = self.model, let context = self.context else {
+        guard let model = self.model else {
+            throw LLaMAEngineError.modelInitFailed
+        }
+
+        // Always recreate a fresh context per generation pass.
+        // Recreating context from the loaded model in RAM/VRAM takes under 5ms,
+        // but 100% guarantees the KV cache and sequence positions are pristine (0 tokens).
+        if let existingContext = self.context {
+            llama_free(existingContext)
+            self.context = nil
+        }
+
+        var contextParams = llama_context_default_params()
+        contextParams.n_ctx = 16384
+        contextParams.n_batch = 512
+
+        guard let freshContext = llama_init_from_model(model, contextParams) else {
             throw LLaMAEngineError.contextInitFailed
+        }
+        self.context = freshContext
+        let context = freshContext
+        
+        if let mem = llama_get_memory(context) {
+            llama_memory_seq_rm(mem, -1, -1, -1)
+            llama_memory_clear(mem, true)
         }
         
         let vocab = llama_model_get_vocab(model)
-
-        // Clear the KV cache so each new generation starts from a clean state.
-        // Without this, the singleton context retains positions from the previous call
-        // and llama_decode rejects the next batch with "inconsistent sequence positions".
-        // This version of llama.cpp (2.10549) uses llama_memory_clear via llama_get_memory().
-        llama_memory_clear(llama_get_memory(context), false)
 
         // The pipeline passes a fully-formatted Llama 3.2 chat prompt that already contains
         // <|begin_of_text|>, <|start_header_id|>, and <|eot_id|> tokens.
@@ -249,10 +280,14 @@ public actor LLaMAEngine {
             llama_sampler_free(sampler)
         }
         
-        llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40))
-        llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9, 1))
-        llama_sampler_chain_add(sampler, llama_sampler_init_temp(temperature))
-        llama_sampler_chain_add(sampler, llama_sampler_init_dist(UInt32(Date().timeIntervalSince1970)))
+        if temperature <= 0.0 {
+            llama_sampler_chain_add(sampler, llama_sampler_init_greedy())
+        } else {
+            llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40))
+            llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9, 1))
+            llama_sampler_chain_add(sampler, llama_sampler_init_temp(temperature))
+            llama_sampler_chain_add(sampler, llama_sampler_init_dist(0xFFFFFFFF)) // LLAMA_DEFAULT_SEED
+        }
         
         // Evaluate the prompt batch in chunks of 512
         var batch = llama_batch_init(512, 0, 1)
@@ -285,6 +320,7 @@ public actor LLaMAEngine {
         var curPos = nTokens
         var generatedCount = 0
         
+        var buffer = [CChar](repeating: 0, count: 256)
         while generatedCount < maxTokens {
             let nextToken = llama_sampler_sample(sampler, context, -1)
             
@@ -292,8 +328,10 @@ public actor LLaMAEngine {
                 break
             }
             
-            var buffer = [CChar](repeating: 0, count: 64)
-            let nChars = llama_detokenize(vocab, [nextToken], 1, &buffer, 64, false, false)
+            buffer.withUnsafeMutableBufferPointer { ptr in
+                ptr.initialize(repeating: 0)
+            }
+            let nChars = llama_detokenize(vocab, [nextToken], 1, &buffer, 256, false, false)
             if nChars > 0 {
                 let piece = String(cString: buffer)
                 generatedText.append(piece)
@@ -309,6 +347,7 @@ public actor LLaMAEngine {
             
             let res = llama_decode(context, batch)
             if res != 0 {
+                print("⚠️ [LLaMAEngine] Decode stopped at pos \(curPos) with code \(res)")
                 break
             }
             

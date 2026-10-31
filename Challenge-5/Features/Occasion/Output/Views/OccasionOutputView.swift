@@ -156,6 +156,10 @@ struct OccasionOutputView: View {
         } message: { message in
             Text(message)
         }
+        .task {
+            let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+            await viewModel.generateLooksIfNeeded(profile: activeProfile)
+        }
     }
     
     

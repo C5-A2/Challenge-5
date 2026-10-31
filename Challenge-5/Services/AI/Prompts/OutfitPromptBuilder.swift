@@ -132,18 +132,19 @@ struct OutfitPromptBuilder: Sendable {
         \(directivesBlock)
 
         \(rulesetsBlock)======================================================================
-        OUTPUT REQUIREMENT: 5 COMPLETE OUTFIT LOOKS
+        OUTPUT REQUIREMENT: EXACTLY 5 COMPLETE OUTFIT LOOKS
         ======================================================================
-        Generate exactly 5 complete, distinct outfit looks for this occasion.
-        There are no predefined archetype rules or artificial differences between the looks; each look should simply be a complete, well-styled outfit option for the occasion.
+        Generate EXACTLY 5 complete outfit looks for this occasion (lookIndex 0 to 4).
 
-        Each look MUST consist of a coordinated 3-piece ensemble:
-        1. Outerwear (e.g. blazer, coat, jacket, cardigan, or layer).
-        2. Top (e.g. blouse, shirt, knit, tee) with cut and neckline flattering the body type and torso balance.
-        3. Bottom (e.g. trousers, skirt, tailored pants) with rise and silhouette flattering the body type and torso balance.
+        STRICT 3-ITEM ENSEMBLE REQUIREMENT:
+        Every look MUST contain EXACTLY THREE (3) garments in the "garments" array, in this exact order:
+        1. "Outer" (e.g. blazer, trench coat, jacket, or cardigan)
+        2. "Top" (e.g. blouse, shirt, knit, or tee)
+        3. "Bottom" (e.g. trousers, tailored pants, or skirt)
+        Do NOT output accessories, ties, scarves, shoes, or a 4th garment. Exactly 3 items per look.
 
         CRITICAL REQUIREMENT - INDIVIDUAL GARMENT RATIONALE:
-        For every garment item, provide a concise dedicated "rationale" (1 concise sentence, max 20 words) explaining why this cut flatters the user's silhouette. Keep "fitRationale" concise as well (1-2 sentences). Do not write excessively long rationales.
+        For every garment item, provide a concise dedicated "rationale" (1 sentence, max 15 words). Keep "fitRationale" to 1 short sentence. Be brief — do NOT add extra fields beyond the schema.
 
         COLOR SELECTION DIRECTIVE (STRICT SEASONAL PALETTE):
         You MUST select each garment's "colorName" and "hexColor" DIRECTLY and EXCLUSIVELY from the user's seasonal Color Palette list provided in the rules above.
@@ -274,18 +275,33 @@ struct OutfitPromptBuilder: Sendable {
 
     // MARK: - LLaMA 3.2 Formatted Chat Prompt (<|start_header_id|>)
 
-    /// The JSON prefix that pre-fills the assistant turn, forcing the model to continue
-    /// the object directly with no prose preamble or markdown wrapper.
-    /// Must be prepended back to the raw LLM output before JSON decoding.
+    /// The JSON prefix that pre-fills the assistant turn for a **single-look** generation.
+    /// Forces the model to output just one look object: `{"looks":[{...}]}`
     public static let assistantPrefill = "{\"looks\":["
 
     /// Produces a ready-to-run Llama 3.2 chat-templated prompt for `Llama-3.2-1B-Instruct-Q4_K_M.gguf`.
+    ///
+    /// - Parameters:
+    ///   - lookIndex: The 0-based index of the look to generate (0–4).
+    ///   - previousLooks: Summaries of already-generated looks injected into the system prompt
+    ///     so the model avoids repeating garment names, colors, and silhouettes.
     public func buildLlamaFormattedPrompt(
         occasion: OccasionItem,
-        profile: UserProfile?
+        profile: UserProfile?,
+        lookIndex: Int = 0,
+        previousLooks: [GeneratedLookSummary] = []
     ) -> String {
-        let system = buildSystemPrompt(occasion: occasion, profile: profile)
-        let user = buildUserPrompt(occasion: occasion, profile: profile)
+        let system = buildSingleLookSystemPrompt(
+            occasion: occasion,
+            profile: profile,
+            lookIndex: lookIndex,
+            previousLooks: previousLooks
+        )
+        let user = buildSingleLookUserPrompt(
+            occasion: occasion,
+            profile: profile,
+            lookIndex: lookIndex
+        )
 
         return """
         <|begin_of_text|><|start_header_id|>system<|end_header_id|>
@@ -296,5 +312,204 @@ struct OutfitPromptBuilder: Sendable {
 
         \(OutfitPromptBuilder.assistantPrefill)
         """
+    }
+
+    // MARK: - Single-Look System Prompt
+
+    /// Builds a system prompt scoped to one look (`lookIndex`), with a "do not repeat" block
+    /// derived from `previousLooks` so the model generates a distinct outfit every call.
+    public func buildSingleLookSystemPrompt(
+        occasion: OccasionItem,
+        profile: UserProfile?,
+        lookIndex: Int,
+        previousLooks: [GeneratedLookSummary]
+    ) -> String {
+        var rules: [String] = []
+
+        // Body shape rules
+        if let bodyType = profile?.bodyType {
+            rules.append("""
+            BODY SHAPE (\(bodyType.displayName)):
+            - Tops & Outer: \(bodyType.suitableGarments.topsAndJackets)
+            - Bottoms: \(bodyType.suitableGarments.bottoms)
+            - Necklines: \(bodyType.suitableGarments.necklines)
+            """)
+        }
+
+        // Torso balance rules
+        if let torsoBalance = profile?.torsoBalance {
+            rules.append("""
+            TORSO (\(torsoBalance.rawValue)):
+            - Top silhouette/length: \(torsoBalance.suitableGarments.top)
+            - Bottom rise/cut: \(torsoBalance.suitableGarments.bottom)
+            """)
+        }
+
+        // Color season palette
+        if let colorSeason = profile?.colorSeason {
+            let paletteStr = colorSeason.palette.map { "\($0.name) (\($0.hex))" }.joined(separator: ", ")
+            rules.append("""
+            COLOR PALETTE (\(colorSeason.rawValue)):
+            Allowed colors (select ONLY from this list, copy name and hex code verbatim):
+            \(paletteStr)
+            Avoid: \(colorSeason.colorsToAvoid)
+            """)
+        }
+
+        // Dresscode
+        let cleanDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanDresscode.isEmpty {
+            rules.append("DRESSCODE: \(cleanDresscode). All garments must match this formality.")
+        }
+
+        // Style visions
+        if !occasion.visions.isEmpty {
+            let visionsDetails = occasion.visions.map { v in
+                "- \(v.adjective): \(v.materialsAndSilhouettes). Items: \(v.recommendedOutfitItems)."
+            }.joined(separator: "\n")
+            rules.append("STYLE VISION (reflect in garments):\n\(visionsDetails)")
+        }
+
+        // Reference images
+        let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
+        if hasReferenceImages {
+            let count = occasion.referenceImagesData.isEmpty ? 1 : occasion.referenceImagesData.count
+            rules.append("REFERENCE IMAGES (\(count)): Subtly reflect the user's aesthetic vibe and textures.")
+        }
+
+        // Previously generated looks
+        if !previousLooks.isEmpty {
+            let prev = previousLooks.enumerated().map { i, s in
+                let g = s.garments.map { "\($0.category): \($0.name) (\($0.colorName))" }.joined(separator: ", ")
+                return "Look \(i): \(g)"
+            }.joined(separator: "\n")
+            rules.append("PREVIOUS LOOKS (aim for variety — different silhouettes/colors where possible):\n\(prev)")
+        }
+
+        let rulesBlock = rules.isEmpty ? "" : rules.joined(separator: "\n\n") + "\n\n"
+
+        let systemPrompt = """
+        You are a personal stylist. Generate ONE outfit look (lookIndex \(lookIndex)) for '\(occasion.title)'.
+        Use your full fashion knowledge — garment examples in the rules are illustrative, not exhaustive.
+
+        \(rulesBlock)ENSEMBLE REQUIREMENT (EXACTLY 3 GARMENTS):
+        Every look must contain EXACTLY 3 garments in this order:
+        1. "Outer" (blazer, coat, jacket, cardigan, etc.)
+        2. "Top" (shirt, blouse, knit, etc.)
+        3. "Bottom" (trousers, skirt, pants, etc.)
+        Do NOT output shoes, accessories, or dresses.
+
+        OUTPUT FORMAT: Return ONLY valid JSON, no markdown, no conversational text.
+        IMPORTANT: Put all 3 garments inside ONE single "garments" array. Do NOT repeat the "garments" key.
+        Allowed garment fields: "category", "name", "material", "colorName", "hexColor", "rationale" (6 fields only).
+        "colorName" and "hexColor" must be copied verbatim from the palette — do not invent colors.
+        Keep rationales extremely concise:
+        - "fitRationale": 1 short sentence.
+        - "rationale": 1 short phrase under 10 words (e.g. "Elongates torso and balances hips").
+
+        Schema (follow this exact structure):
+        {
+          "looks": [
+            {
+              "lookIndex": \(lookIndex),
+              "fitRationale": "1 concise sentence why this look flatters.",
+              "garments": [
+                {
+                  "category": "Outer",
+                  "name": "Tailored Wool Coat",
+                  "material": "Wool Blend",
+                  "colorName": "Exact Color From Palette",
+                  "hexColor": "#HEXCOD",
+                  "rationale": "Elongates torso and balances hips."
+                },
+                {
+                  "category": "Top",
+                  "name": "Silk Camp Shirt",
+                  "material": "Mulberry Silk",
+                  "colorName": "Exact Color From Palette",
+                  "hexColor": "#HEXCOD",
+                  "rationale": "V-neckline draws focus vertically."
+                },
+                {
+                  "category": "Bottom",
+                  "name": "Straight-Leg Trousers",
+                  "material": "Cotton Twill",
+                  "colorName": "Exact Color From Palette",
+                  "hexColor": "#HEXCOD",
+                  "rationale": "Straight cut creates a sleek column."
+                }
+              ]
+            }
+          ]
+        }
+        """
+
+        print("[OutfitPromptBuilder] Look \(lookIndex) system prompt (\(systemPrompt.count) chars) for: \"\(occasion.title)\"")
+
+        return systemPrompt
+    }
+
+    // MARK: - Single-Look User Prompt
+
+    /// Assembles the user-turn message for a single look generation (look `lookIndex`).
+    public func buildSingleLookUserPrompt(
+        occasion: OccasionItem,
+        profile: UserProfile?,
+        lookIndex: Int
+    ) -> String {
+        var lines: [String] = ["Generate look \(lookIndex) for: \(occasion.title)"]
+
+        let cleanDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanDresscode.isEmpty { lines.append("Dresscode: \(cleanDresscode)") }
+
+        if let note = occasion.customNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            lines.append("User note: \(note)")
+        }
+
+        if !occasion.visions.isEmpty {
+            lines.append("Style vision: \(occasion.visions.map(\.adjective).joined(separator: ", "))")
+        }
+
+        let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
+        if hasReferenceImages {
+            let count = occasion.referenceImagesData.isEmpty ? 1 : occasion.referenceImagesData.count
+            lines.append("Reference images: \(count) attached")
+        }
+
+        if let body = profile?.bodyType   { lines.append("Body type: \(body.displayName)") }
+        if let torso = profile?.torsoBalance { lines.append("Torso: \(torso.rawValue)") }
+        if let season = profile?.colorSeason  { lines.append("Color season: \(season.rawValue)") }
+
+        return lines.joined(separator: "\n")
+    }
+}
+
+// MARK: - Generated Look Summary (for "do not repeat" injection)
+
+/// Lightweight summary of a previously generated look, injected into subsequent generation
+/// prompts so the model avoids repeating garment names, silhouettes, and hex colors.
+struct GeneratedLookSummary: Sendable {
+    struct GarmentSummary: Sendable {
+        let category: String
+        let name: String
+        let material: String
+        let colorName: String
+        let hexColor: String
+    }
+    let lookIndex: Int
+    let garments: [GarmentSummary]
+
+    /// Builds a summary from a parsed `OutfitLook`.
+    init(from look: OutfitLook) {
+        self.lookIndex = look.lookIndex
+        self.garments = look.garments.map {
+            GarmentSummary(
+                category: $0.category.rawValue,
+                name: $0.name,
+                material: $0.material,
+                colorName: $0.colorName,
+                hexColor: $0.hexColor
+            )
+        }
     }
 }
