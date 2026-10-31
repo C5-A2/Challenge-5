@@ -445,36 +445,36 @@ struct OutfitPromptBuilder: Sendable {
         - "fitRationale": 1 short sentence.
         - "rationale": 1 short phrase under 10 words (e.g. "Elongates torso and balances hips").
 
-        Schema (follow this exact structure):
+        Schema (follow this exact JSON structure, inventing distinct garments and fabrics suitable for the occasion):
         {
           "looks": [
             {
               "lookIndex": \(lookIndex),
-              "fitRationale": "1 concise sentence why this look flatters.",
+              "fitRationale": "<Short sentence explaining why this outfit flatters the user's silhouette>",
               "garments": [
                 {
                   "category": "Outer",
-                  "name": "Tailored Wool Coat",
-                  "material": "Wool Blend",
-                  "colorName": "Exact Color From Palette",
-                  "hexColor": "#HEXCOD",
-                  "rationale": "Elongates torso and balances hips."
+                  "name": "<Specific outerwear item, e.g. blazer, cardigan, trench, jacket>",
+                  "material": "<Specific fabric, e.g. Linen, Cashmere, Poplin, Denim>",
+                  "colorName": "<Exact Color Name From Palette>",
+                  "hexColor": "<#HEX from Palette>",
+                  "rationale": "<Short phrase under 10 words explaining visual balance>"
                 },
                 {
                   "category": "Top",
-                  "name": "Silk Camp Shirt",
-                  "material": "Mulberry Silk",
-                  "colorName": "Exact Color From Palette",
-                  "hexColor": "#HEXCOD",
-                  "rationale": "V-neckline draws focus vertically."
+                  "name": "<Specific top item, e.g. blouse, knit polo, button-down, tee>",
+                  "material": "<Specific fabric, e.g. Silk, Supima Cotton, Merino Wool>",
+                  "colorName": "<Exact Color Name From Palette>",
+                  "hexColor": "<#HEX from Palette>",
+                  "rationale": "<Short phrase under 10 words explaining visual balance>"
                 },
                 {
                   "category": "Bottom",
-                  "name": "Straight-Leg Trousers",
-                  "material": "Cotton Twill",
-                  "colorName": "Exact Color From Palette",
-                  "hexColor": "#HEXCOD",
-                  "rationale": "Straight cut creates a sleek column."
+                  "name": "<Specific bottom item, e.g. wide-leg trousers, pleated skirt, chinos, midi skirt>",
+                  "material": "<Specific fabric, e.g. Wool Crepe, Cotton Twill, Satin>",
+                  "colorName": "<Exact Color Name From Palette>",
+                  "hexColor": "<#HEX from Palette>",
+                  "rationale": "<Short phrase under 10 words explaining visual balance>"
                 }
               ]
             }

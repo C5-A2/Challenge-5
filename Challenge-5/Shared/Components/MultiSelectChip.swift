@@ -41,7 +41,7 @@ public struct MultiSelectChip: View {
             .font(AppTypography.chipLabel)
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
-            .foregroundStyle(isSelected ? .white : AppColors.bodyText)
+            .foregroundStyle(isSelected ? .white : AppColors.inputPlaceholder)
             .background(isSelected ? AppColors.primaryBlack : AppColors.inputBackground)
             .overlay(
                 Capsule()
