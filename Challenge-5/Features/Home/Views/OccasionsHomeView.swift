@@ -34,6 +34,7 @@ struct OccasionsHomeView: View {
     
     @State private var viewModel = HomeViewModel()
     @State private var isShowingProfileSheet: Bool = false
+    @State private var occasionToDelete: OccasionItem? = nil
     
     // MARK: - Action Callbacks
     
@@ -176,18 +177,8 @@ struct OccasionsHomeView: View {
                         viewModel.selectedOccasion = occasion
                     }
                 }
-                .contextMenu {
-                    Button {
-                        viewModel.editingOccasion = occasion
-                    } label: {
-                        Label("Edit Occasion", systemImage: "pencil")
-                    }
-                    
-                    Button(role: .destructive) {
-                        deleteOccasion(occasion)
-                    } label: {
-                        Label("Delete Occasion", systemImage: "trash")
-                    }
+                .swipeToDelete {
+                    occasionToDelete = occasion
                 }
             }
         }
@@ -240,6 +231,28 @@ struct OccasionsHomeView: View {
             Button("OK", role: .cancel) {}
         } message: { message in
             Text(message)
+        }
+        .alert(
+            "Delete Occasion?",
+            isPresented: Binding(
+                get: { occasionToDelete != nil },
+                set: { if !$0 { occasionToDelete = nil } }
+            ),
+            presenting: occasionToDelete
+        ) { occasion in
+            Button("Cancel", role: .cancel) {
+                occasionToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                deleteOccasion(occasion)
+                occasionToDelete = nil
+            }
+        } message: { occasion in
+            if occasion.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("Are you sure you want to delete this occasion? This action cannot be undone.")
+            } else {
+                Text("Are you sure you want to delete \"\(occasion.title)\"? This action cannot be undone.")
+            }
         }
     }
     
