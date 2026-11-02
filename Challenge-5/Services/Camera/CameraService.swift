@@ -20,7 +20,7 @@ public final class CameraService: NSObject, CameraServiceProtocol {
     public private(set) var isRunning: Bool = false
     public var isFlashEnabled: Bool = false
     public private(set) var cameraPosition: AVCaptureDevice.Position = .front
-    public private(set) var session = AVCaptureSession()
+    @ObservationIgnored nonisolated(unsafe) public private(set) var session = AVCaptureSession()
     public private(set) var permissionGranted: Bool = false
     public var errorMessage: String? = nil
 
@@ -31,12 +31,12 @@ public final class CameraService: NSObject, CameraServiceProtocol {
 
     // MARK: - Internal AVFoundation Components
 
-    private let photoOutput = AVCapturePhotoOutput()
-    private let videoOutput = AVCaptureVideoDataOutput()
+    @ObservationIgnored nonisolated(unsafe) private let photoOutput = AVCapturePhotoOutput()
+    @ObservationIgnored nonisolated(unsafe) private let videoOutput = AVCaptureVideoDataOutput()
     private let sessionQueue = DispatchQueue(label: "com.challenge5.camera.sessionQueue")
     private let sampleQueue = DispatchQueue(label: "com.challenge5.camera.sampleQueue")
 
-    private var currentInput: AVCaptureDeviceInput?
+    @ObservationIgnored nonisolated(unsafe) private var currentInput: AVCaptureDeviceInput?
     private var photoContinuation: CheckedContinuation<UIImage, Error>?
 
     // MARK: - Initializer
@@ -60,6 +60,7 @@ public final class CameraService: NSObject, CameraServiceProtocol {
             return
         }
 
+        let targetPosition = self.cameraPosition
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             sessionQueue.async { [weak self] in
                 guard let self = self else { return }
@@ -68,18 +69,17 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                     self.session.sessionPreset = .photo
 
                     // Configure default input (front camera for Face Scan)
-                    try self.configureDeviceInput(position: self.cameraPosition)
+                    try self.configureDeviceInput(position: targetPosition)
 
                     // Configure Photo Output
                     if self.session.canAddOutput(self.photoOutput) {
                         self.session.addOutput(self.photoOutput)
-                        self.photoOutput.isHighResolutionCaptureEnabled = true
 
                         if let photoConnection = self.photoOutput.connection(with: .video) {
-                            if photoConnection.isVideoOrientationSupported {
-                                photoConnection.videoOrientation = .portrait
+                            if photoConnection.isVideoRotationAngleSupported(90) {
+                                photoConnection.videoRotationAngle = 90
                             }
-                            if photoConnection.isVideoMirroringSupported && self.cameraPosition == .front {
+                            if photoConnection.isVideoMirroringSupported && targetPosition == .front {
                                 photoConnection.isVideoMirrored = true
                             }
                         }
@@ -95,10 +95,10 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                         self.session.addOutput(self.videoOutput)
 
                         if let connection = self.videoOutput.connection(with: .video) {
-                            if connection.isVideoOrientationSupported {
-                                connection.videoOrientation = .portrait
+                            if connection.isVideoRotationAngleSupported(90) {
+                                connection.videoRotationAngle = 90
                             }
-                            if connection.isVideoMirroringSupported && self.cameraPosition == .front {
+                            if connection.isVideoMirroringSupported && targetPosition == .front {
                                 connection.isVideoMirrored = true
                             }
                         }
@@ -146,16 +146,16 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                     self.session.beginConfiguration()
                     try self.configureDeviceInput(position: newPosition)
                     if let photoConnection = self.photoOutput.connection(with: .video) {
-                        if photoConnection.isVideoOrientationSupported {
-                            photoConnection.videoOrientation = .portrait
+                        if photoConnection.isVideoRotationAngleSupported(90) {
+                            photoConnection.videoRotationAngle = 90
                         }
                         if photoConnection.isVideoMirroringSupported {
                             photoConnection.isVideoMirrored = (newPosition == .front)
                         }
                     }
                     if let connection = self.videoOutput.connection(with: .video) {
-                        if connection.isVideoOrientationSupported {
-                            connection.videoOrientation = .portrait
+                        if connection.isVideoRotationAngleSupported(90) {
+                            connection.videoRotationAngle = 90
                         }
                         if connection.isVideoMirroringSupported {
                             connection.isVideoMirrored = (newPosition == .front)
@@ -226,7 +226,7 @@ public final class CameraService: NSObject, CameraServiceProtocol {
         #endif
     }
 
-    private func configureDeviceInput(position: AVCaptureDevice.Position) throws {
+    nonisolated private func configureDeviceInput(position: AVCaptureDevice.Position) throws {
         if let current = currentInput {
             session.removeInput(current)
         }
@@ -324,8 +324,9 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         // Hand off frame to real-time LightingAnalyzer service (C5-83)
+        nonisolated(unsafe) let buffer = sampleBuffer
         Task { @MainActor in
-            self.onSampleBuffer?(sampleBuffer)
+            self.onSampleBuffer?(buffer)
         }
     }
 }

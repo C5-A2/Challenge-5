@@ -21,18 +21,24 @@ public struct PillTextField: View {
     @Binding public var text: String
     public var leadingIconSystemName: String?
     public var showsClearButton: Bool
+    public var placeholderColor: Color
+    public var textColor: Color
     
     // MARK: - Initializer
     public init(
         placeholder: String,
         text: Binding<String>,
         leadingIconSystemName: String? = nil,
-        showsClearButton: Bool = true
+        showsClearButton: Bool = true,
+        placeholderColor: Color = AppColors.inputPlaceholder,
+        textColor: Color = AppColors.espressoTitle
     ) {
         self.placeholder = placeholder
         self._text = text
         self.leadingIconSystemName = leadingIconSystemName
         self.showsClearButton = showsClearButton
+        self.placeholderColor = placeholderColor
+        self.textColor = textColor
     }
     
     // MARK: - Body
@@ -41,17 +47,22 @@ public struct PillTextField: View {
             if let leadingIconSystemName {
                 Image(systemName: leadingIconSystemName)
                     .font(.system(size: 16))
-                    .foregroundStyle(AppColors.mutedCaption)
+                    .foregroundStyle(placeholderColor)
             }
             
-            TextField(placeholder, text: $text)
-                .font(AppTypography.bodyRegular)
-                .foregroundStyle(AppColors.espressoTitle)
+            TextField(
+                "",
+                text: $text,
+                prompt: Text(placeholder).foregroundStyle(placeholderColor)
+            )
+            .font(AppTypography.bodyRegular)
+            .foregroundStyle(textColor)
+            .tint(textColor)
             
             if showsClearButton && !text.isEmpty {
                 Button(action: { text = "" }) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(AppColors.mutedCaption.opacity(0.7))
+                        .foregroundStyle(placeholderColor.opacity(0.8))
                         .font(.system(size: 15))
                 }
             }
