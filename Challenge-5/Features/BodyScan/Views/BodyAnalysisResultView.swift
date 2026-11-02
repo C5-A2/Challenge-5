@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -26,6 +27,7 @@ struct BodyAnalysisResultView: View {
     var onComplete: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var isShowingFineTune: Bool = false
 
     // MARK: - Computed Properties
@@ -847,6 +849,7 @@ struct BodyAnalysisResultView: View {
             Divider()
 
             PrimaryPillButton(title: "Save to Profile") {
+                _ = viewModel.saveToProfile(in: modelContext)
                 if let onComplete = onComplete {
                     onComplete()
                 } else {
@@ -872,4 +875,5 @@ struct BodyAnalysisResultView: View {
     vm.hipCircumferenceCm = 96.0
     vm.computedTorsoToHeightRatio = 31.8
     return BodyAnalysisResultView(viewModel: vm)
+        .modelContainer(for: [UserProfile.self], inMemory: true)
 }

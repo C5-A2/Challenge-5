@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Observation
+import SwiftData
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -224,14 +225,26 @@ public final class SkinScanViewModel {
         self.selectedColorSeason = newSeason
     }
 
-    /// Save completed color season and face photo to the user's persistent profile.
+    /// Save completed color season and face photo to the SwiftData persistent storage (C5-97).
+    @discardableResult
+    func saveToProfile(in context: ModelContext) -> Bool {
+        guard let season = selectedColorSeason ?? predictedColorSeason else { return false }
+        let storageService = UserProfileStorageService(modelContext: context)
+        do {
+            try storageService.saveSkinScanResult(
+                colorSeason: season,
+                facePhotoData: capturedFaceData
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Save completed color season and face photo to an existing UserProfile instance.
     func saveToProfile(_ profile: UserProfile) {
         if let season = selectedColorSeason ?? predictedColorSeason {
-            profile.colorSeason = season
+            profile.updateSkinScan(colorSeason: season, facePhotoData: capturedFaceData)
         }
-        if let faceData = capturedFaceData {
-            profile.facePhotoData = faceData
-        }
-        profile.updatedAt = Date()
     }
 }

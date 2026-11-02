@@ -331,4 +331,5 @@ private struct BodyScanFlowHostView: View {
 
 #Preview {
     ProfileHubView()
+        .modelContainer(for: [UserProfile.self], inMemory: true)
 }

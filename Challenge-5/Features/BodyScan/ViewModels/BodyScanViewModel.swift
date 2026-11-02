@@ -8,6 +8,7 @@
 import SwiftUI
 import Observation
 import Vision
+import SwiftData
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -461,9 +462,9 @@ public final class BodyScanViewModel {
         }
     }
 
-    /// Save completed measurements and body scan results to the persistent UserProfile.
-    func saveToProfile(_ profile: UserProfile) {
-        let measurements = BodyMeasurements(
+    /// Helper to assemble the `BodyMeasurements` value from current state.
+    public func buildBodyMeasurements() -> BodyMeasurements {
+        BodyMeasurements(
             age: age,
             weightKg: weightKg,
             heightCm: heightCm,
@@ -473,18 +474,37 @@ public final class BodyScanViewModel {
             waistCircumferenceCm: waistCircumferenceCm,
             hipCircumferenceCm: hipCircumferenceCm
         )
+    }
 
-        profile.measurements = measurements
-        profile.bodyType = classifiedBodyType
-        profile.torsoBalance = classifiedTorsoBalance
-
-        if let front = frontImageData {
-            profile.frontBodyPhotoData = front
+    /// Save completed measurements and body scan results to SwiftData persistent storage (C5-97).
+    @discardableResult
+    func saveToProfile(in context: ModelContext) -> Bool {
+        let storageService = UserProfileStorageService(modelContext: context)
+        let measurements = buildBodyMeasurements()
+        do {
+            try storageService.saveBodyScanResult(
+                measurements: measurements,
+                bodyType: classifiedBodyType,
+                torsoBalance: classifiedTorsoBalance,
+                frontPhotoData: frontImageData,
+                sidePhotoData: sideImageData
+            )
+            return true
+        } catch {
+            self.errorMessage = "Gagal menyimpan profil: \(error.localizedDescription)"
+            return false
         }
-        if let side = sideImageData {
-            profile.sideBodyPhotoData = side
-        }
+    }
 
-        profile.updatedAt = Date()
+    /// Save completed measurements and body scan results to an existing UserProfile instance.
+    func saveToProfile(_ profile: UserProfile) {
+        let measurements = buildBodyMeasurements()
+        profile.updateBodyScan(
+            measurements: measurements,
+            bodyType: classifiedBodyType,
+            torsoBalance: classifiedTorsoBalance,
+            frontPhotoData: frontImageData,
+            sidePhotoData: sideImageData
+        )
     }
 }

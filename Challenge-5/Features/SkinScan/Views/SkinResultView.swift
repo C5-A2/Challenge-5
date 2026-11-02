@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -27,6 +28,7 @@ struct SkinResultView: View {
     var onNext: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     // MARK: - Computed Properties
 
@@ -336,6 +338,7 @@ struct SkinResultView: View {
             Divider()
 
             PrimaryPillButton(title: "Next") {
+                _ = viewModel.saveToProfile(in: modelContext)
                 if let onNext = onNext {
                     onNext()
                 } else {
@@ -358,4 +361,5 @@ struct SkinResultView: View {
         vm.selectedColorSeason = .trueSpring
         return vm
     }())
+    .modelContainer(for: [UserProfile.self], inMemory: true)
 }
