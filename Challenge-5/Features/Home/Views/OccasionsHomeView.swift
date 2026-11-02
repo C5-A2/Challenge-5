@@ -24,6 +24,7 @@ struct OccasionsHomeView: View {
     
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \OccasionItem.date, order: .forward) private var occasions: [OccasionItem]
+    @Query private var userProfiles: [UserProfile]
     
     // MARK: - Navigation & Tab State
     
@@ -59,6 +60,14 @@ struct OccasionsHomeView: View {
     private var activeOccasions: [OccasionItem] {
         occasions.filter { !$0.isPast }
     }
+
+    private var currentProfile: UserProfile? {
+        userProfiles.first
+    }
+
+    private var isProfileSetupCompleted: Bool {
+        currentProfile?.hasCompletedProfileSetup == true
+    }
     
     // MARK: - Body
     
@@ -74,6 +83,11 @@ struct OccasionsHomeView: View {
                     // Header Bar (History, Profile icons + Large Title)
                     headerBar
                         .padding(.top, 8)
+
+                    // Profile Setup Prompt Banner (C5-98)
+                    if !isProfileSetupCompleted {
+                        profileSetupPromptCard
+                    }
                     
                     // Occasion Cards List or Empty State (no card)
                     if activeOccasions.isEmpty {
@@ -99,6 +113,24 @@ struct OccasionsHomeView: View {
         .sheet(isPresented: $viewModel.isShowingHistorySheet) {
             OccasionsHistoryView()
         }
+        .sheet(isPresented: $viewModel.isShowingProfileSheet) {
+            ProfileHubView()
+        }
+        .sheet(isPresented: $viewModel.isShowingProfilePromptModal) {
+            ProfilePromptModal(
+                onStartProfiling: {
+                    viewModel.isShowingProfilePromptModal = false
+                    viewModel.isShowingProfilingFlow = true
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $viewModel.isShowingProfilingFlow) {
+            ProfilingFlowHostView(
+                onComplete: {
+                    viewModel.isShowingProfilingFlow = false
+                }
+            )
+        }
         .fullScreenCover(item: $viewModel.selectedOccasion) { occasion in
             OccasionOutputView(
                 occasion: occasion,
@@ -113,7 +145,45 @@ struct OccasionsHomeView: View {
         }
     }
     
-    // MARK: - Subviews
+    /// Prompt card displayed at the top of Home feed encouraging profile setup (C5-98).
+    private var profileSetupPromptCard: some View {
+        Button {
+            viewModel.isShowingProfilePromptModal = true
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(AppColors.primaryBlue.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 20))
+                        .foregroundStyle(AppColors.primaryBlue)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Set Up Your Profile")
+                        .font(AppTypography.cardHeadline)
+                        .foregroundStyle(AppColors.espressoTitle)
+                    Text("Ketahui bentuk tubuh & warna personalmu untuk kurasi outfit yang presisi.")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.mutedCaption)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.mutedCaption)
+            }
+            .padding(AppDimensions.cardInternalPadding)
+            .background(AppColors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius)
+                    .stroke(AppColors.subtleBorder, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
     
     /// Top header bar with history and profile circular buttons and large "Occasions" title.
     private var headerBar: some View {
@@ -131,12 +201,12 @@ struct OccasionsHomeView: View {
                     }
                 }
                 
-                // Profile Button (Empty objective for now)
-                CircularIconButton(systemName: "circle") {
+                // Profile Button (Opens ProfileHubView)
+                CircularIconButton(systemName: "person.crop.circle") {
                     if let onProfileTap {
                         onProfileTap()
                     } else {
-                        print("Profile button tapped (empty action)")
+                        viewModel.isShowingProfileSheet = true
                     }
                 }
             }
@@ -242,12 +312,12 @@ struct OccasionsHomeView: View {
     OccasionsHomeView(
         selectedTab: .constant(.occasions)
     )
-    .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self], inMemory: true)
+    .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self, UserProfile.self], inMemory: true)
 }
 
 #Preview("Occasions Home - With Sample Data") {
     let container = try! ModelContainer(
-        for: OccasionItem.self, OutfitLook.self, GarmentItem.self,
+        for: OccasionItem.self, OutfitLook.self, GarmentItem.self, UserProfile.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
     

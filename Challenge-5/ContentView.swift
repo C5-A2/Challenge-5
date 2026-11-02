@@ -9,8 +9,17 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @State private var selectedTab: CapsuleTabItem = .occasions
+    
     var body: some View {
-        ProfileHubView()
+        Group {
+            switch selectedTab {
+            case .occasions:
+                OccasionsHomeView(selectedTab: $selectedTab)
+            case .library:
+                LibraryView(selectedTab: $selectedTab)
+            }
+        }
     }
 }
 
@@ -18,5 +27,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [UserProfile.self], inMemory: true)
+        .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self, UserProfile.self], inMemory: true)
 }
