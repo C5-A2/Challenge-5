@@ -50,12 +50,12 @@ struct ProfilePromptModal: View {
                         // Emblem Icon Badge
                         ZStack {
                             Circle()
-                                .fill(AppColors.primaryBlue.opacity(0.12))
+                                .fill(AppColors.pastelGold.opacity(0.35))
                                 .frame(width: 80, height: 80)
 
                             Image(systemName: "sparkles")
                                 .font(.system(size: 36))
-                                .foregroundStyle(AppColors.primaryBlue)
+                                .foregroundStyle(AppColors.espressoTitle)
                         }
                         .padding(.top, 12)
 
@@ -77,21 +77,21 @@ struct ProfilePromptModal: View {
                         VStack(spacing: 14) {
                             featureRow(
                                 icon: "paintpalette.fill",
-                                color: Color(hex: "#FF7043"),
+                                color: AppColors.pastelRose,
                                 title: "Personal Color Analysis",
                                 subtitle: "Menemukan palet warna busana yang harmonis dengan skin undertone wajahmu."
                             )
 
                             featureRow(
                                 icon: "figure.stand",
-                                color: AppColors.primaryBlue,
+                                color: AppColors.pastelSage,
                                 title: "3D Body Shape Scan",
                                 subtitle: "Mendeteksi klasifikasi bentuk tubuh dan proporsi torso vertikal hanya dari 2 foto."
                             )
 
                             featureRow(
                                 icon: "ruler.fill",
-                                color: Color(hex: "#009688"),
+                                color: AppColors.pastelGold,
                                 title: "Dimensi Lingkar Presisi",
                                 subtitle: "Rekonstruksi lingkar dada, pinggang, dan pinggul menggunakan aproksimasi elips 3D."
                             )
@@ -143,12 +143,12 @@ struct ProfilePromptModal: View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(color.opacity(0.12))
+                    .fill(color.opacity(0.40))
                     .frame(width: 44, height: 44)
 
                 Image(systemName: icon)
                     .font(.system(size: 20))
-                    .foregroundStyle(color)
+                    .foregroundStyle(AppColors.espressoTitle)
             }
 
             VStack(alignment: .leading, spacing: 3) {

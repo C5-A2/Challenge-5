@@ -153,11 +153,11 @@ struct OccasionsHomeView: View {
             HStack(spacing: 14) {
                 ZStack {
                     Circle()
-                        .fill(AppColors.primaryBlue.opacity(0.12))
+                        .fill(AppColors.pastelGold.opacity(0.35))
                         .frame(width: 44, height: 44)
                     Image(systemName: "sparkles")
                         .font(.system(size: 20))
-                        .foregroundStyle(AppColors.primaryBlue)
+                        .foregroundStyle(AppColors.espressoTitle)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Set Up Your Profile")

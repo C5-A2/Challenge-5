@@ -167,7 +167,7 @@ struct BodyAnalysisResultView: View {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 11))
-                    .foregroundStyle(AppColors.primaryBlue)
+                    .foregroundStyle(AppColors.pastelGold)
 
                 Text("Contour lines calibrated from Apple Vision 2D pose landmarks")
                     .font(AppTypography.caption)
@@ -320,8 +320,9 @@ struct BodyAnalysisResultView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("CLASSIFIED BODY SHAPE")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppColors.primaryBlue)
+                        .font(AppTypography.caption.weight(.bold))
+                        .tracking(1.2)
+                        .foregroundStyle(AppColors.mutedCaption)
 
                     Text(activeBodyType.displayName)
                         .font(AppTypography.screenHeader)
@@ -332,7 +333,7 @@ struct BodyAnalysisResultView: View {
 
                 bodyTypeIcon(activeBodyType)
                     .frame(width: 44, height: 44)
-                    .background(AppColors.primaryBlue.opacity(0.1))
+                    .background(AppColors.pastelSage.opacity(0.40))
                     .clipShape(Circle())
             }
 
@@ -394,7 +395,7 @@ struct BodyAnalysisResultView: View {
 
         return Image(systemName: iconName)
             .font(.system(size: 20))
-            .foregroundStyle(AppColors.primaryBlue)
+            .foregroundStyle(AppColors.espressoTitle)
             .rotationEffect(type == .invertedTriangle ? .degrees(180) : .zero)
     }
 
@@ -405,8 +406,9 @@ struct BodyAnalysisResultView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("VERTICAL PROPORTION")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppColors.primaryBlue)
+                        .font(AppTypography.caption.weight(.bold))
+                        .tracking(1.2)
+                        .foregroundStyle(AppColors.mutedCaption)
 
                     Text(activeTorsoBalance.rawValue)
                         .font(AppTypography.screenHeader)
@@ -417,10 +419,10 @@ struct BodyAnalysisResultView: View {
 
                 Text(activeTorsoBalance.thrThresholdDescription)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppColors.primaryBlue)
+                    .foregroundStyle(AppColors.espressoTitle)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(AppColors.primaryBlue.opacity(0.12))
+                    .background(AppColors.pastelGold.opacity(0.35))
                     .clipShape(Capsule())
             }
 
@@ -467,17 +469,17 @@ struct BodyAnalysisResultView: View {
                     HStack(spacing: 3) {
                         // Short zone (25% - 30%)
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(activeTorsoBalance == .shortTorso ? AppColors.primaryBlue.opacity(0.85) : Color.black.opacity(0.08))
+                            .fill(activeTorsoBalance == .shortTorso ? AppColors.espressoTitle : Color.black.opacity(0.08))
                             .frame(maxWidth: .infinity)
 
                         // Balanced zone (30% - 33%)
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(activeTorsoBalance == .balanced ? AppColors.primaryBlue.opacity(0.85) : Color.black.opacity(0.08))
+                            .fill(activeTorsoBalance == .balanced ? AppColors.espressoTitle : Color.black.opacity(0.08))
                             .frame(maxWidth: .infinity)
 
                         // Long zone (33% - 38%)
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(activeTorsoBalance == .longTorso ? AppColors.primaryBlue.opacity(0.85) : Color.black.opacity(0.08))
+                            .fill(activeTorsoBalance == .longTorso ? AppColors.espressoTitle : Color.black.opacity(0.08))
                             .frame(maxWidth: .infinity)
                     }
                     .frame(height: 10)
@@ -496,20 +498,20 @@ struct BodyAnalysisResultView: View {
             // Zone labels
             HStack {
                 Text("Short (<30%)")
-                    .font(.system(size: 10))
-                    .foregroundStyle(activeTorsoBalance == .shortTorso ? AppColors.primaryBlue : AppColors.mutedCaption)
+                    .font(.system(size: 10, weight: activeTorsoBalance == .shortTorso ? .bold : .regular))
+                    .foregroundStyle(activeTorsoBalance == .shortTorso ? AppColors.espressoTitle : AppColors.mutedCaption)
 
                 Spacer()
 
                 Text("Balanced (30-33%)")
                     .font(.system(size: 10, weight: activeTorsoBalance == .balanced ? .bold : .regular))
-                    .foregroundStyle(activeTorsoBalance == .balanced ? AppColors.primaryBlue : AppColors.mutedCaption)
+                    .foregroundStyle(activeTorsoBalance == .balanced ? AppColors.espressoTitle : AppColors.mutedCaption)
 
                 Spacer()
 
                 Text("Long (>33%)")
-                    .font(.system(size: 10))
-                    .foregroundStyle(activeTorsoBalance == .longTorso ? AppColors.primaryBlue : AppColors.mutedCaption)
+                    .font(.system(size: 10, weight: activeTorsoBalance == .longTorso ? .bold : .regular))
+                    .foregroundStyle(activeTorsoBalance == .longTorso ? AppColors.espressoTitle : AppColors.mutedCaption)
             }
         }
         .padding(12)
@@ -524,7 +526,7 @@ struct BodyAnalysisResultView: View {
             HStack(spacing: 8) {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 16))
-                    .foregroundStyle(AppColors.primaryBlue)
+                    .foregroundStyle(AppColors.espressoTitle)
 
                 Text("Styling Direction")
                     .font(AppTypography.cardHeadline)
@@ -559,7 +561,7 @@ struct BodyAnalysisResultView: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppColors.primaryBlue)
+                .foregroundStyle(AppColors.espressoTitle)
 
             Text(content)
                 .font(AppTypography.caption)
@@ -577,11 +579,12 @@ struct BodyAnalysisResultView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "sparkles")
                             .font(.system(size: 12))
-                            .foregroundStyle(AppColors.primaryBlue)
+                            .foregroundStyle(AppColors.pastelGold)
 
                         Text("DIMENSI TUBUH 3D")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundStyle(AppColors.primaryBlue)
+                            .font(AppTypography.caption.weight(.bold))
+                            .tracking(1.2)
+                            .foregroundStyle(AppColors.mutedCaption)
                     }
 
                     Text("Hasil Pemindaian AI")
@@ -728,17 +731,18 @@ struct BodyAnalysisResultView: View {
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("PROPORSI TORSO & TINGGI BADAN")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppColors.primaryBlue)
+                    .font(AppTypography.caption.weight(.bold))
+                    .tracking(1.2)
+                    .foregroundStyle(AppColors.mutedCaption)
 
                 Spacer()
 
                 Text(activeTorsoBalance.rawValue)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppColors.primaryBlue)
+                    .foregroundStyle(AppColors.espressoTitle)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(AppColors.primaryBlue.opacity(0.12))
+                    .background(AppColors.pastelPeach.opacity(0.40))
                     .clipShape(Capsule())
             }
 
@@ -758,21 +762,21 @@ struct BodyAnalysisResultView: View {
 
                     HStack(spacing: 2) {
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(AppColors.primaryBlue)
+                            .fill(AppColors.pastelPeach)
                             .frame(width: max(CGFloat(10), torsoW))
                             .overlay(
                                 Text(String(format: "%.0f%% Torso", torsoPct))
                                     .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(AppColors.espressoTitle)
                             )
 
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(hex: "#009688"))
+                            .fill(AppColors.pastelSage)
                             .frame(width: max(CGFloat(10), lowerW))
                             .overlay(
                                 Text(String(format: "%.0f%% Kaki", lowerPct))
                                     .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(AppColors.espressoTitle)
                             )
                     }
                 }
@@ -781,13 +785,13 @@ struct BodyAnalysisResultView: View {
                 HStack {
                     Text("Torso: \(String(format: "%.1f", torsoLen)) cm")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(AppColors.primaryBlue)
+                        .foregroundStyle(AppColors.espressoTitle)
 
                     Spacer()
 
                     Text("Kaki & Tubuh Bawah: \(String(format: "%.1f", viewModel.heightCm - torsoLen)) cm")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(Color(hex: "#009688"))
+                        .foregroundStyle(AppColors.espressoTitle)
                 }
             }
         }

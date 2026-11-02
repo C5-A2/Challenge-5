@@ -317,7 +317,7 @@ struct SideBodyReviewView: View {
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(viewModel.canConfirmSidePhoto ? AppColors.primaryBlue : AppColors.primaryBlue.opacity(0.4))
+                        .background(viewModel.canConfirmSidePhoto ? AppColors.primaryBlack : AppColors.primaryBlack.opacity(0.35))
                         .clipShape(Capsule())
                 }
                 .disabled(!viewModel.canConfirmSidePhoto)

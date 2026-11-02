@@ -20,7 +20,7 @@ struct EditableMeasurementsCard: View {
                 HStack(spacing: 8) {
                     Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 16))
-                        .foregroundStyle(AppColors.primaryBlue)
+                        .foregroundStyle(AppColors.espressoTitle)
 
                     Text("Fine-Tune Measurements")
                         .font(AppTypography.cardHeadline)
@@ -41,10 +41,10 @@ struct EditableMeasurementsCard: View {
                             Text("Reset")
                                 .font(AppTypography.caption.weight(.semibold))
                         }
-                        .foregroundStyle(AppColors.primaryBlue)
+                        .foregroundStyle(AppColors.espressoTitle)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(AppColors.primaryBlue.opacity(0.1))
+                        .background(AppColors.circularButtonBackground)
                         .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)

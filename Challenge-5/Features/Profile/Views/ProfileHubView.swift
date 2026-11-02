@@ -121,7 +121,7 @@ struct ProfileHubView: View {
 
     private var titleSection: some View {
         Text("Profile")
-            .font(.system(size: 34, weight: .bold, design: .serif))
+            .font(AppTypography.screenHeader)
             .foregroundStyle(AppColors.espressoTitle)
             .padding(.top, 4)
     }
@@ -134,7 +134,8 @@ struct ProfileHubView: View {
             VStack(spacing: 48) {
                 folderCard(
                     title: "Color Season",
-                    value: colorSeasonText
+                    value: colorSeasonText,
+                    accentColor: AppColors.pastelRose
                 ) {
                     if let onSelectColorSeason = onSelectColorSeason {
                         onSelectColorSeason()
@@ -145,7 +146,8 @@ struct ProfileHubView: View {
 
                 folderCard(
                     title: "Measurements",
-                    value: measurementsText
+                    value: measurementsText,
+                    accentColor: AppColors.pastelGold
                 ) {
                     if let onSelectMeasurements = onSelectMeasurements {
                         onSelectMeasurements()
@@ -163,7 +165,8 @@ struct ProfileHubView: View {
 
                 folderCard(
                     title: "Body Type",
-                    value: bodyTypeText
+                    value: bodyTypeText,
+                    accentColor: AppColors.pastelSage
                 ) {
                     if let onSelectBodyType = onSelectBodyType {
                         onSelectBodyType()
@@ -174,7 +177,8 @@ struct ProfileHubView: View {
 
                 folderCard(
                     title: "Character",
-                    value: characterText
+                    value: characterText,
+                    accentColor: AppColors.pastelPeach
                 ) {
                     if let onSelectCharacter = onSelectCharacter {
                         onSelectCharacter()
@@ -192,18 +196,19 @@ struct ProfileHubView: View {
     private func folderCard(
         title: String,
         value: String,
+        accentColor: Color,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             ZStack(alignment: .topLeading) {
-                // Layer 1: Back Tab (subtle translucent layer peeking out on top)
+                // Layer 1: Back Tab (subtle pastel tint peeking out on top)
                 FolderTabShape(
                     tabPosition: .leading,
                     tabWidthFraction: 0.44,
                     tabHeight: 28,
                     cornerRadius: 14
                 )
-                .fill(Color.white.opacity(0.65))
+                .fill(accentColor.opacity(0.65))
                 .offset(x: -3, y: -5)
                 .shadow(color: .black.opacity(0.025), radius: 6, x: 0, y: 2)
 
@@ -226,13 +231,23 @@ struct ProfileHubView: View {
                 )
                 .shadow(color: .black.opacity(0.045), radius: 10, x: 0, y: 4)
 
+                // Top Accent Line on Tab
+                HStack {
+                    Capsule()
+                        .fill(accentColor.opacity(0.95))
+                        .frame(width: 28, height: 4)
+                        .padding(.leading, 16)
+                        .padding(.top, 12)
+                    Spacer()
+                }
+
                 // Content inside the folder
                 VStack(alignment: .leading, spacing: 4) {
                     Spacer().frame(height: 32)
 
                     Text(title)
                         .font(AppTypography.caption)
-                        .foregroundStyle(Color(hex: "#7A6C63"))
+                        .foregroundStyle(AppColors.mutedCaption)
                         .lineLimit(1)
 
                     Text(value)

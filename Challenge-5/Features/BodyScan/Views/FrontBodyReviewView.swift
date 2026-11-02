@@ -317,7 +317,7 @@ struct FrontBodyReviewView: View {
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(viewModel.canConfirmFrontPhoto ? AppColors.primaryBlue : AppColors.primaryBlue.opacity(0.4))
+                        .background(viewModel.canConfirmFrontPhoto ? AppColors.primaryBlack : AppColors.primaryBlack.opacity(0.35))
                         .clipShape(Capsule())
                 }
                 .disabled(!viewModel.canConfirmFrontPhoto)

@@ -92,7 +92,7 @@ struct PhysicalMetricsInputView: View {
                     focusedField = nil
                 }
                 .font(AppTypography.caption.weight(.semibold))
-                .foregroundStyle(AppColors.primaryBlue)
+                .foregroundStyle(AppColors.espressoTitle)
             }
         }
     }
@@ -268,7 +268,7 @@ struct PhysicalMetricsInputView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(
-                        hasError ? Color.red.opacity(0.7) : (focusedField == field ? AppColors.primaryBlue.opacity(0.6) : Color.clear),
+                        hasError ? Color.red.opacity(0.7) : (focusedField == field ? AppColors.espressoTitle.opacity(0.6) : Color.clear),
                         lineWidth: hasError ? 1.5 : 1.5
                     )
             )
