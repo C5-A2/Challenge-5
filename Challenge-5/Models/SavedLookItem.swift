@@ -22,11 +22,6 @@ public struct SavedLookItem: Identifiable, Hashable, Sendable {
     public var date: Date
     public var lookIndex: Int
     public var isBookmarked: Bool
-    
-    // 3-Fits compliance scores (0.0 to 1.0)
-    public var bodyShapeScore: Double
-    public var colorHarmonyScore: Double
-    public var torsoBalanceScore: Double
     public var fitRationale: String
     
     /// Stored image data for the avatar / outfit look.
@@ -50,9 +45,6 @@ public struct SavedLookItem: Identifiable, Hashable, Sendable {
         date: Date = Date(),
         lookIndex: Int = 0,
         isBookmarked: Bool = true,
-        bodyShapeScore: Double = 0.90,
-        colorHarmonyScore: Double = 0.92,
-        torsoBalanceScore: Double = 0.88,
         fitRationale: String = "",
         lookImageData: Data? = nil,
         assetImageName: String? = nil,
@@ -65,9 +57,6 @@ public struct SavedLookItem: Identifiable, Hashable, Sendable {
         self.date = date
         self.lookIndex = lookIndex
         self.isBookmarked = isBookmarked
-        self.bodyShapeScore = bodyShapeScore
-        self.colorHarmonyScore = colorHarmonyScore
-        self.torsoBalanceScore = torsoBalanceScore
         self.fitRationale = fitRationale
         self.lookImageData = lookImageData
         self.assetImageName = assetImageName
@@ -91,9 +80,6 @@ public struct SavedLookItem: Identifiable, Hashable, Sendable {
         self.date = date ?? outfitLook.savedAt ?? outfitLook.occasion?.date ?? Date()
         self.lookIndex = outfitLook.lookIndex
         self.isBookmarked = outfitLook.isBookmarked
-        self.bodyShapeScore = outfitLook.bodyShapeScore
-        self.colorHarmonyScore = outfitLook.colorHarmonyScore
-        self.torsoBalanceScore = outfitLook.torsoBalanceScore
         self.fitRationale = outfitLook.fitRationale
         self.lookImageData = outfitLook.lookImageData
         self.assetImageName = nil
@@ -106,11 +92,6 @@ public struct SavedLookItem: Identifiable, Hashable, Sendable {
     public var formattedDate: String {
         date.formatted(date: .abbreviated, time: .omitted)
     }
-    
-    public var averageFitScorePercentage: Int {
-        let avg = (bodyShapeScore + colorHarmonyScore + torsoBalanceScore) / 3.0
-        return Int(avg * 100)
-    }
 }
 
 /// Standalone garment representation for UI display in Library details.
@@ -121,6 +102,7 @@ public struct SavedGarmentItem: Identifiable, Hashable, Sendable {
     public var material: String
     public var colorName: String
     public var hexColor: String
+    public var rationale: String = ""
     
     public init(
         id: UUID = UUID(),
@@ -128,7 +110,8 @@ public struct SavedGarmentItem: Identifiable, Hashable, Sendable {
         name: String,
         material: String,
         colorName: String,
-        hexColor: String
+        hexColor: String,
+        rationale: String = ""
     ) {
         self.id = id
         self.category = category
@@ -136,6 +119,7 @@ public struct SavedGarmentItem: Identifiable, Hashable, Sendable {
         self.material = material
         self.colorName = colorName
         self.hexColor = hexColor
+        self.rationale = rationale
     }
     
     init(from garment: GarmentItem) {
@@ -145,6 +129,7 @@ public struct SavedGarmentItem: Identifiable, Hashable, Sendable {
         self.material = garment.material
         self.colorName = garment.colorName
         self.hexColor = garment.hexColor
+        self.rationale = garment.rationale
     }
 }
 
@@ -159,9 +144,6 @@ public extension SavedLookItem {
             date: Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? Date(),
             lookIndex: 0,
             isBookmarked: true,
-            bodyShapeScore: 0.94,
-            colorHarmonyScore: 0.96,
-            torsoBalanceScore: 0.90,
             fitRationale: "The dark French Terry polo balances shoulder proportions while burgundy tailored trousers elongate the vertical line.",
             garments: [
                 SavedGarmentItem(category: "Top", name: "Polo", material: "french terry Cotton", colorName: "Black", hexColor: "#1C1C1E"),
@@ -177,9 +159,6 @@ public extension SavedLookItem {
             date: Calendar.current.date(byAdding: .day, value: -5, to: Date()) ?? Date(),
             lookIndex: 1,
             isBookmarked: true,
-            bodyShapeScore: 0.88,
-            colorHarmonyScore: 0.91,
-            torsoBalanceScore: 0.93,
             fitRationale: "Structured peak lapels broaden the upper torso while high-waisted pleats create a balanced, commanding silhouette.",
             garments: [
                 SavedGarmentItem(category: "Outer", name: "Peak Lapel Tuxedo Jacket", material: "Wool Mohair", colorName: "Midnight Navy", hexColor: "#1B2430"),
@@ -195,9 +174,6 @@ public extension SavedLookItem {
             date: Calendar.current.date(byAdding: .day, value: -9, to: Date()) ?? Date(),
             lookIndex: 2,
             isBookmarked: true,
-            bodyShapeScore: 0.92,
-            colorHarmonyScore: 0.89,
-            torsoBalanceScore: 0.94,
             fitRationale: "Unstructured blazer over a clean merino crew neck softens the chest line while maintaining executive polish.",
             garments: [
                 SavedGarmentItem(category: "Outer", name: "Deconstructed Linen Blazer", material: "Linen Wool Blend", colorName: "Slate Grey", hexColor: "#4A5568"),
@@ -213,9 +189,6 @@ public extension SavedLookItem {
             date: Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date(),
             lookIndex: 0,
             isBookmarked: true,
-            bodyShapeScore: 0.95,
-            colorHarmonyScore: 0.97,
-            torsoBalanceScore: 0.91,
             fitRationale: "Earth-toned overshirt with relaxed drop-shoulder cut complements undertones and provides comfortable torso drape.",
             garments: [
                 SavedGarmentItem(category: "Outer", name: "Boxy Wool Overshirt", material: "Boiled Wool", colorName: "Olive Sage", hexColor: "#556B2F"),
@@ -231,9 +204,6 @@ public extension SavedLookItem {
             date: Calendar.current.date(byAdding: .day, value: -20, to: Date()) ?? Date(),
             lookIndex: 3,
             isBookmarked: true,
-            bodyShapeScore: 0.90,
-            colorHarmonyScore: 0.93,
-            torsoBalanceScore: 0.89,
             fitRationale: "Lightweight pastel knit polo with relaxed linen shorts maintains an approachable, warm appearance.",
             garments: [
                 SavedGarmentItem(category: "Top", name: "Open Collar Polo", material: "Silk Cotton Blend", colorName: "Cream Sand", hexColor: "#F4EBD9"),

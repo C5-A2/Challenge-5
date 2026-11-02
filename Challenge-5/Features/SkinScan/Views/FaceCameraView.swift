@@ -300,14 +300,14 @@ struct FaceCameraView: View {
         viewModel.isCountingDown = true
         countdownRemaining = 3
 
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
-            if countdownRemaining > 1 {
+        Task { @MainActor in
+            while countdownRemaining > 1 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 countdownRemaining -= 1
-            } else {
-                timer.invalidate()
-                viewModel.isCountingDown = false
-                executeCapture()
             }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            viewModel.isCountingDown = false
+            executeCapture()
         }
     }
 
@@ -400,8 +400,8 @@ private final class FaceCameraPreviewUIView: UIView {
 
     func updateOrientationAndMirroring() {
         if let connection = previewLayer.connection {
-            if connection.isVideoOrientationSupported {
-                connection.videoOrientation = .portrait
+            if connection.isVideoRotationAngleSupported(90) {
+                connection.videoRotationAngle = 90
             }
             if connection.isVideoMirroringSupported {
                 connection.automaticallyAdjustsVideoMirroring = false

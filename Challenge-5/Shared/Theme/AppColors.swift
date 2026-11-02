@@ -14,6 +14,7 @@ public enum AppColors {
     public static let cardBackground = Color.white
     public static let inputBackground = Color.white
     public static let inputBorder = Color(hex: "#E5E5EA")
+    public static let inputPlaceholder = Color(hex: "#89898D")
     public static let circularButtonBackground = Color(hex: "#F2F2F7")
     public static let glassmorphicFill = Color.white.opacity(0.85)
     public static let frostedGlass = Color.white.opacity(0.70)
