@@ -36,7 +36,7 @@ public final class OccasionInputViewModel {
     /// The specified dress code (e.g., "Formal", "Black Tie", "Smart Casual"). Optional.
     public var dresscode: String = ""
     
-    /// Desired emotional style impressions selected by the user. Min 0, Max 3.
+    /// Desired emotional style impressions selected by the user. Min 1, Max 3.
     public var selectedVisions: Set<StyleVision> = []
     
     /// Outfit reference photos (JPEG) from the camera, photo library, or saved looks. Optional, Max 3.
@@ -136,14 +136,19 @@ public final class OccasionInputViewModel {
     /// Checks whether the required occasion fields are valid:
     /// - Occasion `title` must be non-empty (required).
     /// - `date` cannot be in the past.
-    /// - `selectedVisions` count must be between 0 and 3 (min 0, max 3).
+    /// - `selectedVisions` count must be between 1 and 3 (min 1, max 3).
     /// - `referenceImages` count must be between 0 and 3 (min 0, max 3).
     /// - `dresscode` is optional.
     public var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !isDateInPast &&
-        selectedVisions.count <= 3 &&
+        hasValidVisionCount &&
         referenceImages.count <= ReferencePickerConstants.maximumReferenceCount
+    }
+    
+    /// Whether the user has selected between 1 and 3 style visions (required for submission).
+    public var hasValidVisionCount: Bool {
+        (1...3).contains(selectedVisions.count)
     }
     
     /// Indicates whether the user has modified any field from its initial state.
@@ -198,7 +203,7 @@ public final class OccasionInputViewModel {
     // MARK: - Actions
     
     /// Toggles selection state of a given `StyleVision`.
-    /// Caps selection at a maximum of 3 items (minimum 0).
+    /// Caps selection at a maximum of 3 items (minimum 1 required before submit).
     public func toggleVision(_ vision: StyleVision) {
         if selectedVisions.contains(vision) {
             selectedVisions.remove(vision)

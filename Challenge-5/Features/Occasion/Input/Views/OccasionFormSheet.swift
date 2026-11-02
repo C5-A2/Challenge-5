@@ -108,7 +108,7 @@ public struct OccasionFormSheet: View {
                             // 4. Reference Photos Section (Optional, Max 3)
                             ReferenceImagesView(viewModel: viewModel)
                             
-                            // 5. "I want to look more" Style Vision Chips Section (Min 0, Max 3)
+                            // 5. "I want to look more" Style Vision Chips Section (Min 1, Max 3)
                             VisionChipsGridView(viewModel: viewModel)
                         }
                         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
