@@ -155,6 +155,7 @@ final class OccasionOutputViewModel {
                 for: occasion,
                 profile: activeProfile
             )
+            
             withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                 self.looks = newLooks
                 self.occasion.generatedLooks = newLooks
