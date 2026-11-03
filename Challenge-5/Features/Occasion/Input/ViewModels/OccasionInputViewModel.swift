@@ -36,7 +36,7 @@ public final class OccasionInputViewModel {
     /// The specified dress code (e.g., "Formal", "Black Tie", "Smart Casual"). Optional.
     public var dresscode: String = ""
     
-    /// Desired emotional style impressions selected by the user. Min 0, Max 3.
+    /// Desired emotional style impressions selected by the user. Min 1, Max 3.
     public var selectedVisions: Set<StyleVision> = []
     
     /// Outfit reference photos (JPEG) from the camera, photo library, or saved looks. Optional, Max 3.
@@ -51,6 +51,9 @@ public final class OccasionInputViewModel {
     public var isShowingReferenceCamera: Bool = false
     public var isShowingReferencePhotoPicker: Bool = false
     public var isShowingReferenceLibrary: Bool = false
+    
+    /// Presentation state of the style vision picker modal sheet.
+    public var isShowingVisionPicker: Bool = false
     
     /// Photos picked in "Open from Photos", loaded into `referenceImages` by `loadPickedReferencePhotos()`.
     public var referencePhotoPickerItems: [PhotosPickerItem] = []
@@ -136,14 +139,19 @@ public final class OccasionInputViewModel {
     /// Checks whether the required occasion fields are valid:
     /// - Occasion `title` must be non-empty (required).
     /// - `date` cannot be in the past.
-    /// - `selectedVisions` count must be between 0 and 3 (min 0, max 3).
+    /// - `selectedVisions` count must be between 1 and 3 (min 1, max 3).
     /// - `referenceImages` count must be between 0 and 3 (min 0, max 3).
     /// - `dresscode` is optional.
     public var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !isDateInPast &&
-        selectedVisions.count <= 3 &&
+        hasValidVisionCount &&
         referenceImages.count <= ReferencePickerConstants.maximumReferenceCount
+    }
+    
+    /// Whether the user has selected between 1 and 3 style visions (required for submission).
+    public var hasValidVisionCount: Bool {
+        (1...3).contains(selectedVisions.count)
     }
     
     /// Indicates whether the user has modified any field from its initial state.
@@ -158,6 +166,18 @@ public final class OccasionInputViewModel {
     /// Formatted date string for accessibility and display purposes.
     public var formattedDateString: String {
         date.formatted(date: .abbreviated, time: .omitted)
+    }
+    
+    /// Comma-separated list of selected visions (e.g., "Approachable, Competent, Elegant")
+    /// or empty string if none are selected.
+    public var selectedVisionsSummaryText: String {
+        guard !selectedVisions.isEmpty else {
+            return "Select your style vision"
+        }
+        return selectedVisions
+            .map(\.rawValue)
+            .sorted()
+            .joined(separator: ", ")
     }
     
     /// Whether additional visions can be selected before reaching the maximum limit of 3.
@@ -198,13 +218,18 @@ public final class OccasionInputViewModel {
     // MARK: - Actions
     
     /// Toggles selection state of a given `StyleVision`.
-    /// Caps selection at a maximum of 3 items (minimum 0).
+    /// Caps selection at a maximum of 3 items (minimum 1 required before submit).
     public func toggleVision(_ vision: StyleVision) {
         if selectedVisions.contains(vision) {
             selectedVisions.remove(vision)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
         } else {
-            guard selectedVisions.count < 3 else { return }
+            guard selectedVisions.count < 3 else {
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                return
+            }
             selectedVisions.insert(vision)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
     }
     
@@ -384,6 +409,7 @@ public final class OccasionInputViewModel {
         referenceImages = []
         referenceSavedLookIDs = []
         referencePhotoPickerItems = []
+        isShowingVisionPicker = false
         isShowingDiscardAlert = false
     }
 }
