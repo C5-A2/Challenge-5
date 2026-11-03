@@ -24,14 +24,16 @@ struct OccasionsHomeView: View {
     
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \OccasionItem.date, order: .forward) private var occasions: [OccasionItem]
+    @Query private var userProfiles: [UserProfile]
     
     // MARK: - Navigation & Tab State
     
     @Binding var selectedTab: CapsuleTabItem
     
-    // MARK: - Local ViewModel
+    // MARK: - Local ViewModel & State
     
     @State private var viewModel = HomeViewModel()
+    @State private var isShowingProfileSheet: Bool = false
     
     // MARK: - Action Callbacks
     
@@ -99,9 +101,14 @@ struct OccasionsHomeView: View {
         .sheet(isPresented: $viewModel.isShowingHistorySheet) {
             OccasionsHistoryView()
         }
+        .sheet(isPresented: $isShowingProfileSheet) {
+            TemporaryProfileFormSheet()
+        }
         .fullScreenCover(item: $viewModel.selectedOccasion) { occasion in
+            let activeProfile = userProfiles.first ?? UserProfile.mockSample
             OccasionOutputView(
                 occasion: occasion,
+                profile: activeProfile,
                 onDismiss: {
                     viewModel.selectedOccasion = nil
                 },
@@ -131,12 +138,12 @@ struct OccasionsHomeView: View {
                     }
                 }
                 
-                // Profile Button (Empty objective for now)
-                CircularIconButton(systemName: "circle") {
+                // Profile Button (Opens TemporaryProfileFormSheet)
+                CircularIconButton(systemName: "person.crop.circle") {
                     if let onProfileTap {
                         onProfileTap()
                     } else {
-                        print("Profile button tapped (empty action)")
+                        isShowingProfileSheet = true
                     }
                 }
             }
@@ -220,9 +227,19 @@ struct OccasionsHomeView: View {
         .padding(.bottom, AppDimensions.tabBarHeight + 28)
         .sheet(isPresented: $viewModel.isShowingNewOccasionSheet) {
             OccasionFormSheet { occasionDetail in
-                let createdOccasion = viewModel.saveOccasion(from: occasionDetail, in: modelContext)
+                let activeProfile = userProfiles.first ?? UserProfile.mockSample
+                let createdOccasion = viewModel.saveOccasion(
+                    from: occasionDetail,
+                    profile: activeProfile,
+                    in: modelContext
+                )
                 viewModel.selectedOccasion = createdOccasion
             }
+        }
+        .alert("AI Generation Error", isPresented: $viewModel.isShowingErrorAlert, presenting: viewModel.errorMessage) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { message in
+            Text(message)
         }
     }
     
