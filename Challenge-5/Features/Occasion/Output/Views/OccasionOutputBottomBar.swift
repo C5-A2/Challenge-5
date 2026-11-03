@@ -9,23 +9,23 @@ import SwiftUI
 
 struct OccasionOutputBottomBar: View {
     
-    
     var onInfoTap: (() -> Void)? = nil
     /// Whether the current look is saved to the Library (filled icon when true).
     var isBookmarked: Bool = false
     var onBookmarkTap: (() -> Void)? = nil
-    
+    var onPlaygroundTap: (() -> Void)? = nil
     
     init(
         onInfoTap: (() -> Void)? = nil,
         isBookmarked: Bool = false,
-        onBookmarkTap: (() -> Void)? = nil
+        onBookmarkTap: (() -> Void)? = nil,
+        onPlaygroundTap: (() -> Void)? = nil
     ) {
         self.onInfoTap = onInfoTap
         self.isBookmarked = isBookmarked
         self.onBookmarkTap = onBookmarkTap
+        self.onPlaygroundTap = onPlaygroundTap
     }
-    
     
     var body: some View {
         HStack(spacing: 12) {
@@ -35,8 +35,10 @@ struct OccasionOutputBottomBar: View {
             
             Spacer()
             
-            CircularIconButton(systemName: "plus") {
+            CircularIconButton(systemName: "wand.and.stars") {
+                onPlaygroundTap?()
             }
+            .accessibilityLabel("Visualize Look with Image Playground")
             
             CircularIconButton(systemName: isBookmarked ? "bookmark.fill" : "bookmark", isFilled: isBookmarked) {
                 onBookmarkTap?()
