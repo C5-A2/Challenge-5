@@ -23,7 +23,10 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
 
     /// Garment regions in pixels, with a top-left origin.
     nonisolated private struct BodyRegions {
+        /// A top without an outer layer.
         let upperBody: CGRect
+        /// An outer piece, which can be longer than a top (coats).
+        let outerBody: CGRect
         let lowerBody: CGRect
         /// `nil` when the inner layer can't be located (no body pose found).
         let innerTop: CGRect?
@@ -44,7 +47,7 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
         let garmentRect: CGRect
         switch request.category {
         case .outer:
-            garmentRect = regions.upperBody
+            garmentRect = regions.outerBody
         case .top:
             if request.hasOuterLayer {
                 guard let innerTop = regions.innerTop else {
@@ -119,19 +122,31 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
             return proportionalRegions(in: personBounds)
         }
 
-        // Upper body starts at the neck so the face stays out, and extends below the hips for long tops.
+        // Upper body starts at the neck so the face stays out.
+        // A top ends just below the hips; an outer piece goes further for long coats.
         let upperStartY = points([.neck]).first?.y
             ?? (shoulderY - torsoLength * StoreConstants.Crop.neckOffsetTorsoRatio)
-        let upperEndY = hipY + torsoLength * StoreConstants.Crop.upperBodyExtensionBelowHipTorsoRatio
+        let topEndY = hipY + torsoLength * StoreConstants.Crop.topExtensionBelowHipTorsoRatio
         let upperBody = CGRect(x: personBounds.minX, y: upperStartY,
-                               width: personBounds.width, height: upperEndY - upperStartY)
-
-        let lowerStartY = hipY - torsoLength * StoreConstants.Crop.lowerBodyStartAboveHipTorsoRatio
-        let lowestLegY = lowerLegs.map(\.y).max() ?? personBounds.maxY
-        let lowerEndY = min(lowestLegY + torsoLength * StoreConstants.Crop.lowerBodyExtensionBelowLegsTorsoRatio,
+                               width: personBounds.width, height: topEndY - upperStartY)
+        let outerEndY = min(hipY + torsoLength * StoreConstants.Crop.outerExtensionBelowHipTorsoRatio,
                             personBounds.maxY)
-        let lowerBody = CGRect(x: personBounds.minX, y: lowerStartY,
-                               width: personBounds.width, height: lowerEndY - lowerStartY)
+        let outerBody = CGRect(x: personBounds.minX, y: upperStartY,
+                               width: personBounds.width, height: outerEndY - upperStartY)
+
+        // Bottoms: from just above the hips to just below the ankles (shoes out),
+        // as wide as the legs (hands out).
+        let lowerStartY = hipY - torsoLength * StoreConstants.Crop.lowerBodyStartAboveHipTorsoRatio
+        let ankles = points([.leftAnkle, .rightAnkle])
+        let lowestLegY = (ankles.isEmpty ? lowerLegs : ankles).map(\.y).max() ?? personBounds.maxY
+        let lowerEndY = min(lowestLegY + torsoLength * StoreConstants.Crop.lowerBodyExtensionBelowAnklesTorsoRatio,
+                            personBounds.maxY)
+        let legXs = (hips + lowerLegs).map(\.x)
+        let legPadding = torsoLength * StoreConstants.Crop.lowerBodyHorizontalPaddingTorsoRatio
+        let lowerMinX = max((legXs.min() ?? personBounds.minX) - legPadding, personBounds.minX)
+        let lowerMaxX = min((legXs.max() ?? personBounds.maxX) + legPadding, personBounds.maxX)
+        let lowerBody = CGRect(x: lowerMinX, y: lowerStartY,
+                               width: lowerMaxX - lowerMinX, height: lowerEndY - lowerStartY)
 
         // Inner top: the strip between the shoulders, from the neck to the hips.
         let shoulderCenterX = average(shoulders.map(\.x))
@@ -145,7 +160,7 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
         let innerTop = CGRect(x: shoulderCenterX - innerTopWidth / 2, y: upperStartY,
                               width: innerTopWidth, height: hipY - upperStartY)
 
-        return BodyRegions(upperBody: upperBody, lowerBody: lowerBody, innerTop: innerTop)
+        return BodyRegions(upperBody: upperBody, outerBody: outerBody, lowerBody: lowerBody, innerTop: innerTop)
     }
 
     /// Regions from the person's proportions, used when no body pose is found (C5-59).
@@ -163,7 +178,7 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
             width: personBounds.width,
             height: personBounds.height * StoreConstants.Crop.fallbackLowerBodyHeightRatio
         )
-        return BodyRegions(upperBody: upperBody, lowerBody: lowerBody, innerTop: nil)
+        return BodyRegions(upperBody: upperBody, outerBody: upperBody, lowerBody: lowerBody, innerTop: nil)
     }
 
     private func average(_ values: [CGFloat]) -> CGFloat {

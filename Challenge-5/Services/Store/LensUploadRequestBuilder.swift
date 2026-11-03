@@ -23,8 +23,8 @@ nonisolated enum LensUploadRequestBuilder {
             throw StoreError.lensURLInvalid
         }
         components.queryItems = [
-            URLQueryItem(name: "hl", value: StoreConstants.Search.lensLanguageCode),
-            URLQueryItem(name: "gl", value: StoreConstants.Search.lensCountryCode)
+            URLQueryItem(name: StoreConstants.Search.languageQueryName, value: StoreConstants.Search.lensLanguageCode),
+            URLQueryItem(name: StoreConstants.Search.countryQueryName, value: StoreConstants.Search.lensCountryCode)
         ]
         guard let uploadURL = components.url else { throw StoreError.lensURLInvalid }
 
@@ -32,6 +32,7 @@ nonisolated enum LensUploadRequestBuilder {
         var request = URLRequest(url: uploadURL)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue(StoreConstants.Search.lensAcceptLanguage, forHTTPHeaderField: "Accept-Language")
         request.httpBody = GarmentImageEncoder.makeMultipartBody(
             fieldName: StoreConstants.Search.lensUploadFieldName,
             jpegData: jpegData,

@@ -1645,6 +1645,11 @@ appState.isShowingWhereToBuySheet = true
 // appState.selectedGarmentForPurchase
 ```
 
+> **Current implementation (no `AppState` yet):** `OccasionOutputView` passes the tapped garment from
+> `OnThisOutfitSection` to `OccasionOutputViewModel.selectGarmentForPurchase(_:)`, which sets
+> `garmentForPurchase`, and the view presents `WhereToBuySheet(garment:)` as a sheet. The sheet crops
+> the garment from `garment.outfitLook.lookImageData` and opens Google Lens.
+
 ### 8.3 Home → Ricky: Profile setup prompt triggers profiling flow
 
 When an un-profiled user taps "Let's Get Started" in Michael's `ProfilePromptModal`:

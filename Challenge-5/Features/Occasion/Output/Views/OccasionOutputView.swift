@@ -67,7 +67,11 @@ struct OccasionOutputView: View {
                 OnThisOutfitSection(
                     garments: viewModel.currentGarments,
                     onSelectGarment: { garment in
-                        onSelectGarment?(garment)
+                        if let onSelectGarment {
+                            onSelectGarment(garment)
+                        } else {
+                            viewModel.selectGarmentForPurchase(garment)
+                        }
                     }
                 )
                 .offset(y: -36)
@@ -114,6 +118,11 @@ struct OccasionOutputView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(viewModel.bookmarkErrorMessage ?? "")
+        }
+        .sheet(item: $viewModel.garmentForPurchase) { garment in
+            WhereToBuySheet(garment: garment)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $isShowingDetailsSheet) {
             CollapsibleRationaleDrawer(viewModel: viewModel)

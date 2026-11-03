@@ -26,9 +26,15 @@ nonisolated enum StoreConstants {
 
         // Body-pose regions, as a fraction of the torso length (shoulders to hips).
         static let neckOffsetTorsoRatio: CGFloat = 0.08
-        static let upperBodyExtensionBelowHipTorsoRatio: CGFloat = 0.30
+        /// A top without an outer layer ends a little below the hips, so the pants stay out.
+        static let topExtensionBelowHipTorsoRatio: CGFloat = 0.15
+        /// An outer piece can be long (coats reach the knees), so it extends further.
+        static let outerExtensionBelowHipTorsoRatio: CGFloat = 0.70
         static let lowerBodyStartAboveHipTorsoRatio: CGFloat = 0.12
-        static let lowerBodyExtensionBelowLegsTorsoRatio: CGFloat = 0.15
+        /// Bottoms end just below the ankles, so the shoes stay out.
+        static let lowerBodyExtensionBelowAnklesTorsoRatio: CGFloat = 0.03
+        /// Bottoms are as wide as the legs plus this padding, so the hands stay out.
+        static let lowerBodyHorizontalPaddingTorsoRatio: CGFloat = 0.15
 
         /// Width of the inner top strip (visible between an open outer layer), as a fraction of shoulder width.
         static let innerTopWidthShoulderRatio: CGFloat = 0.55
@@ -57,9 +63,19 @@ nonisolated enum StoreConstants {
         /// Not an official API. If it stops working, try "https://lens.google.com/v3/upload".
         static let lensUploadEndpoint = URL(string: "https://lens.google.com/upload")
         static let lensUploadFieldName = "encoded_image"
+        /// Indonesian results page: Google then favors local shops (Shopee, Tokopedia, Zalora)
+        /// over international ones (eBay, Amazon), which show up more with English.
         static let lensLanguageCode = "id"
-        /// Country hint for Google Lens.
+        /// Country hint for shops in Indonesia (Google also uses the device location).
         static let lensCountryCode = "id"
+        /// Sent with the upload and result pages, Indonesian first.
+        static let lensAcceptLanguage = "id-ID,id;q=0.9,en;q=0.8"
+        static let languageQueryName = "hl"
+        static let countryQueryName = "gl"
+        /// Result pages on these hosts get `hl` and `gl` added (`LensResultURLLocalizer`).
+        static let localizedHostKeywords = ["google."]
+        /// Stops re-adding `hl` / `gl` if Google keeps removing them, so pages never reload in a loop.
+        static let maximumLocalizationRetries = 2
     }
 
     // MARK: - Consent

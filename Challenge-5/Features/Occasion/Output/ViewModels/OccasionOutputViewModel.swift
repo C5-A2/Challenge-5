@@ -42,6 +42,9 @@ final class OccasionOutputViewModel {
     /// Shown when saving or unsaving a look fails.
     var bookmarkErrorMessage: String?
     
+    /// Garment picked in "On this outfit"; opens the "Where to Buy" sheet (Google Lens) when set.
+    var garmentForPurchase: GarmentItem?
+    
     /// Injected storage (previews and tests). Without it, the occasion's SwiftData context is used.
     private let injectedSavedLookStorage: (any SavedLookStoring)?
     
@@ -150,6 +153,16 @@ final class OccasionOutputViewModel {
         for look in looks where !storedLookIDs.contains(look.id) {
             occasion.generatedLooks.append(look)
         }
+    }
+    
+    /// Opens "Where to Buy" for a garment of the current look.
+    /// The store crops the garment from its look image, so the garment must be linked to that look.
+    func selectGarmentForPurchase(_ garment: GarmentItem) {
+        if garment.outfitLook == nil, let currentLook,
+           currentLook.garments.contains(where: { $0.id == garment.id }) {
+            garment.outfitLook = currentLook
+        }
+        garmentForPurchase = garment
     }
     
     func toggleDetailsDrawer() {
@@ -303,13 +316,27 @@ extension OccasionOutputViewModel {
         // Dummy look images (same assets as the avatar stage), so saved mock looks
         // show in the Library and in "From Library" references. Replace with generated images.
         for look in mockLooks {
-            look.lookImageData = UIImage(named: "mock_result_\(look.lookIndex + 1)")?
+            look.lookImageData = UIImage(named: "mock_result_\(look.lookIndex + 1)")
+                .map(makeImageOnWhite)?
                 .jpegData(compressionQuality: mockLookImageCompressionQuality)
         }
         return mockLooks
     }
     
     private static let mockLookImageCompressionQuality: CGFloat = 0.8
+    
+    /// The mock PNGs have a transparent background, which turns black in a JPEG.
+    /// Draws them on white so a dark garment doesn't blend into the background.
+    private static func makeImageOnWhite(_ image: UIImage) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.preferred()
+        format.opaque = true
+        format.scale = image.scale
+        return UIGraphicsImageRenderer(size: image.size, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: image.size))
+            image.draw(at: .zero)
+        }
+    }
     
     /// New garment objects with the same details, for reusing a mock outfit in another look.
     private static func makeGarmentCopies(of garments: [GarmentItem]) -> [GarmentItem] {
