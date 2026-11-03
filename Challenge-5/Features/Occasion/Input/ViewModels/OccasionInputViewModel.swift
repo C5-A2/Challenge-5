@@ -52,6 +52,9 @@ public final class OccasionInputViewModel {
     public var isShowingReferencePhotoPicker: Bool = false
     public var isShowingReferenceLibrary: Bool = false
     
+    /// Presentation state of the style vision picker modal sheet.
+    public var isShowingVisionPicker: Bool = false
+    
     /// Photos picked in "Open from Photos", loaded into `referenceImages` by `loadPickedReferencePhotos()`.
     public var referencePhotoPickerItems: [PhotosPickerItem] = []
     public private(set) var isLoadingReferencePhotos: Bool = false
@@ -165,6 +168,18 @@ public final class OccasionInputViewModel {
         date.formatted(date: .abbreviated, time: .omitted)
     }
     
+    /// Comma-separated list of selected visions (e.g., "Approachable, Competent, Elegant")
+    /// or empty string if none are selected.
+    public var selectedVisionsSummaryText: String {
+        guard !selectedVisions.isEmpty else {
+            return "Select your style vision"
+        }
+        return selectedVisions
+            .map(\.rawValue)
+            .sorted()
+            .joined(separator: ", ")
+    }
+    
     /// Whether additional visions can be selected before reaching the maximum limit of 3.
     public var canSelectMoreVisions: Bool {
         selectedVisions.count < 3
@@ -207,9 +222,14 @@ public final class OccasionInputViewModel {
     public func toggleVision(_ vision: StyleVision) {
         if selectedVisions.contains(vision) {
             selectedVisions.remove(vision)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
         } else {
-            guard selectedVisions.count < 3 else { return }
+            guard selectedVisions.count < 3 else {
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                return
+            }
             selectedVisions.insert(vision)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
     }
     
@@ -389,6 +409,7 @@ public final class OccasionInputViewModel {
         referenceImages = []
         referenceSavedLookIDs = []
         referencePhotoPickerItems = []
+        isShowingVisionPicker = false
         isShowingDiscardAlert = false
     }
 }
