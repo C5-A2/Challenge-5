@@ -13,15 +13,15 @@ struct OccasionOutputView: View {
     
     
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @Query private var userProfiles: [UserProfile]
     @State var viewModel: OccasionOutputViewModel
     
     
     @State private var isShowingDetailsSheet: Bool = false
     @State private var isShowingMoreMenu: Bool = false
-    @State private var isShowingEditSheet: Bool = false
+    @State private var isShowingOccasionDetailSheet: Bool = false
     @State private var isShowingProfileSheet: Bool = false
-    @State private var isShowingUpcomingAlert: Bool = false
     
     
     var onDismiss: (() -> Void)? = nil
@@ -129,31 +129,39 @@ struct OccasionOutputView: View {
         } message: {
             Text(viewModel.bookmarkErrorMessage ?? "")
         }
-        .alert("Upcoming Feature", isPresented: $isShowingUpcomingAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Occasion insights and additional styling options are coming soon.")
-        }
         .sheet(isPresented: $isShowingDetailsSheet) {
             CollapsibleRationaleDrawer(viewModel: viewModel)
                 .presentationDetents([.fraction(0.65), .large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $isShowingEditSheet) {
+        .sheet(isPresented: $isShowingOccasionDetailSheet) {
             OccasionFormSheet(
                 viewModel: OccasionInputViewModel(from: viewModel.occasion),
+                initialMode: .view,
                 onSave: { updatedDetail in
+                    // Overwrite occasion attributes while preserving occasion.id
                     viewModel.occasion.title = updatedDetail.title
                     viewModel.occasion.date = updatedDetail.date
                     viewModel.occasion.dresscode = updatedDetail.dresscode
                     viewModel.occasion.visionKeywords = updatedDetail.visions.map(\.rawValue)
                     viewModel.occasion.referenceImagesData = updatedDetail.referenceImages
                     viewModel.occasion.referenceImageData = updatedDetail.referenceImages.first
-                    onEditOccasion?(viewModel.occasion)
-                    isShowingEditSheet = false
+                    try? modelContext.save()
+                    isShowingOccasionDetailSheet = false
+                    
+                    // Auto-generate fresh looks like a new occasion
+                    let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+                    viewModel.regenerateLooks(profile: activeProfile)
+                },
+                onDelete: {
+                    modelContext.delete(viewModel.occasion)
+                    try? modelContext.save()
+                    isShowingOccasionDetailSheet = false
+                    dismiss()
+                    onDismiss?()
                 },
                 onDismiss: {
-                    isShowingEditSheet = false
+                    isShowingOccasionDetailSheet = false
                 }
             )
         }
@@ -193,9 +201,9 @@ struct OccasionOutputView: View {
                     .accessibilityLabel("Generate More Looks")
                     
                     CircularIconButton(systemName: "info.bubble") {
-                        isShowingUpcomingAlert = true
+                        isShowingOccasionDetailSheet = true
                     }
-                    .accessibilityLabel("Upcoming Features")
+                    .accessibilityLabel("Occasion Details")
                 }
             }
             
@@ -222,7 +230,7 @@ struct OccasionOutputView: View {
                 withAnimation(.easeInOut(duration: 0.15)) {
                     isShowingMoreMenu = false
                 }
-                isShowingEditSheet = true
+                isShowingOccasionDetailSheet = true
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "pencil")

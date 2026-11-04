@@ -247,19 +247,39 @@ final class OccasionOutputViewModel {
     
     func regenerateLooks(profile: UserProfile? = nil) {
         guard !isLoading else { return }
-        isLoading = true
-        errorMessage = nil
+        
+        // Remove old non-bookmarked looks from context if persisted
+        if let context = occasion.modelContext {
+            for oldLook in occasion.generatedLooks where !oldLook.isBookmarked {
+                context.delete(oldLook)
+            }
+        }
+        occasion.generatedLooks.removeAll()
+        
+        // Reset to generating state like a brand new occasion
+        withAnimation(.easeInOut(duration: 0.2)) {
+            self.selectedLookIndex = 0
+            self.looks = OccasionOutputViewModel.makeMockLooks()
+            self.isUsingMockPlaceholders = true
+            self.isLoading = true
+            self.errorMessage = nil
+        }
         
         Task {
-            let activeProfile = profile ?? UserProfile.mockSample
+            let activeProfile = profile ?? self.profile ?? UserProfile.mockSample
             do {
-                let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(for: occasion, profile: activeProfile)
+                let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(
+                    for: occasion,
+                    profile: activeProfile
+                )
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                     self.looks = newLooks
                     self.occasion.generatedLooks = newLooks
                     self.selectedLookIndex = 0
+                    self.isUsingMockPlaceholders = false
                     self.isLoading = false
                 }
+                try? self.occasion.modelContext?.save()
             } catch {
                 let errorMsg = error.localizedDescription
                 print("\n❌ [OccasionOutputViewModel] LLM CANNOT BE USED (\(LLMResource.activeModelFilename)): \(errorMsg)\n")

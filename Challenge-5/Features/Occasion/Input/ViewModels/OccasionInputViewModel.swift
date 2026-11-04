@@ -412,4 +412,17 @@ public final class OccasionInputViewModel {
         isShowingVisionPicker = false
         isShowingDiscardAlert = false
     }
+    
+    /// Restores all input fields back to the values passed during initialization.
+    public func resetToInitial() {
+        title = initialTitle
+        date = initialDate
+        dresscode = initialDresscode
+        selectedVisions = initialVisions
+        referenceImages = initialReferenceImages
+        referenceSavedLookIDs = Array(repeating: nil, count: initialReferenceImages.count)
+        referencePhotoPickerItems = []
+        isShowingVisionPicker = false
+        isShowingDiscardAlert = false
+    }
 }
