@@ -127,13 +127,13 @@ struct OccasionOutputView: View {
                     .zIndex(10)
             }
 
-            if viewModel.isLoading {
+            if viewModel.isLoading || isProcessingPlayground {
                 generationLoadingOverlay
                     .transition(.opacity)
                     .zIndex(20)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: viewModel.isLoading)
+        .animation(.easeInOut(duration: 0.25), value: viewModel.isLoading || isProcessingPlayground)
         .alert(
             "Couldn't Save Look",
             isPresented: Binding(
@@ -194,6 +194,9 @@ struct OccasionOutputView: View {
                         self.isProcessingPlayground = false
                     }
                 }
+            },
+            onCancellation: {
+                isProcessingPlayground = false
             }
         )
         .alert("AI Generation Error", isPresented: $viewModel.isShowingErrorAlert, presenting: viewModel.errorMessage) { _ in
@@ -395,11 +398,15 @@ struct OccasionOutputView: View {
                 }
                 
                 VStack(spacing: 6) {
-                    Text("Curating Your Looks")
+                    Text(isProcessingPlayground ? "Styling With AI" : "Curating Your Looks")
                         .font(AppTypography.sfProSemiboldExtended(size: 19))
                         .foregroundStyle(AppColors.espressoTitle)
                     
-                    Text("Styling ensembles tailored to your silhouette and \(viewModel.occasion.title)...")
+                    Text(
+                        isProcessingPlayground
+                            ? "Preparing visual outfit mapper and loading Image Playground..."
+                            : "Styling ensembles tailored to your silhouette and \(viewModel.occasion.title)..."
+                    )
                         .font(AppTypography.caption)
                         .foregroundStyle(AppColors.mutedCaption)
                         .multilineTextAlignment(.center)
@@ -435,6 +442,10 @@ struct OccasionOutputView: View {
     
     private func triggerPlaygroundGeneration() {
         guard let currentLook = viewModel.currentLook else { return }
+        
+        // Show loading indicator immediately when user taps Generate
+        isProcessingPlayground = true
+        
         if playgroundPackage == nil || playgroundPackage?.lookIndex != currentLook.lookIndex {
             updatePlaygroundPackage()
         }
@@ -443,7 +454,7 @@ struct OccasionOutputView: View {
         if #available(iOS 18.2, *) {
             if ImagePlaygroundViewController.isAvailable {
                 // Ensure state is cleanly settled before presenting remote XPC sheet
-                DispatchQueue.main.async {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                     self.isShowingPlayground = true
                 }
                 return
