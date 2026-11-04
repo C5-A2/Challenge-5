@@ -72,6 +72,14 @@ struct OccasionsHomeView: View {
             .filter { $0.isPast }
             .sorted(by: { $0.date > $1.date })
     }
+
+    private var currentProfile: UserProfile? {
+        userProfiles.first
+    }
+
+    private var isProfileSetupCompleted: Bool {
+        currentProfile?.hasCompletedProfileSetup == true
+    }
     
     // MARK: - Body
     
@@ -87,6 +95,11 @@ struct OccasionsHomeView: View {
                     // Header Bar (Profile icon + Large Title)
                     headerBar
                         .padding(.top, 8)
+
+                    // Profile Setup Prompt Banner (C5-98)
+                    if !isProfileSetupCompleted {
+                        profileSetupPromptCard
+                    }
                     
                     // Main Feed Content: Upcoming Occasions & Past Occasions
                     if activeOccasions.isEmpty && pastOccasions.isEmpty {
@@ -119,7 +132,22 @@ struct OccasionsHomeView: View {
                 .padding(.horizontal, 40)
         }
         .sheet(isPresented: $isShowingProfileSheet) {
-            TemporaryProfileFormSheet()
+            ProfileHubView()
+        }
+        .sheet(isPresented: $viewModel.isShowingProfilePromptModal) {
+            ProfilePromptModal(
+                onStartProfiling: {
+                    viewModel.isShowingProfilePromptModal = false
+                    viewModel.isShowingProfilingFlow = true
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $viewModel.isShowingProfilingFlow) {
+            ProfilingFlowHostView(
+                onComplete: {
+                    viewModel.isShowingProfilingFlow = false
+                }
+            )
         }
         .sheet(item: $viewModel.editingOccasion) { occasion in
             OccasionFormSheet(
@@ -146,15 +174,64 @@ struct OccasionsHomeView: View {
     }
     
     // MARK: - Subviews
+
+    /// Prompt card displayed at the top of Home feed encouraging profile setup (C5-98).
+    private var profileSetupPromptCard: some View {
+        Button {
+            viewModel.isShowingProfilePromptModal = true
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(AppColors.pastelGold.opacity(0.35))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 20))
+                        .foregroundStyle(AppColors.espressoTitle)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Set Up Your Profile")
+                        .font(AppTypography.cardHeadline)
+                        .foregroundStyle(AppColors.espressoTitle)
+                    Text("Ketahui bentuk tubuh & warna personalmu untuk kurasi outfit yang presisi.")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.mutedCaption)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.mutedCaption)
+            }
+            .padding(AppDimensions.cardInternalPadding)
+            .background(AppColors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius)
+                    .stroke(AppColors.subtleBorder, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
     
-    /// Top header bar with profile circular button and large "Occasions" title.
+    /// Top header bar with history and profile circular buttons and large "Occasions" title.
     private var headerBar: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Top Row: Circular Profile Icon Button at Top Right
+            // Top Row: Circular Icon Buttons at Top Right
             HStack(spacing: 12) {
                 Spacer()
                 
-                // Profile Button (Opens TemporaryProfileFormSheet)
+                // History Button (Opens OccasionsHistoryView)
+                CircularIconButton(systemName: "clock.arrow.circlepath") {
+                    if let onHistoryTap {
+                        onHistoryTap()
+                    } else {
+                        viewModel.isShowingHistorySheet = true
+                    }
+                }
+                
+                // Profile Button (Opens ProfileHubView)
                 CircularIconButton(systemName: "person.crop.circle") {
                     if let onProfileTap {
                         onProfileTap()
@@ -328,12 +405,12 @@ struct OccasionsHomeView: View {
     OccasionsHomeView(
         selectedTab: .constant(.occasions)
     )
-    .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self], inMemory: true)
+    .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self, UserProfile.self], inMemory: true)
 }
 
 #Preview("Occasions Home - With Sample Data") {
     let container = try! ModelContainer(
-        for: OccasionItem.self, OutfitLook.self, GarmentItem.self,
+        for: OccasionItem.self, OutfitLook.self, GarmentItem.self, UserProfile.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
     

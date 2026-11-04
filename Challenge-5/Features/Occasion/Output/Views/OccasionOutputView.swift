@@ -159,7 +159,7 @@ struct OccasionOutputView: View {
             )
         }
         .sheet(isPresented: $isShowingProfileSheet) {
-            TemporaryProfileFormSheet()
+            ProfileHubView()
         }
         .alert("AI Generation Error", isPresented: $viewModel.isShowingErrorAlert, presenting: viewModel.errorMessage) { _ in
             Button("OK", role: .cancel) {}
