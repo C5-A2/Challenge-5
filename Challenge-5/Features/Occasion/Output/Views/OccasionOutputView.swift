@@ -186,10 +186,17 @@ struct OccasionOutputView: View {
                 }
                 
                 Spacer()
-                
-                CircularIconButton(systemName: "ellipsis") {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        isShowingMoreMenu.toggle()
+
+                HStack(spacing: 12) {
+                    CircularIconButton(systemName: "plus.app") {
+                        let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+                        viewModel.generateAdditionalLook(profile: activeProfile)
+                    }
+
+                    CircularIconButton(systemName: "info.bubble") {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                            isShowingMoreMenu.toggle()
+                        }
                     }
                 }
             }

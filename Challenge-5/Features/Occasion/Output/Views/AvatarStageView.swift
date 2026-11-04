@@ -83,9 +83,16 @@ struct AvatarStageView: View {
     
     
     private func modelImageView(for index: Int) -> some View {
-        let name = assetName(for: index)
-        return Group {
-            if let uiImage = UIImage(named: name) {
+        Group {
+            if viewModel.looks.indices.contains(index),
+               let look = viewModel.looks[index] as OutfitLook?,
+               let data = look.lookImageData,
+               let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFit()
+            } else if let assetName = assetName(for: index),
+                      let uiImage = UIImage(named: assetName) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFit()
@@ -95,13 +102,13 @@ struct AvatarStageView: View {
         }
     }
     
-    private func assetName(for index: Int) -> String {
+    private func assetName(for index: Int) -> String? {
+        guard index < 5 else { return nil }
         let specificName = "mock_result_\(index + 1)"
         if UIImage(named: specificName) != nil {
             return specificName
         }
-        let fallbackAssets = ["mock_result_1", "mock_result_2", "mock_result_3"]
-        return fallbackAssets[index % fallbackAssets.count]
+        return nil
     }
     
     private func fallbackSilhouette(for index: Int) -> some View {

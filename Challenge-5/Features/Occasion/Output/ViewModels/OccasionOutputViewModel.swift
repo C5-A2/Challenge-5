@@ -286,6 +286,46 @@ final class OccasionOutputViewModel {
             }
         }
     }
+
+    /// Generates one additional outfit look and appends it to the right of existing looks.
+    func generateAdditionalLook(profile: UserProfile? = nil) {
+        guard !isLoading else { return }
+        isLoading = true
+        errorMessage = nil
+
+        Task {
+            let activeProfile = profile ?? self.profile ?? UserProfile.mockSample
+            do {
+                let newLook = try await OutfitGenerationPipeline.shared.generateSingleLook(
+                    for: occasion,
+                    profile: activeProfile,
+                    existingLooks: self.looks
+                )
+
+                if let modelContext = occasion.modelContext {
+                    modelContext.insert(newLook)
+                    for garment in newLook.garments {
+                        modelContext.insert(garment)
+                    }
+                }
+
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    self.looks.append(newLook)
+                    self.occasion.generatedLooks = self.looks
+                    self.selectedLookIndex = self.looks.count - 1
+                    self.isLoading = false
+                }
+            } catch {
+                let errorMsg = error.localizedDescription
+                print("\n❌ [OccasionOutputViewModel] Failed to generate additional look: \(errorMsg)\n")
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    self.errorMessage = errorMsg
+                    self.isShowingErrorAlert = true
+                    self.isLoading = false
+                }
+            }
+        }
+    }
 }
 
 extension OccasionOutputViewModel {
