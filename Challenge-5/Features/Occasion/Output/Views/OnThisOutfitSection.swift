@@ -11,14 +11,17 @@ struct OnThisOutfitSection: View {
     
     
     var garments: [GarmentItem]
+    var isLoading: Bool = false
     var onSelectGarment: ((GarmentItem) -> Void)? = nil
     
     
     init(
         garments: [GarmentItem] = [],
+        isLoading: Bool = false,
         onSelectGarment: ((GarmentItem) -> Void)? = nil
     ) {
         self.garments = garments
+        self.isLoading = isLoading
         self.onSelectGarment = onSelectGarment
     }
     
@@ -62,16 +65,49 @@ struct OnThisOutfitSection: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
-                    ForEach(displayGarments) { garment in
-                        garmentCard(for: garment)
-                            .onTapGesture {
-                                onSelectGarment?(garment)
-                            }
+                    if isLoading {
+                        ForEach(["Outer", "Top", "Bottom"], id: \.self) { category in
+                            skeletonCard(category: category)
+                        }
+                    } else {
+                        ForEach(displayGarments) { garment in
+                            garmentCard(for: garment)
+                                .onTapGesture {
+                                    onSelectGarment?(garment)
+                                }
+                        }
                     }
                 }
                 .padding(.horizontal, AppDimensions.screenHorizontalPadding)
             }
         }
+    }
+    
+    private func skeletonCard(category: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color(hex: "#E8E6E3").opacity(0.85))
+                
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: AppColors.espressoTitle.opacity(0.45)))
+                    .scaleEffect(0.9)
+            }
+            .frame(width: 128, height: 128)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(category)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.espressoTitle)
+                
+                Text("Selecting piece...")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(AppColors.mutedCaption)
+            }
+            .frame(width: 104, alignment: .leading)
+        }
+        .frame(width: 128)
     }
     
     

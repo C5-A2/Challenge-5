@@ -63,12 +63,14 @@ struct OccasionOutputView: View {
                 navigationHeader
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
                     .padding(.top, 16)
+                    .zIndex(1)
                 
                 AvatarStageView(viewModel: viewModel)
                     .frame(maxHeight: .infinity)
                 
                 OnThisOutfitSection(
                     garments: viewModel.currentGarments,
+                    isLoading: viewModel.isCurrentLookLoading,
                     onSelectGarment: { garment in
                         onSelectGarment?(garment)
                     }
@@ -81,8 +83,14 @@ struct OccasionOutputView: View {
                         isShowingDetailsSheet = true
                     },
                     isBookmarked: viewModel.isCurrentLookBookmarked,
+                    isBookmarkDisabled: viewModel.isCurrentLookLoading,
                     onBookmarkTap: {
                         viewModel.toggleBookmark()
+                    },
+                    isAddLookDisabled: viewModel.isGeneratingMore || viewModel.isLoading,
+                    onAddLookTap: {
+                        let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+                        viewModel.generateMoreLooks(profile: activeProfile)
                     }
                 )
                 .offset(y: -24)

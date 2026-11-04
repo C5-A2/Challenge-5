@@ -38,7 +38,7 @@ struct AvatarStageView: View {
     
     private var carouselTrack: some View {
         ZStack {
-            ForEach(0..<viewModel.looks.count, id: \.self) { index in
+            ForEach(0..<viewModel.totalCarouselCount, id: \.self) { index in
                 cardItem(for: index)
             }
         }
@@ -62,14 +62,17 @@ struct AvatarStageView: View {
             let xOffset = relativeIndex * cardSpacing
             
             ZStack(alignment: .center) {
-
-                modelImageView(for: index)
-                    .frame(width: width, height: height)
-                    .shadow(
-                        color: Color.black.opacity(isCenter ? 0.08 : 0.03),
-                        radius: isCenter ? 8 : 3,
-                        y: isCenter ? 4 : 2
-                    )
+                if viewModel.isLookLoading(at: index) {
+                    loadingRingCard(for: index, width: width, height: height, isCenter: isCenter)
+                } else {
+                    modelImageView(for: index)
+                        .frame(width: width, height: height)
+                        .shadow(
+                            color: Color.black.opacity(isCenter ? 0.08 : 0.03),
+                            radius: isCenter ? 8 : 3,
+                            y: isCenter ? 4 : 2
+                        )
+                }
             }
             .frame(width: width, height: height)
             .offset(x: xOffset)
@@ -81,18 +84,59 @@ struct AvatarStageView: View {
         }
     }
     
+    @ViewBuilder
+    private func loadingRingCard(for index: Int, width: CGFloat, height: CGFloat, isCenter: Bool) -> some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .stroke(AppColors.espressoTitle.opacity(0.12), lineWidth: 3.5)
+                    .frame(width: isCenter ? 54 : 36, height: isCenter ? 54 : 36)
+                
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: AppColors.espressoTitle))
+                    .scaleEffect(isCenter ? 1.3 : 0.85)
+            }
+            
+            if isCenter {
+                VStack(spacing: 4) {
+                    Text("Curating Look \(index + 1)...")
+                        .font(AppTypography.sfProSemiboldExtended(size: 14))
+                        .foregroundStyle(AppColors.espressoTitle)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("Exploring silhouettes")
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(AppColors.mutedCaption)
+                }
+                .padding(.horizontal, 10)
+                .transition(.opacity)
+            }
+        }
+        .frame(width: width, height: height, alignment: .center)
+    }
     
     private func modelImageView(for index: Int) -> some View {
-        let name = assetName(for: index)
-        return Group {
-            if let uiImage = UIImage(named: name) {
+        if viewModel.looks.indices.contains(index),
+           let data = viewModel.looks[index].lookImageData,
+           let uiImage = UIImage(data: data) {
+            return AnyView(
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFit()
-            } else {
-                fallbackSilhouette(for: index)
-            }
+            )
         }
+        let name = assetName(for: index)
+        return AnyView(
+            Group {
+                if let uiImage = UIImage(named: name) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    fallbackSilhouette(for: index)
+                }
+            }
+        )
     }
     
     private func assetName(for index: Int) -> String {
@@ -100,7 +144,7 @@ struct AvatarStageView: View {
         if UIImage(named: specificName) != nil {
             return specificName
         }
-        let fallbackAssets = ["mock_result_1", "mock_result_2", "mock_result_3"]
+        let fallbackAssets = ["mock_result_1", "mock_result_2", "mock_result_3", "mock_result_4", "mock_result_5"]
         return fallbackAssets[index % fallbackAssets.count]
     }
     
@@ -123,7 +167,7 @@ struct AvatarStageView: View {
                 
                 if viewModel.selectedLookIndex == 0 && translation > 0 {
                     dragOffset = translation * 0.25
-                } else if viewModel.selectedLookIndex == viewModel.looks.count - 1 && translation < 0 {
+                } else if viewModel.selectedLookIndex == viewModel.totalCarouselCount - 1 && translation < 0 {
                     dragOffset = translation * 0.25
                 } else {
                     dragOffset = translation
@@ -133,7 +177,7 @@ struct AvatarStageView: View {
                 let threshold: CGFloat = 40
                 let translation = value.translation.width
                 
-                if translation < -threshold && viewModel.selectedLookIndex < viewModel.looks.count - 1 {
+                if translation < -threshold && viewModel.selectedLookIndex < viewModel.totalCarouselCount - 1 {
                     viewModel.goToNextLook()
                 } else if translation > threshold && viewModel.selectedLookIndex > 0 {
                     viewModel.goToPreviousLook()
@@ -172,20 +216,26 @@ struct AvatarStageView: View {
                 .frame(width: 200, height: 30)
             
             HStack(spacing: 6) {
-                ForEach(0..<viewModel.looks.count, id: \.self) { index in
+                ForEach(0..<viewModel.totalCarouselCount, id: \.self) { index in
+                    let isSelected = index == viewModel.selectedLookIndex
+                    let isLookLoading = viewModel.isLookLoading(at: index)
+                    
                     Circle()
                         .fill(
-                            index == viewModel.selectedLookIndex
+                            isSelected
                                 ? Color.white
-                                : Color.white.opacity(0.45)
+                                : (isLookLoading ? AppColors.espressoTitle.opacity(0.25) : Color.white.opacity(0.45))
                         )
                         .frame(
-                            width: index == viewModel.selectedLookIndex ? 7.5 : 5,
-                            height: index == viewModel.selectedLookIndex ? 7.5 : 5
+                            width: isSelected ? 7.5 : 5,
+                            height: isSelected ? 7.5 : 5
                         )
                         .overlay(
                             Circle()
-                                .stroke(Color.black.opacity(0.18), lineWidth: 0.5)
+                                .stroke(
+                                    isLookLoading ? AppColors.espressoTitle.opacity(0.55) : Color.black.opacity(0.18),
+                                    lineWidth: isLookLoading ? 0.8 : 0.5
+                                )
                         )
                         .onTapGesture {
                             viewModel.selectLook(at: index)

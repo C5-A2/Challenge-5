@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftData
+import UIKit
 
 /// Decodable schema matching the structured LLM output for an outfit look.
 public struct GeneratedLookDTO: Codable, Sendable {
@@ -40,6 +41,15 @@ protocol OutfitGenerationPipelineProtocol {
         for occasion: OccasionItem,
         profile: UserProfile
     ) async throws -> [OutfitLook]
+
+    /// Generates a single new tailored outfit look for an occasion, appending all previous looks and using higher temperature for diversity.
+    func generateSingleLook(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        lookIndex: Int,
+        existingLooks: [OutfitLook],
+        temperature: Float
+    ) async throws -> OutfitLook
 }
 
 // MARK: - Default Outfit Generation Pipeline
@@ -159,6 +169,71 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
 
         return generatedLooks
+    }
+
+    /// Generates a single new tailored outfit look for an occasion, appending all previous looks and using high temperature (0.75) for diversity.
+    func generateSingleLook(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        lookIndex: Int,
+        existingLooks: [OutfitLook],
+        temperature: Float = 0.75
+    ) async throws -> OutfitLook {
+        // Validate the GGUF model file is present before attempting inference.
+        try LLMResource.validateModelAvailability()
+
+        // 1. Injected JSON short-circuit (prompt testing / UI previews).
+        if let injectedJSON = OutfitGenerationPipeline.injectedLLMResponseJSON, !injectedJSON.isEmpty {
+            if let looks = try? parseLooks(from: injectedJSON, colorSeason: profile.colorSeason), let first = looks.first {
+                first.lookIndex = lookIndex
+                return first
+            }
+        }
+
+        // 2. Approach 1: Analyze user reference photos via Apple Vision on Neural Engine
+        let allImageData = occasion.referenceImagesData.isEmpty
+            ? (occasion.referenceImageData.map { [$0] } ?? [])
+            : occasion.referenceImagesData
+        let analyzedImageStyle = await ReferenceImageStyleAnalyzer.shared.analyzeStyle(from: allImageData)
+
+        // 3. Extract summaries of all previous looks generated for this occasion (e.g. 5 previous looks or more)
+        let previousSummaries = existingLooks.map { GeneratedLookSummary(from: $0) }
+
+        print("🔧 [OutfitGenerationPipeline] Generating single look \(lookIndex) (temperature: \(temperature), previous looks appended: \(previousSummaries.count))…")
+
+        // 4. Build single-look prompt injecting all previous looks and vision style
+        let prompt = promptBuilder.buildFormattedPrompt(
+            occasion: occasion,
+            profile: profile,
+            lookIndex: lookIndex,
+            previousLooks: previousSummaries,
+            analyzedImageStyle: analyzedImageStyle
+        )
+
+        // 5. Run LLM generation with temperature
+        let rawOutput = try await LLMEngine.shared.generate(
+            prompt: prompt,
+            maxTokens: 4096,
+            temperature: temperature
+        )
+
+        print("✅ [OutfitGenerationPipeline] Look \(lookIndex) raw output (\(rawOutput.count) chars):\n\(rawOutput)")
+
+        let rawClean = rawOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parsedLooks = try parseLooks(from: rawClean, colorSeason: profile.colorSeason)
+        guard let parsedLook = parsedLooks.first else {
+            throw LLMError.invalidOutput("LLM returned 0 looks for look index \(lookIndex).")
+        }
+
+        parsedLook.lookIndex = lookIndex
+
+        // Provide look image data using available assets (cycling through mock results 1..5)
+        let assetName = "mock_result_\((lookIndex % 5) + 1)"
+        if let image = UIImage(named: assetName), let data = image.jpegData(compressionQuality: 0.8) {
+            parsedLook.lookImageData = data
+        }
+
+        return parsedLook
     }
 
     /// Synchronous generation for seamless instant UI transitions upon form submit.

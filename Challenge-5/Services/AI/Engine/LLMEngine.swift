@@ -238,8 +238,40 @@ public actor LLMEngine {
         // Instant simulated response for Xcode Previews and Simulator without crashing
         try? await Task.sleep(nanoseconds: 600_000_000)
         return """
-        [Preview / Simulator Mode]
-        A slim-fit navy blazer creates a structured, tapered V-shape that harmonizes with broad shoulders without adding unnecessary bulk. The deep navy tone visually anchors the torso, drawing the gaze inward and downward for a clean, balanced silhouette.
+        {
+          "looks": [
+            {
+              "lookIndex": 0,
+              "fitRationale": "Balanced layering with tailored silhouettes that flatter vertical proportions and suit the event.",
+              "garments": [
+                {
+                  "category": "Outer",
+                  "name": "Single-Breasted Duster Coat",
+                  "material": "Crepe Wool",
+                  "colorName": "Navy",
+                  "hexColor": "#1B2A4A",
+                  "rationale": "Elongates vertical frame and balances shoulder proportions."
+                },
+                {
+                  "category": "Top",
+                  "name": "Silk Blend Knit",
+                  "material": "Silk Wool",
+                  "colorName": "Ivory",
+                  "hexColor": "#FDFBF7",
+                  "rationale": "Softens upper body lines and complements neckline."
+                },
+                {
+                  "category": "Bottom",
+                  "name": "Fluid Pleated Trousers",
+                  "material": "Gabardine",
+                  "colorName": "Charcoal",
+                  "hexColor": "#2C3539",
+                  "rationale": "Mid-rise cut elongates the legs and harmonizes torso balance."
+                }
+              ]
+            }
+          ]
+        }
         """
         #else
         guard !isGenerating else {

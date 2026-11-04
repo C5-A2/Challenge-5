@@ -23,7 +23,7 @@ struct HorizontalLookSwitcher: View {
             get: { viewModel.selectedLookIndex },
             set: { viewModel.selectLook(at: $0) }
         )) {
-            ForEach(0..<viewModel.looks.count, id: \.self) { index in
+            ForEach(0..<viewModel.totalCarouselCount, id: \.self) { index in
                 lookStagePage(for: index)
                     .tag(index)
             }

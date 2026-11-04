@@ -13,17 +13,26 @@ struct OccasionOutputBottomBar: View {
     var onInfoTap: (() -> Void)? = nil
     /// Whether the current look is saved to the Library (filled icon when true).
     var isBookmarked: Bool = false
+    var isBookmarkDisabled: Bool = false
     var onBookmarkTap: (() -> Void)? = nil
+    var isAddLookDisabled: Bool = false
+    var onAddLookTap: (() -> Void)? = nil
     
     
     init(
         onInfoTap: (() -> Void)? = nil,
         isBookmarked: Bool = false,
-        onBookmarkTap: (() -> Void)? = nil
+        isBookmarkDisabled: Bool = false,
+        onBookmarkTap: (() -> Void)? = nil,
+        isAddLookDisabled: Bool = false,
+        onAddLookTap: (() -> Void)? = nil
     ) {
         self.onInfoTap = onInfoTap
         self.isBookmarked = isBookmarked
+        self.isBookmarkDisabled = isBookmarkDisabled
         self.onBookmarkTap = onBookmarkTap
+        self.isAddLookDisabled = isAddLookDisabled
+        self.onAddLookTap = onAddLookTap
     }
     
     
@@ -35,10 +44,19 @@ struct OccasionOutputBottomBar: View {
             
             Spacer()
             
-            CircularIconButton(systemName: "plus") {
+            CircularIconButton(
+                systemName: "plus",
+                isEnabled: !isAddLookDisabled
+            ) {
+                onAddLookTap?()
             }
+            .accessibilityLabel("Generate More Looks")
             
-            CircularIconButton(systemName: isBookmarked ? "bookmark.fill" : "bookmark", isFilled: isBookmarked) {
+            CircularIconButton(
+                systemName: isBookmarked ? "bookmark.fill" : "bookmark",
+                isFilled: isBookmarked,
+                isEnabled: !isBookmarkDisabled
+            ) {
                 onBookmarkTap?()
             }
             .accessibilityLabel(isBookmarked ? "Remove from Library" : "Save to Library")

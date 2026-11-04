@@ -34,6 +34,9 @@ final class OccasionOutputViewModel {
     
     var isLoading: Bool = false
     
+    /// True when an additional look is being generated in the background.
+    var isGeneratingMore: Bool = false
+    
     var isShowingChatModal: Bool = false
     
     var isShowingMoreMenu: Bool = false
@@ -57,6 +60,25 @@ final class OccasionOutputViewModel {
     
     var isShowingErrorAlert: Bool = false
     
+    /// Total number of carousel items, including the loading card if generating more.
+    var totalCarouselCount: Int {
+        looks.count + (isGeneratingMore ? 1 : 0)
+    }
+
+    /// Index of the loading card when generating more looks.
+    var loadingLookIndex: Int? {
+        isGeneratingMore ? looks.count : nil
+    }
+
+    /// Returns true if the look at the given carousel index is currently loading.
+    func isLookLoading(at index: Int) -> Bool {
+        isGeneratingMore && index == looks.count
+    }
+
+    /// Returns true if the currently selected card is the loading placeholder.
+    var isCurrentLookLoading: Bool {
+        isLookLoading(at: selectedLookIndex)
+    }
     
     var currentLook: OutfitLook? {
         guard looks.indices.contains(selectedLookIndex) else { return nil }
@@ -165,7 +187,7 @@ final class OccasionOutputViewModel {
     
     
     func selectLook(at index: Int) {
-        guard looks.indices.contains(index) else { return }
+        guard index >= 0 && index < totalCarouselCount else { return }
         withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
             selectedLookIndex = index
         }
@@ -177,7 +199,7 @@ final class OccasionOutputViewModel {
     }
     
     func goToNextLook() {
-        guard selectedLookIndex < looks.count - 1 else { return }
+        guard selectedLookIndex < totalCarouselCount - 1 else { return }
         selectLook(at: selectedLookIndex + 1)
     }
     
@@ -245,6 +267,52 @@ final class OccasionOutputViewModel {
                     self.errorMessage = errorMsg
                     self.isShowingErrorAlert = true
                     self.isLoading = false
+                }
+            }
+        }
+    }
+
+    /// Generates one additional look in the background, showing a loading ring in the carousel
+    /// while keeping the rest of the screen fully interactive.
+    func generateMoreLooks(profile: UserProfile? = nil) {
+        guard !isLoading && !isGeneratingMore else { return }
+        
+        isGeneratingMore = true
+        let newIndex = looks.count
+        
+        // Transition carousel directly to the new loading index
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+            selectedLookIndex = newIndex
+        }
+        
+        Task {
+            let activeProfile = profile ?? self.profile ?? UserProfile.mockSample
+            do {
+                let newLook = try await OutfitGenerationPipeline.shared.generateSingleLook(
+                    for: occasion,
+                    profile: activeProfile,
+                    lookIndex: newIndex,
+                    existingLooks: self.looks
+                )
+                
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    newLook.occasion = self.occasion
+                    if self.occasion.modelContext != nil {
+                        self.occasion.generatedLooks.append(newLook)
+                    }
+                    self.looks.append(newLook)
+                    self.isGeneratingMore = false
+                }
+            } catch {
+                let errorMsg = error.localizedDescription
+                print("\n❌ [OccasionOutputViewModel] Failed to generate more looks: \(errorMsg)\n")
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    self.isGeneratingMore = false
+                    if self.selectedLookIndex >= self.looks.count {
+                        self.selectedLookIndex = max(0, self.looks.count - 1)
+                    }
+                    self.errorMessage = errorMsg
+                    self.isShowingErrorAlert = true
                 }
             }
         }
