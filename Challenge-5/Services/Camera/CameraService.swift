@@ -76,8 +76,8 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                         self.session.addOutput(self.photoOutput)
 
                         if let photoConnection = self.photoOutput.connection(with: .video) {
-                            if photoConnection.isVideoRotationAngleSupported(90) {
-                                photoConnection.videoRotationAngle = 90
+                            if photoConnection.isVideoOrientationSupported {
+                                photoConnection.videoOrientation = .portrait
                             }
                             if photoConnection.isVideoMirroringSupported && targetPosition == .front {
                                 photoConnection.isVideoMirrored = true
@@ -95,8 +95,8 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                         self.session.addOutput(self.videoOutput)
 
                         if let connection = self.videoOutput.connection(with: .video) {
-                            if connection.isVideoRotationAngleSupported(90) {
-                                connection.videoRotationAngle = 90
+                            if connection.isVideoOrientationSupported {
+                                connection.videoOrientation = .portrait
                             }
                             if connection.isVideoMirroringSupported && targetPosition == .front {
                                 connection.isVideoMirrored = true
@@ -146,16 +146,16 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                     self.session.beginConfiguration()
                     try self.configureDeviceInput(position: newPosition)
                     if let photoConnection = self.photoOutput.connection(with: .video) {
-                        if photoConnection.isVideoRotationAngleSupported(90) {
-                            photoConnection.videoRotationAngle = 90
+                        if photoConnection.isVideoOrientationSupported {
+                            photoConnection.videoOrientation = .portrait
                         }
                         if photoConnection.isVideoMirroringSupported {
                             photoConnection.isVideoMirrored = (newPosition == .front)
                         }
                     }
                     if let connection = self.videoOutput.connection(with: .video) {
-                        if connection.isVideoRotationAngleSupported(90) {
-                            connection.videoRotationAngle = 90
+                        if connection.isVideoOrientationSupported {
+                            connection.videoOrientation = .portrait
                         }
                         if connection.isVideoMirroringSupported {
                             connection.isVideoMirrored = (newPosition == .front)
