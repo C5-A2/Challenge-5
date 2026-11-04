@@ -21,6 +21,7 @@ struct OccasionOutputView: View {
     @State private var isShowingMoreMenu: Bool = false
     @State private var isShowingEditSheet: Bool = false
     @State private var isShowingProfileSheet: Bool = false
+    @State private var isShowingUpcomingAlert: Bool = false
     
     
     var onDismiss: (() -> Void)? = nil
@@ -86,11 +87,6 @@ struct OccasionOutputView: View {
                     isBookmarkDisabled: viewModel.isCurrentLookLoading,
                     onBookmarkTap: {
                         viewModel.toggleBookmark()
-                    },
-                    isAddLookDisabled: viewModel.isGeneratingMore || viewModel.isLoading,
-                    onAddLookTap: {
-                        let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
-                        viewModel.generateMoreLooks(profile: activeProfile)
                     }
                 )
                 .offset(y: -24)
@@ -132,6 +128,11 @@ struct OccasionOutputView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(viewModel.bookmarkErrorMessage ?? "")
+        }
+        .alert("Upcoming Feature", isPresented: $isShowingUpcomingAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Occasion insights and additional styling options are coming soon.")
         }
         .sheet(isPresented: $isShowingDetailsSheet) {
             CollapsibleRationaleDrawer(viewModel: viewModel)
@@ -181,19 +182,37 @@ struct OccasionOutputView: View {
                 
                 Spacer()
                 
-                CircularIconButton(systemName: "ellipsis") {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        isShowingMoreMenu.toggle()
+                HStack(spacing: 8) {
+                    CircularIconButton(
+                        systemName: "plus.app",
+                        isEnabled: !viewModel.isGeneratingMore && !viewModel.isLoading
+                    ) {
+                        let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+                        viewModel.generateMoreLooks(profile: activeProfile)
                     }
+                    .accessibilityLabel("Generate More Looks")
+                    
+                    CircularIconButton(systemName: "info.bubble") {
+                        isShowingUpcomingAlert = true
+                    }
+                    .accessibilityLabel("Upcoming Features")
                 }
             }
             
-            Text(viewModel.occasion.title)
-                .font(AppTypography.sfProSemiboldExtended(size: 24))
-                .foregroundStyle(AppColors.espressoTitle)
-                .multilineTextAlignment(.center)
-                .lineLimit(1)
-                .padding(.top, 2)
+            VStack(spacing: 3) {
+                Text(viewModel.occasion.title)
+                    .font(AppTypography.sfProSemiboldExtended(size: 24))
+                    .foregroundStyle(AppColors.espressoTitle)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(1)
+                
+                Text("\(viewModel.occasion.dayText) \(viewModel.occasion.monthText.capitalized)")
+                    .font(AppTypography.sfProSemiboldExtended(size: 16))
+                    .foregroundStyle(AppColors.espressoTitle)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 2)
         }
     }
     

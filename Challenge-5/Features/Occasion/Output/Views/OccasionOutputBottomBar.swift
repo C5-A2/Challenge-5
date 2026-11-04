@@ -15,42 +15,29 @@ struct OccasionOutputBottomBar: View {
     var isBookmarked: Bool = false
     var isBookmarkDisabled: Bool = false
     var onBookmarkTap: (() -> Void)? = nil
-    var isAddLookDisabled: Bool = false
-    var onAddLookTap: (() -> Void)? = nil
     
     
     init(
         onInfoTap: (() -> Void)? = nil,
         isBookmarked: Bool = false,
         isBookmarkDisabled: Bool = false,
-        onBookmarkTap: (() -> Void)? = nil,
-        isAddLookDisabled: Bool = false,
-        onAddLookTap: (() -> Void)? = nil
+        onBookmarkTap: (() -> Void)? = nil
     ) {
         self.onInfoTap = onInfoTap
         self.isBookmarked = isBookmarked
         self.isBookmarkDisabled = isBookmarkDisabled
         self.onBookmarkTap = onBookmarkTap
-        self.isAddLookDisabled = isAddLookDisabled
-        self.onAddLookTap = onAddLookTap
     }
     
     
     var body: some View {
         HStack(spacing: 12) {
-            CircularIconButton(systemName: "info.bubble") {
+            CircularIconButton(systemName: "books.vertical") {
                 onInfoTap?()
             }
+            .accessibilityLabel("Look Details")
             
             Spacer()
-            
-            CircularIconButton(
-                systemName: "plus",
-                isEnabled: !isAddLookDisabled
-            ) {
-                onAddLookTap?()
-            }
-            .accessibilityLabel("Generate More Looks")
             
             CircularIconButton(
                 systemName: isBookmarked ? "bookmark.fill" : "bookmark",
