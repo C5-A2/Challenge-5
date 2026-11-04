@@ -9,7 +9,7 @@ import SwiftData
 import SwiftUI
 
 /// Test screen for the store flow with the dummy look (C5-75).
-/// Not part of the production navigation: it mimics the result stage with the look image and the
+/// Not part of the production navigation: it shows the look image and the Output's
 /// "On this outfit" row. Tap a garment to open its Google Lens results.
 struct StoreSandboxView: View {
 
@@ -17,6 +17,8 @@ struct StoreSandboxView: View {
 
     let looks: [OutfitLook]
     @State private var selectedGarment: GarmentItem?
+    /// Garment crops for the "On this outfit" cards, by garment ID.
+    @State private var cropImagesByGarmentID: [UUID: CGImage] = [:]
 
     // MARK: - Body
 
@@ -33,6 +35,7 @@ struct StoreSandboxView: View {
             }
             .background(AppColors.canvasBackground)
         }
+        .task { await loadCrops() }
         .sheet(item: $selectedGarment) { garment in
             WhereToBuySheet(garment: garment)
                 .presentationDetents([.large])
@@ -54,11 +57,25 @@ struct StoreSandboxView: View {
     private func lookSection(for look: OutfitLook) -> some View {
         VStack(alignment: .leading, spacing: AppDimensions.elementSpacing) {
             lookImage(for: look)
-            OutfitGarmentStrip(look: look, selectedGarmentID: selectedGarment?.id) { garment in
-                selectedGarment = garment
-            }
+            // Same "On this outfit" row as the Output.
+            OnThisOutfitSection(
+                garments: look.garments.sortedForOutfitDisplay(),
+                garmentCropImages: cropImagesByGarmentID,
+                onSelectGarment: { garment in selectedGarment = garment }
+            )
         }
     }
+
+    // MARK: - Actions
+
+    private func loadCrops() async {
+        for look in looks {
+            let crops = await GarmentCropProvider.shared.crops(for: look.garments)
+            cropImagesByGarmentID.merge(crops.mapValues(\.image)) { _, newImage in newImage }
+        }
+    }
+
+    // MARK: - Look Image
 
     @ViewBuilder
     private func lookImage(for look: OutfitLook) -> some View {

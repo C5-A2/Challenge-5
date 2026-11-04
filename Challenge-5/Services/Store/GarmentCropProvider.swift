@@ -8,7 +8,7 @@
 import CoreGraphics
 import Foundation
 
-/// Gives the crop for a garment of a look, shared by the "On this outfit" thumbnails
+/// Gives the crop for a garment of a look, shared by the "On this outfit" cards (Output)
 /// and the Where to Buy sheet, so each garment is cropped only once.
 @MainActor
 final class GarmentCropProvider {
@@ -44,6 +44,16 @@ final class GarmentCropProvider {
         let crop = try await cropper.makeGarmentCrop(for: request)
         cropCache.store(crop, forGarmentID: garment.id)
         return crop
+    }
+
+    /// Crops of several garments by garment ID. A garment that can't be cropped is left out,
+    /// so its card keeps the placeholder.
+    func crops(for garments: [GarmentItem]) async -> [UUID: GarmentCrop] {
+        var cropsByGarmentID: [UUID: GarmentCrop] = [:]
+        for garment in garments {
+            cropsByGarmentID[garment.id] = try? await crop(for: garment)
+        }
+        return cropsByGarmentID
     }
 
     // MARK: - Look Image
