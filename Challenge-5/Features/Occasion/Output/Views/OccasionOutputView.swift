@@ -69,6 +69,7 @@ struct OccasionOutputView: View {
                 
                 OnThisOutfitSection(
                     garments: viewModel.currentGarments,
+                    garmentCropImages: viewModel.garmentCropImages,
                     onSelectGarment: { garment in
                         if let onSelectGarment {
                             onSelectGarment(garment)
@@ -168,6 +169,10 @@ struct OccasionOutputView: View {
         .task {
             let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
             await viewModel.generateLooksIfNeeded(profile: activeProfile)
+        }
+        .task(id: viewModel.currentLook?.id) {
+            // Crop the garments of the look on screen for the "On this outfit" thumbnails.
+            await viewModel.loadCurrentGarmentCrops()
         }
     }
     

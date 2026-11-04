@@ -36,6 +36,32 @@ nonisolated enum StoreConstants {
         /// Bottoms are as wide as the legs plus this padding, so the hands stay out.
         static let lowerBodyHorizontalPaddingTorsoRatio: CGFloat = 0.15
 
+        // Finding where an outer piece ends (hem): going down from the hips, the first rows
+        // where most of the person's pixels look like the bottoms instead of the outer.
+        /// The outer's color is read from the sleeves: this far outside each shoulder (fraction of shoulder width)...
+        static let hemSleeveOffsetShoulderRatio: CGFloat = 0.1
+        /// ...from this far below the shoulders to...
+        static let hemSleeveStartTorsoRatio: CGFloat = 0.3
+        /// ...this far below the shoulders (fractions of the torso length).
+        static let hemSleeveEndTorsoRatio: CGFloat = 0.6
+        /// Half-width of each sampled column, as a fraction of the torso length.
+        static let hemSampleHalfWidthTorsoRatio: CGFloat = 0.03
+        /// Search for the hem down to this far below the hips (fraction of the torso length).
+        static let hemSearchDepthTorsoRatio: CGFloat = 1.3
+        /// A row is past the hem when fewer than this share of its pixels look like the outer.
+        static let hemMaximumOuterPixelShare: Double = 0.25
+        /// Outer and bottoms closer than this (RGB distance) can't be told apart, so the hem isn't searched.
+        static let hemMinimumColorDistance: Double = 25
+        /// That many rows in a row (fraction of the torso length) must pass, so a fold or shadow isn't a hem.
+        static let hemConsecutiveRowsTorsoRatio: CGFloat = 0.03
+        static let hemMinimumConsecutiveRows = 3
+        /// Pixels brighter than this in every channel are the white background.
+        static let backgroundMinimumChannelValue: Double = 235
+        /// Space kept below the hem in the outer crop.
+        static let hemPaddingTorsoRatio: CGFloat = 0.05
+        /// Under a long outer, bottoms start at its hem when at least this much leg is left (fraction of torso).
+        static let minimumVisibleBottomTorsoRatio: CGFloat = 0.6
+
         /// Width of the inner top strip (visible between an open outer layer), as a fraction of shoulder width.
         static let innerTopWidthShoulderRatio: CGFloat = 0.55
         /// Shoulder width guess when only one shoulder is found, as a fraction of the person width.
@@ -89,11 +115,5 @@ nonisolated enum StoreConstants {
     nonisolated enum Layout {
         static let lensStatusCropMaximumHeight: CGFloat = 160
         static let sandboxLookImageMaximumHeight: CGFloat = 220
-
-        // "On this outfit" garment thumbnails.
-        static let garmentThumbnailSize: CGFloat = 132
-        static let garmentThumbnailSelectedInset: CGFloat = 12
-        static let garmentThumbnailBackgroundOpacity: Double = 0.15
-        static let garmentThumbnailSelectedBackgroundOpacity: Double = 0.6
     }
 }
