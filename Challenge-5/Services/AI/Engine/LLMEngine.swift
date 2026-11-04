@@ -229,10 +229,12 @@ public actor LLMEngine {
     // MARK: - Inference Execution
     
     /// Generates raw text response for a given prompt using LLM instruct template.
+    /// - Parameter topP: Nucleus sampling share; creative looks use a slightly higher value.
     public func generate(
         prompt: String,
         maxTokens: Int = 512,
-        temperature: Float = 0.2
+        temperature: Float = 0.2,
+        topP: Float = 0.9
     ) async throws -> String {
         #if targetEnvironment(simulator)
         // Instant simulated response for Xcode Previews and Simulator without crashing
@@ -352,7 +354,7 @@ public actor LLMEngine {
             llama_sampler_chain_add(sampler, llama_sampler_init_greedy())
         } else {
             llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40))
-            llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9, 1))
+            llama_sampler_chain_add(sampler, llama_sampler_init_top_p(topP, 1))
             llama_sampler_chain_add(sampler, llama_sampler_init_temp(temperature))
             llama_sampler_chain_add(sampler, llama_sampler_init_dist(0xFFFFFFFF)) // LLAMA_DEFAULT_SEED
         }

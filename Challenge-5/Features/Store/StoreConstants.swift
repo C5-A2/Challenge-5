@@ -59,6 +59,11 @@ nonisolated enum StoreConstants {
         static let backgroundMinimumChannelValue: Double = 235
         /// Space kept below the hem in the outer crop.
         static let hemPaddingTorsoRatio: CGFloat = 0.05
+        /// A dress is cropped from the neck down to this far below the hips (fraction of the torso length),
+        /// about knee length; its real hem isn't searched.
+        static let dressExtensionBelowHipTorsoRatio: CGFloat = 1.3
+        /// Without a body pose, a dress is this share of the person's height, from the upper-body start.
+        static let fallbackDressHeightRatio: CGFloat = 0.6
         /// Under a long outer, bottoms start at its hem when at least this much leg is left (fraction of torso).
         static let minimumVisibleBottomTorsoRatio: CGFloat = 0.6
 

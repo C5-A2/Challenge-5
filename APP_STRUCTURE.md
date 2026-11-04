@@ -417,9 +417,15 @@ Challenge-5/
 │   │   └── SkinColorAnalyzer.swift                # Pixel sampling + undertone classification
 │   ├── AI/
 │   │   ├── Engine/
-│   │   │   └── LLaMAEngine.swift                  # llama.cpp on-device wrapper
+│   │   │   ├── LLMEngine.swift                    # llama.cpp on-device wrapper (Qwen 2.5 3B / Llama 3.2 1B)
+│   │   │   ├── LLMError.swift
+│   │   │   └── LLMResource.swift                  # Finds the GGUF model
+│   │   ├── Pipeline/
+│   │   │   ├── OutfitGenerationPipeline.swift     # One LLM call per look + JSON parsing
+│   │   │   └── ReferenceImageStyleAnalyzer.swift  # Reference photos → pieces, layering, palette colors
 │   │   └── Prompts/
-│   │       └── PromptTemplates.swift              # System prompt builder for 5-look generation
+│   │       ├── OutfitPromptBuilder.swift          # Per-look system / user prompts
+│   │       └── OutfitArchetype.swift              # 5 look directions + outfit structures (incl. dress)
 │   └── Storage/
 │       ├── SwiftDataStack.swift                   # ModelContainer + query helpers
 │       ├── SavedLookStorageService.swift          # SwiftData saved looks + mock for previews
@@ -1550,6 +1556,7 @@ nonisolated enum GarmentCategory: String, Codable, CaseIterable, Identifiable, S
     case outer = "Outer"
     case top = "Top"
     case bottom = "Bottom"
+    case dress = "Dress"        // one-piece (dress, jumpsuit) worn instead of a top + bottom
     
     var id: String { rawValue }
 }
