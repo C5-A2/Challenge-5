@@ -54,4 +54,44 @@ nonisolated enum GarmentCategory: String, Codable, CaseIterable, Identifiable, S
     case bottom = "Bottom"
 
     var id: String { rawValue }
+
+    /// Order of the "On this outfit" cards, left to right: inner top, outer, bottom.
+    static let outfitDisplayOrder: [GarmentCategory] = [.top, .outer, .bottom]
+
+    /// Position in `outfitDisplayOrder`, for sorting.
+    var outfitDisplayPosition: Int {
+        Self.outfitDisplayOrder.firstIndex(of: self) ?? Self.outfitDisplayOrder.count
+    }
+
+    /// Words in an AI category label (or garment name) that point to each category.
+    private static let generatedLabelKeywords: [(category: GarmentCategory, keywords: [String])] = [
+        (.outer, ["outer", "jacket", "coat", "blazer", "cardigan", "bomber", "parka", "trench"]),
+        (.bottom, ["bottom", "pants", "trousers", "jeans", "skirt", "shorts", "chinos", "culottes", "leggings"]),
+        (.top, ["top", "inner", "shirt", "blouse", "tee", "polo", "knit", "sweater", "tank", "camisole", "turtleneck"])
+    ]
+
+    /// Reads a category from the AI's label, which isn't always exactly "Outer" / "Top" / "Bottom"
+    /// ("Outerwear", "Inner", "Pants"). `nil` for pieces outside the three (shoes, accessories),
+    /// instead of treating them as a top, which made the crop and the label not match.
+    init?(generatedLabel: String) {
+        let label = generatedLabel.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let exactCategory = GarmentCategory.allCases.first(where: { $0.rawValue.lowercased() == label }) {
+            self = exactCategory
+            return
+        }
+        guard let match = Self.generatedLabelKeywords.first(where: { entry in
+            entry.keywords.contains { label.contains($0) }
+        }) else { return nil }
+        self = match.category
+    }
+}
+
+// MARK: - Outfit Display Order
+
+extension Array where Element == GarmentItem {
+    /// Left to right like the "On this outfit" cards: inner top, outer, bottom.
+    /// SwiftData doesn't keep relationship order, so garments are sorted before showing them.
+    func sortedForOutfitDisplay() -> [GarmentItem] {
+        sorted { $0.category.outfitDisplayPosition < $1.category.outfitDisplayPosition }
+    }
 }

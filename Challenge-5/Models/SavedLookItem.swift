@@ -83,7 +83,10 @@ public struct SavedLookItem: Identifiable, Hashable, Sendable {
         self.fitRationale = outfitLook.fitRationale
         self.lookImageData = outfitLook.lookImageData
         self.assetImageName = nil
-        self.garments = outfitLook.garments.map { SavedGarmentItem(from: $0) }
+        // Same order as the Output's "On this outfit": inner top, outer, bottom.
+        self.garments = outfitLook.garments
+            .sortedForOutfitDisplay()
+            .map { SavedGarmentItem(from: $0) }
         self.cardHeightRatio = cardHeightRatio
     }
     

@@ -43,6 +43,12 @@ final class OccasionOutputViewModel {
     /// Shown when saving or unsaving a look fails.
     var bookmarkErrorMessage: String?
     
+    /// Garment picked in "On this outfit"; opens the "Where to Buy" sheet (Google Lens) when set.
+    var garmentForPurchase: GarmentItem?
+    
+    /// Cropped garment images for the "On this outfit" thumbnails, by garment ID.
+    private(set) var garmentCropImages: [UUID: CGImage] = [:]
+    
     /// Injected storage (previews and tests). Without it, the occasion's SwiftData context is used.
     private let injectedSavedLookStorage: (any SavedLookStoring)?
     
@@ -82,8 +88,11 @@ final class OccasionOutputViewModel {
         }
     }
     
+    /// Garments of the current look, always left to right: inner top, outer, bottom.
+    /// SwiftData doesn't keep relationship order, so they're sorted by category here;
+    /// each card shows the name and the crop of the same garment, so they always match.
     var currentGarments: [GarmentItem] {
-        currentLook?.garments ?? []
+        (currentLook?.garments ?? []).sortedForOutfitDisplay()
     }
     
     
@@ -217,6 +226,34 @@ final class OccasionOutputViewModel {
         }
     }
     
+    /// Opens "Where to Buy" for a garment of the current look.
+    func selectGarmentForPurchase(_ garment: GarmentItem) {
+        if let currentLook {
+            prepareLookForCropping(currentLook)
+        }
+        garmentForPurchase = garment
+    }
+    
+    /// Crops every garment of the current look for the "On this outfit" thumbnails.
+    /// Uses the same crops (and cache) as the "Where to Buy" sheet.
+    func loadCurrentGarmentCrops() async {
+        guard let look = currentLook else { return }
+        prepareLookForCropping(look)
+        let crops = await GarmentCropProvider.shared.crops(for: look.garments)
+        garmentCropImages.merge(crops.mapValues(\.image)) { _, newImage in newImage }
+    }
+    
+    /// The store crops a garment from its look image, so it needs the garment linked to the look
+    /// and a look image. Generated looks have no image yet (image generation is deferred), so the
+    /// avatar image shown for that look is used as a placeholder.
+    private func prepareLookForCropping(_ look: OutfitLook) {
+        for garment in look.garments where garment.outfitLook == nil {
+            garment.outfitLook = look
+        }
+        guard look.lookImageData == nil else { return }
+        look.lookImageData = OccasionOutputViewModel.makePlaceholderLookImageData(for: look.lookIndex)
+    }
+    
     func toggleDetailsDrawer() {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             isDetailsDrawerExpanded.toggle()
@@ -269,25 +306,27 @@ extension OccasionOutputViewModel {
             fitRationale: "The fitted dark knit with a clean neckline narrows shoulder breadth, while the elongated silhouette and statement necklace draw visual focus toward the vertical centerline.",
             isBookmarked: false
         )
+        // Mock garments match what is worn in mock_result_1 (bomber, polo, skinny jeans),
+        // so the "Where to Buy" crops and titles describe the same item.
         let top1 = GarmentItem(
             category: .top,
-            name: "Ribbed Mockneck Top",
-            material: "Fine Merino Wool",
-            colorName: "Midnight Black",
+            name: "Polo Shirt",
+            material: "Knit Cotton",
+            colorName: "Black",
             hexColor: "#1A1A1A"
         )
         let pants1 = GarmentItem(
             category: .bottom,
-            name: "Tailored Cigarette Pants",
-            material: "Stretch Crepe",
-            colorName: "Jet Black",
-            hexColor: "#111111"
+            name: "Skinny Jeans",
+            material: "Stretch Denim",
+            colorName: "Burgundy",
+            hexColor: "#6B1F2A"
         )
         let shoes1 = GarmentItem(
             category: .outer,
-            name: "Pointed Ankle Boots",
-            material: "Polished Calfskin",
-            colorName: "Obsidian",
+            name: "Bomber Jacket",
+            material: "Faux Leather",
+            colorName: "Black",
             hexColor: "#0D0D0D"
         )
         look1.garments = [top1, pants1, shoes1]
@@ -297,26 +336,27 @@ extension OccasionOutputViewModel {
             fitRationale: "The warm terracotta long coat establishes a striking vertical column, balancing upper proportions with warm autumnal earth tones.",
             isBookmarked: false
         )
+        // Matches mock_result_2 (rust coat, mauve blazer, mustard trousers).
         let coat2 = GarmentItem(
             category: .outer,
-            name: "Tailored Duster Coat",
-            material: "Double-Faced Wool",
-            colorName: "Terracotta Ochre",
-            hexColor: "#C36B3D"
+            name: "Long Wool Coat",
+            material: "Wool Blend",
+            colorName: "Rust",
+            hexColor: "#B5582E"
         )
         let inner2 = GarmentItem(
             category: .top,
-            name: "Cashmere Crewneck",
-            material: "Cashmere Blend",
-            colorName: "Warm Umber",
-            hexColor: "#4A3222"
+            name: "Single-Breasted Blazer",
+            material: "Crepe",
+            colorName: "Dusty Mauve",
+            hexColor: "#8E6A78"
         )
         let pants2 = GarmentItem(
             category: .bottom,
-            name: "Wide Pleated Trousers",
-            material: "Fluid Gabardine",
-            colorName: "Rich Caramel",
-            hexColor: "#82502E"
+            name: "Slim Trousers",
+            material: "Cotton Twill",
+            colorName: "Mustard",
+            hexColor: "#B88A2E"
         )
         look2.garments = [coat2, inner2, pants2]
         
@@ -325,26 +365,27 @@ extension OccasionOutputViewModel {
             fitRationale: "Soft dusty rose tailoring softens angular shoulder lines, paired with draped fabrics that add gentle feminine fluidity for wedding guest elegance.",
             isBookmarked: false
         )
+        // Matches mock_result_3 (mauve coat, rust cropped blazer, olive trousers).
         let coat3 = GarmentItem(
             category: .outer,
-            name: "Fluid Cocoon Coat",
-            material: "Virgin Wool Blend",
+            name: "Long Coat",
+            material: "Wool Blend",
             colorName: "Dusty Mauve",
-            hexColor: "#8E5D67"
+            hexColor: "#9C7381"
         )
         let top3 = GarmentItem(
             category: .top,
-            name: "Draped Silk Blouse",
-            material: "Mulberry Silk",
-            colorName: "Pale Blush",
-            hexColor: "#E8D7D8"
+            name: "Cropped Blazer",
+            material: "Wool Crepe",
+            colorName: "Rust",
+            hexColor: "#B5582E"
         )
         let pants3 = GarmentItem(
             category: .bottom,
-            name: "Straight Leg Chinos",
-            material: "Fine Twill",
-            colorName: "Deep Plum",
-            hexColor: "#5E454B"
+            name: "Pleated Trousers",
+            material: "Cotton Twill",
+            colorName: "Olive",
+            hexColor: "#6B6A3A"
         )
         look3.garments = [coat3, top3, pants3]
         
@@ -368,13 +409,33 @@ extension OccasionOutputViewModel {
         // Dummy look images (same assets as the avatar stage), so saved mock looks
         // show in the Library and in "From Library" references. Replace with generated images.
         for look in mockLooks {
-            look.lookImageData = UIImage(named: "mock_result_\(look.lookIndex + 1)")?
-                .jpegData(compressionQuality: mockLookImageCompressionQuality)
+            look.lookImageData = makePlaceholderLookImageData(for: look.lookIndex)
         }
         return mockLooks
     }
     
     private static let mockLookImageCompressionQuality: CGFloat = 0.8
+    
+    /// The avatar image for a look (`mock_result_<n>`, same as `AvatarStageView`) as JPEG on white.
+    /// A dummy until looks get generated images.
+    static func makePlaceholderLookImageData(for lookIndex: Int) -> Data? {
+        UIImage(named: "mock_result_\(lookIndex + 1)")
+            .map(makeImageOnWhite)?
+            .jpegData(compressionQuality: mockLookImageCompressionQuality)
+    }
+    
+    /// The mock PNGs have a transparent background, which turns black in a JPEG.
+    /// Draws them on white so a dark garment doesn't blend into the background.
+    private static func makeImageOnWhite(_ image: UIImage) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.preferred()
+        format.opaque = true
+        format.scale = image.scale
+        return UIGraphicsImageRenderer(size: image.size, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: image.size))
+            image.draw(at: .zero)
+        }
+    }
     
     /// New garment objects with the same details, for reusing a mock outfit in another look.
     private static func makeGarmentCopies(of garments: [GarmentItem]) -> [GarmentItem] {

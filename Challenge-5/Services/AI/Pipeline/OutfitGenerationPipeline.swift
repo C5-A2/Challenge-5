@@ -361,17 +361,20 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                         let candidate = String(text[start...idx])
                         if let data = candidate.data(using: .utf8),
                            let dto = try? JSONDecoder().decode(LLMOutfitGenerationResponse.GarmentDTO.self, from: data) {
-                            let cat = GarmentCategory(rawValue: dto.category.capitalized) ?? .top
-                            let color = resolveSeasonalColor(rawName: dto.colorName, rawHex: dto.hexColor, palette: palette)
-                            let garment = GarmentItem(
-                                category: cat,
-                                name: dto.name,
-                                material: dto.material,
-                                colorName: color.name,
-                                hexColor: color.hex,
-                                rationale: dto.rationale
-                            )
-                            garments.append(garment)
+                            // Pieces outside Outer / Top / Bottom (shoes, accessories) are skipped.
+                            if let cat = GarmentCategory(generatedLabel: dto.category)
+                                ?? GarmentCategory(generatedLabel: dto.name) {
+                                let color = resolveSeasonalColor(rawName: dto.colorName, rawHex: dto.hexColor, palette: palette)
+                                let garment = GarmentItem(
+                                    category: cat,
+                                    name: dto.name,
+                                    material: dto.material,
+                                    colorName: color.name,
+                                    hexColor: color.hex,
+                                    rationale: dto.rationale
+                                )
+                                garments.append(garment)
+                            }
                         }
                         objStart = nil
                     } else if depth <= 1 {
@@ -390,7 +393,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             isBookmarked: false,
             lookImageData: nil
         )
-        let trimmedGarments = Array(garments.prefix(3))
+        let trimmedGarments = makeOutfitGarments(from: garments)
         for g in trimmedGarments {
             g.outfitLook = look
         }
@@ -399,6 +402,15 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
     }
 
     // MARK: - JSON Parsing Helpers
+
+    /// Keeps the first garment of each category (one inner top, one outer, one bottom)
+    /// and orders them like the Output cards: inner top, outer, bottom.
+    private func makeOutfitGarments(from garments: [GarmentItem]) -> [GarmentItem] {
+        var seenCategories: Set<GarmentCategory> = []
+        return garments
+            .filter { seenCategories.insert($0.category).inserted }
+            .sortedForOutfitDisplay()
+    }
 
     private func decodeLooks(from jsonString: String, colorSeason: ColorSeason? = nil) throws -> [OutfitLook] {
         guard let data = jsonString.data(using: .utf8) else {
@@ -427,10 +439,10 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 lookImageData: nil
             )
             var garments: [GarmentItem] = []
-            // Limit to at most 3 garments per look (Outer, Top, Bottom)
-            let trimmedGarments = Array(lookDTO.garments.prefix(3))
-            for gDTO in trimmedGarments {
-                let cat = GarmentCategory(rawValue: gDTO.category.capitalized) ?? .top
+            // Pieces outside Outer / Top / Bottom (shoes, accessories) are skipped instead of becoming a top.
+            for gDTO in lookDTO.garments {
+                guard let cat = GarmentCategory(generatedLabel: gDTO.category)
+                        ?? GarmentCategory(generatedLabel: gDTO.name) else { continue }
 
                 // Harmonize / snap color to the closest valid seasonal swatch if palette is available
                 let resolvedColor = resolveSeasonalColor(
@@ -447,10 +459,14 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                     hexColor: resolvedColor.hex,
                     rationale: gDTO.rationale
                 )
-                garment.outfitLook = look
                 garments.append(garment)
             }
-            look.garments = garments
+            // At most one garment per category, ordered inner top, outer, bottom.
+            let outfitGarments = makeOutfitGarments(from: garments)
+            for garment in outfitGarments {
+                garment.outfitLook = look
+            }
+            look.garments = outfitGarments
             looks.append(look)
         }
         return looks
