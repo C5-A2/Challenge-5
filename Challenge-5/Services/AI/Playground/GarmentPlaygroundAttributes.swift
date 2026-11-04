@@ -109,24 +109,58 @@ import ImagePlayground
 
 extension OutfitPlaygroundPackage {
     
+    private static let conflictingColorWords: Set<String> = [
+        "yellow", "red", "blue", "green", "black", "white", "pink", "brown",
+        "purple", "orange", "grey", "gray", "gold", "silver", "beige", "navy",
+        "violet", "indigo", "cyan", "magenta", "maroon", "olive", "teal", "tan"
+    ]
+    
+    private static func sanitizeGarmentName(_ name: String, intendedColor: String) -> String {
+        let tokens = name.components(separatedBy: .whitespaces)
+        let filtered = tokens.filter { token in
+            let clean = token.lowercased().trimmingCharacters(in: .punctuationCharacters)
+            if conflictingColorWords.contains(clean) && !intendedColor.localizedCaseInsensitiveContains(clean) {
+                return false
+            }
+            return true
+        }
+        let result = filtered.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        return result.isEmpty ? name : result
+    }
+
     /// Converts mapped outfit attributes into native `ImagePlaygroundConcept` tokens.
     /// Directly compatible with `.imagePlaygroundSheet(concepts:sourceImage:)`.
     @available(iOS 18.2, macOS 15.2, *)
     var playgroundConcepts: [ImagePlaygroundConcept] {
-        var concepts: [ImagePlaygroundConcept] = garments.map { garment in
-            .extracted(
-                from: "Wearing \(garment.category.rawValue.lowercased()): \(garment.colorName) (\(garment.colorHex)) \(garment.fabricMaterial) \(garment.name) with \(garment.fitSilhouette)",
-                title: garment.category.rawValue
-            )
+        var garmentPhrases: [String] = []
+        
+        for garment in garments {
+            let color = garment.colorName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let material = garment.fabricMaterial.trimmingCharacters(in: .whitespacesAndNewlines)
+            let rawName = garment.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = Self.sanitizeGarmentName(rawName, intendedColor: color)
+            
+            var parts: [String] = []
+            if !color.isEmpty && color.lowercased() != "neutral" {
+                parts.append(color)
+            }
+            if !material.isEmpty && !name.localizedCaseInsensitiveContains(material) {
+                parts.append(material)
+            }
+            parts.append(name)
+            
+            let phrase = parts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !phrase.isEmpty {
+                garmentPhrases.append(phrase)
+            }
         }
         
-        // Add human body persona & studio lighting guidance
-        concepts.append(.text("full-body model with \(bodyTypeName) silhouette and \(torsoBalanceName) body proportion, soft flat even studio lighting, natural original skin tone, clean neutral background with subtle floor shadow"))
+        if garmentPhrases.isEmpty {
+            return [.text("Wearing a tailored stylish outfit")]
+        }
         
-        // Instruct Image Playground to map garments onto the person in the source image (mock_result_1)
-        concepts.append(.text("Dress the person in the source image in this complete coordinated outfit, preserving the model's exact standing pose, face, skin tone, and body proportions"))
-        
-        return concepts
+        let outfitList = garmentPhrases.joined(separator: ", ")
+        return [.text("Wearing \(outfitList)")]
     }
 }
 #endif

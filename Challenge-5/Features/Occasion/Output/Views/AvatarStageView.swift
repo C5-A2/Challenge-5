@@ -85,27 +85,6 @@ struct AvatarStageView: View {
                     playgroundPlaceholderView(for: index, isCenter: isCenter, width: width, height: height)
                         .frame(width: width, height: height)
                 }
-                
-                if isCenter && isProcessingPlayground {
-                    ZStack {
-                        Capsule()
-                            .fill(Color.black.opacity(0.68))
-                            .background(.ultraThinMaterial)
-                        
-                        HStack(spacing: 8) {
-                            ProgressView()
-                                .tint(.white)
-                                .scaleEffect(0.9)
-                            Text("Generating with AI...")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                    }
-                    .clipShape(Capsule())
-                    .shadow(color: .black.opacity(0.20), radius: 8, y: 3)
-                }
             }
             .frame(width: width, height: height)
             .offset(x: xOffset)

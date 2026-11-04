@@ -452,21 +452,26 @@ extension View {
         isPresented: Binding<Bool>,
         package: OutfitPlaygroundPackage?,
         sourceImage: Image? = nil,
-        onGenerated: @escaping (CGImage) -> Void
+        onGenerated: @escaping (CGImage) -> Void,
+        onCancellation: (() -> Void)? = nil
     ) -> some View {
         #if canImport(ImagePlayground)
         if #available(iOS 18.2, macOS 15.2, *) {
             self.imagePlaygroundSheet(
                 isPresented: isPresented,
                 concepts: package?.playgroundConcepts ?? [],
-                sourceImage: sourceImage
-            ) { url in
-                if let data = try? Data(contentsOf: url),
-                   let ciImage = CIImage(data: data),
-                   let cgImage = CIContext().createCGImage(ciImage, from: ciImage.extent) {
-                    onGenerated(cgImage)
+                sourceImage: sourceImage,
+                onCompletion: { url in
+                    if let data = try? Data(contentsOf: url),
+                       let ciImage = CIImage(data: data),
+                       let cgImage = CIContext().createCGImage(ciImage, from: ciImage.extent) {
+                        onGenerated(cgImage)
+                    }
+                },
+                onCancellation: {
+                    onCancellation?()
                 }
-            }
+            )
         } else {
             self
         }
