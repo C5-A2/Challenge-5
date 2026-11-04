@@ -303,7 +303,8 @@ struct OutfitPromptBuilder: Sendable {
         let user = buildSingleLookUserPrompt(
             occasion: occasion,
             profile: profile,
-            lookIndex: lookIndex
+            lookIndex: lookIndex,
+            previousLooks: previousLooks
         )
 
         // Qwen 2.5 uses ChatML tokens (<|im_start|> ... <|im_end|>)
@@ -418,10 +419,16 @@ struct OutfitPromptBuilder: Sendable {
         // Previously generated looks
         if !previousLooks.isEmpty {
             let prev = previousLooks.enumerated().map { i, s in
-                let g = s.garments.map { "\($0.category): \($0.name) (\($0.colorName))" }.joined(separator: ", ")
-                return "Look \(i): \(g)"
+                let g = s.garments.map { "[\($0.category)] \($0.name) (\($0.colorName), \($0.material))" }.joined(separator: " + ")
+                return "- Look \(i + 1): \(g)"
             }.joined(separator: "\n")
-            rules.append("PREVIOUS LOOKS (aim for variety — different silhouettes/colors where possible):\n\(prev)")
+            rules.append("""
+            PAST RECOMMENDATIONS ALREADY GIVEN FOR THIS OCCASION:
+            \(prev)
+
+            CRITICAL REQUIREMENT: NO SIMILAR OUTPUT ALLOWED
+            You are strictly forbidden from generating any outfit that is similar or identical to any of the \(previousLooks.count) previous looks above. Even if the JSON order (urutan), category order, or phrasing is changed, the actual garments, silhouettes, materials, and colors must be completely different. Propose a brand-new distinct outfit.
+            """)
         }
 
         let rulesBlock = rules.isEmpty ? "" : rules.joined(separator: "\n\n") + "\n\n"
@@ -493,9 +500,10 @@ struct OutfitPromptBuilder: Sendable {
     public func buildSingleLookUserPrompt(
         occasion: OccasionItem,
         profile: UserProfile?,
-        lookIndex: Int
+        lookIndex: Int,
+        previousLooks: [GeneratedLookSummary] = []
     ) -> String {
-        var lines: [String] = ["Generate look \(lookIndex) for: \(occasion.title)"]
+        var lines: [String] = ["Generate look \(lookIndex + 1) for: \(occasion.title)"]
 
         let cleanDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         if !cleanDresscode.isEmpty { lines.append("Dresscode: \(cleanDresscode)") }
@@ -517,6 +525,22 @@ struct OutfitPromptBuilder: Sendable {
         if let body = profile?.bodyType   { lines.append("Body type: \(body.displayName)") }
         if let torso = profile?.torsoBalance { lines.append("Torso: \(torso.rawValue)") }
         if let season = profile?.colorSeason  { lines.append("Color season: \(season.rawValue)") }
+
+        if !previousLooks.isEmpty {
+            let prevList = previousLooks.enumerated().map { i, s in
+                let items = s.garments.map { "\($0.name) in \($0.colorName)" }.joined(separator: ", ")
+                return "  • Look \(i + 1): \(items)"
+            }.joined(separator: "\n")
+
+            lines.append("""
+
+            PAST RECOMMENDATIONS ALREADY GIVEN (DO NOT REUSE):
+            \(prevList)
+
+            STRICT INSTRUCTION - NO SIMILAR OUTPUT ALLOWED:
+            You are strictly forbidden from generating similar output. Even if the JSON order (urutan) or category arrangement is different, the actual garments, silhouettes, and colors must be completely different from all previous looks listed above. Generate a completely fresh and distinct outfit for look \(lookIndex + 1).
+            """)
+        }
 
         return lines.joined(separator: "\n")
     }
