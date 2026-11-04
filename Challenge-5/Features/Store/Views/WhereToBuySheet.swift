@@ -10,7 +10,7 @@ import SwiftUI
 
 /// Bottom sheet that shows Google Lens results for one cropped garment of a look (C5-112).
 ///
-/// The garment is picked from the "On this outfit" row (`OutfitGarmentStrip`). Presented when
+/// The garment is picked from the Output's "On this outfit" row (`OnThisOutfitSection`). Presented when
 /// `appState.isShowingWhereToBuySheet` is true, for `appState.selectedGarmentForPurchase`
 /// (integration contract 8.2).
 struct WhereToBuySheet: View {

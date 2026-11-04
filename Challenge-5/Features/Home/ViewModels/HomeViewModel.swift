@@ -18,6 +18,8 @@ final class HomeViewModel {
     var isShowingNewOccasionSheet: Bool = false
     var isShowingHistorySheet: Bool = false
     var isShowingProfileSheet: Bool = false
+    var isShowingProfilePromptModal: Bool = false
+    var isShowingProfilingFlow: Bool = false
     var selectedOccasion: OccasionItem? = nil
     var editingOccasion: OccasionItem? = nil
     var errorMessage: String? = nil

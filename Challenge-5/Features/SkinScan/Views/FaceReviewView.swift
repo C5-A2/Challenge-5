@@ -242,7 +242,7 @@ struct FaceReviewView: View {
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(viewModel.canProceedToResult ? AppColors.primaryBlue : AppColors.primaryBlue.opacity(0.4))
+                        .background(viewModel.canProceedToResult ? AppColors.primaryBlack : AppColors.primaryBlack.opacity(0.35))
                         .clipShape(Capsule())
                 }
                 .disabled(!viewModel.canProceedToResult || viewModel.isAnalyzing)

@@ -400,8 +400,8 @@ private final class FaceCameraPreviewUIView: UIView {
 
     func updateOrientationAndMirroring() {
         if let connection = previewLayer.connection {
-            if connection.isVideoRotationAngleSupported(90) {
-                connection.videoRotationAngle = 90
+            if connection.isVideoOrientationSupported {
+                connection.videoOrientation = .portrait
             }
             if connection.isVideoMirroringSupported {
                 connection.automaticallyAdjustsVideoMirroring = false

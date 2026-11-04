@@ -80,6 +80,63 @@ final class UserProfile {
     }
 }
 
+// MARK: - Query & Storage Helpers (C5-97)
+
+extension UserProfile {
+    /// Standard fetch descriptor for the primary user profile.
+    static var primaryDescriptor: FetchDescriptor<UserProfile> {
+        var descriptor = FetchDescriptor<UserProfile>(
+            sortBy: [SortDescriptor(\UserProfile.createdAt, order: .forward)]
+        )
+        descriptor.fetchLimit = 1
+        return descriptor
+    }
+
+    /// Fetches the existing primary profile from the ModelContext, or creates and inserts a new one.
+    @MainActor
+    static func fetchOrCreate(in context: ModelContext) throws -> UserProfile {
+        if let existing = try context.fetch(primaryDescriptor).first {
+            return existing
+        }
+        let newProfile = UserProfile()
+        context.insert(newProfile)
+        try context.save()
+        return newProfile
+    }
+
+    /// Updates body measurements, classified body shape, torso balance, and scan photos.
+    func updateBodyScan(
+        measurements: BodyMeasurements,
+        bodyType: BodyType?,
+        torsoBalance: TorsoBalance?,
+        frontPhotoData: Data? = nil,
+        sidePhotoData: Data? = nil
+    ) {
+        self.measurements = measurements
+        self.bodyType = bodyType
+        self.torsoBalance = torsoBalance
+        if let front = frontPhotoData {
+            self.frontBodyPhotoData = front
+        }
+        if let side = sidePhotoData {
+            self.sideBodyPhotoData = side
+        }
+        self.updatedAt = Date()
+    }
+
+    /// Updates skin analysis color season and captured face photo.
+    func updateSkinScan(
+        colorSeason: ColorSeason,
+        facePhotoData: Data? = nil
+    ) {
+        self.colorSeason = colorSeason
+        if let face = facePhotoData {
+            self.facePhotoData = face
+        }
+        self.updatedAt = Date()
+    }
+}
+
 // MARK: - Sample Preview Data
 
 extension UserProfile {

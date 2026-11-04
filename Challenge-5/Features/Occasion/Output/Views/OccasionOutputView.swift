@@ -71,8 +71,13 @@ struct OccasionOutputView: View {
                 OnThisOutfitSection(
                     garments: viewModel.currentGarments,
                     isLoading: viewModel.isCurrentLookLoading,
+                    garmentCropImages: viewModel.garmentCropImages,
                     onSelectGarment: { garment in
-                        onSelectGarment?(garment)
+                        if let onSelectGarment {
+                            onSelectGarment(garment)
+                        } else {
+                            viewModel.selectGarmentForPurchase(garment)
+                        }
                     }
                 )
                 .offset(y: -36)
@@ -133,6 +138,11 @@ struct OccasionOutputView: View {
         } message: {
             Text(viewModel.bookmarkErrorMessage ?? "")
         }
+        .sheet(item: $viewModel.garmentForPurchase) { garment in
+            WhereToBuySheet(garment: garment)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $isShowingDetailsSheet) {
             CollapsibleRationaleDrawer(viewModel: viewModel)
                 .presentationDetents([.fraction(0.65), .large])
@@ -157,7 +167,7 @@ struct OccasionOutputView: View {
             )
         }
         .sheet(isPresented: $isShowingProfileSheet) {
-            TemporaryProfileFormSheet()
+            ProfileHubView()
         }
         .alert("AI Generation Error", isPresented: $viewModel.isShowingErrorAlert, presenting: viewModel.errorMessage) { _ in
             Button("OK", role: .cancel) {}
@@ -167,6 +177,10 @@ struct OccasionOutputView: View {
         .task {
             let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
             await viewModel.generateLooksIfNeeded(profile: activeProfile)
+        }
+        .task(id: viewModel.currentLook?.id) {
+            // Crop the garments of the look on screen for the "On this outfit" thumbnails.
+            await viewModel.loadCurrentGarmentCrops()
         }
     }
     
