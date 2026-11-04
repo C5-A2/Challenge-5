@@ -63,7 +63,8 @@ final class GarmentCropProvider {
         if let decodedImage = lookImagesByLookID[look.id] {
             return decodedImage
         }
-        guard let data = look.lookImageData else { throw StoreError.lookImageUnavailable }
+        let data = look.lookImageData ?? OccasionOutputViewModel.makePlaceholderLookImageData(for: look.lookIndex)
+        guard let data else { throw StoreError.lookImageUnavailable }
         guard let decodedImage = LookImageDecoder.makeImage(from: data) else { throw StoreError.lookImageDecodingFailed }
         lookImagesByLookID[look.id] = decodedImage
         return decodedImage
