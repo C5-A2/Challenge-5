@@ -63,12 +63,12 @@ public struct OccasionDetail: Identifiable, Codable, Sendable, Hashable {
     /// Checks if the occasion has valid parameters:
     /// - `title` must be non-empty (required).
     /// - `date` cannot be in the past (`!isPast`).
-    /// - `visions` count is between 0 and 3 (`min 0, max 3`).
+    /// - `visions` count is between 1 and 3 (`min 1, max 3`).
     /// - `dresscode` is optional.
     public var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !isPast &&
-        visions.count <= 3
+        (1...3).contains(visions.count)
     }
 
     /// Whether this occasion date has already passed (prior to today; today is not past).

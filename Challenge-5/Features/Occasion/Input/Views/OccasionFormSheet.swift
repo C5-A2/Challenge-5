@@ -102,14 +102,14 @@ public struct OccasionFormSheet: View {
                             .tint(AppColors.primaryBlack)
                             .pillInputContainer()
                             
-                            // 3. Dresscode Section (Optional)
+                            // 3. "I Want to Look More" Selector Row (Opens picker modal, shows chosen under)
+                            visionSelectorSection
+                            
+                            // 4. Dresscode Section (Optional)
                             dresscodeSection
                             
-                            // 4. Reference Photos Section (Optional, Max 3)
+                            // 5. Reference Photos Section (Optional, Max 3)
                             ReferenceImagesView(viewModel: viewModel)
-                            
-                            // 5. "I want to look more" Style Vision Chips Section (Min 0, Max 3)
-                            VisionChipsGridView(viewModel: viewModel)
                         }
                         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
                         .padding(.bottom, 32)
@@ -126,10 +126,67 @@ public struct OccasionFormSheet: View {
                     onDismiss?()
                 }
             )
+            .sheet(isPresented: $viewModel.isShowingVisionPicker) {
+                StyleVisionPickerSheet(viewModel: viewModel)
+            }
         }
     }
     
     // MARK: - Subviews
+    
+    /// "I Want to Look More" picker button showing the chosen style visions underneath.
+    private var visionSelectorSection: some View {
+        Button {
+            viewModel.isShowingVisionPicker = true
+        } label: {
+            VStack(spacing: 0) {
+                // Top Row: Title and Chevron
+                HStack {
+                    Text("I Want to Look More")
+                        .font(AppTypography.bodyRegular)
+                        .foregroundStyle(AppColors.espressoTitle)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.inputPlaceholder)
+                }
+                .padding(.horizontal, 18)
+                .frame(height: AppDimensions.inputFieldHeight)
+                
+                // Divider
+                Divider()
+                    .overlay(AppColors.inputBorder)
+                    .padding(.horizontal, 18)
+                
+                // Bottom Row: Chosen Style Visions or Placeholder
+                HStack {
+                    Text(viewModel.selectedVisionsSummaryText)
+                        .font(AppTypography.caption)
+                        .foregroundStyle(
+                            viewModel.selectedVisions.isEmpty
+                                ? AppColors.inputPlaceholder
+                                : AppColors.mutedCaption
+                        )
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 18)
+                .frame(height: 38)
+            }
+            .background(AppColors.inputBackground)
+            .clipShape(RoundedRectangle(cornerRadius: AppDimensions.inputCornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppDimensions.inputCornerRadius)
+                    .strokeBorder(AppColors.inputBorder, lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.02), radius: 3, x: 0, y: 1)
+        }
+        .buttonStyle(.plain)
+    }
     
     /// Section displaying the "Dresscode" header and its optional pill input field.
     private var dresscodeSection: some View {
@@ -147,7 +204,7 @@ public struct OccasionFormSheet: View {
             .padding(.top, 4)
             
             PillTextField(
-                placeholder: "e.g. Cocktail, Black Tie (Optional)",
+                placeholder: "Dresscode",
                 text: $viewModel.dresscode
             )
         }

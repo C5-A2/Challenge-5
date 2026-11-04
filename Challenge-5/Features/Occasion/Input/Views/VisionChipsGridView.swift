@@ -22,15 +22,11 @@ public struct VisionChipsGridView: View {
     // MARK: - Body
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Header with Selection Counter & Optional Indicator (Min 0, Max 3)
+            // Header with Selection Counter (Min 1, Max 3)
             HStack(alignment: .firstTextBaseline) {
                 Text("I want to look more")
                     .font(AppTypography.cardHeadline)
                     .foregroundStyle(AppColors.espressoTitle)
-                
-                Text("(Optional)")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.bodyText.opacity(0.6))
                 
                 Spacer()
                 

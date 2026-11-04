@@ -24,6 +24,7 @@ struct OccasionsHistoryView: View {
     
     @AppStorage("hasAutoSeededDummyHistory") private var hasAutoSeededDummyHistory: Bool = false
     @State private var selectedOccasionForEdit: OccasionItem? = nil
+    @State private var occasionToDelete: OccasionItem? = nil
     
     // MARK: - Computed Properties
     
@@ -75,6 +76,28 @@ struct OccasionsHistoryView: View {
                     }
                 )
             }
+            .alert(
+                "Delete Occasion?",
+                isPresented: Binding(
+                    get: { occasionToDelete != nil },
+                    set: { if !$0 { occasionToDelete = nil } }
+                ),
+                presenting: occasionToDelete
+            ) { occasion in
+                Button("Cancel", role: .cancel) {
+                    occasionToDelete = nil
+                }
+                Button("Delete", role: .destructive) {
+                    deleteOccasion(occasion)
+                    occasionToDelete = nil
+                }
+            } message: { occasion in
+                if occasion.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("Are you sure you want to delete this occasion? This action cannot be undone.")
+                } else {
+                    Text("Are you sure you want to delete \"\(occasion.title)\"? This action cannot be undone.")
+                }
+            }
         }
     }
     
@@ -88,21 +111,12 @@ struct OccasionsHistoryView: View {
                     OccasionCardView(occasion: occasion) {
                         selectedOccasionForEdit = occasion
                     }
-                    .contextMenu {
-                        Button {
-                            selectedOccasionForEdit = occasion
-                        } label: {
-                            Label("View Details", systemImage: "pencil")
-                        }
-                        
-                        Button(role: .destructive) {
-                            deleteOccasion(occasion)
-                        } label: {
-                            Label("Delete From History", systemImage: "trash")
-                        }
+                    .swipeToDelete {
+                        occasionToDelete = occasion
                     }
                 }
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: pastOccasions)
             .padding(.horizontal, AppDimensions.screenHorizontalPadding)
             .padding(.top, 8)
             .padding(.bottom, 32)
