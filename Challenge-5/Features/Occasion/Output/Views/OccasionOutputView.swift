@@ -7,20 +7,26 @@
 
 import SwiftUI
 import SwiftData
+#if canImport(ImagePlayground)
+import ImagePlayground
+#endif
 
 @MainActor
 struct OccasionOutputView: View {
-    
     
     @Environment(\.dismiss) private var dismiss
     @Query private var userProfiles: [UserProfile]
     @State var viewModel: OccasionOutputViewModel
     
-    
     @State private var isShowingDetailsSheet: Bool = false
     @State private var isShowingMoreMenu: Bool = false
     @State private var isShowingEditSheet: Bool = false
     @State private var isShowingProfileSheet: Bool = false
+    
+    // Image Playground Integration (C5-46)
+    @State private var isShowingPlayground: Bool = false
+    @State private var playgroundPackage: OutfitPlaygroundPackage? = nil
+    @State private var isProcessingPlayground: Bool = false
     
     
     var onDismiss: (() -> Void)? = nil
@@ -64,7 +70,13 @@ struct OccasionOutputView: View {
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
                     .padding(.top, 16)
                 
-                AvatarStageView(viewModel: viewModel)
+                AvatarStageView(
+                    viewModel: viewModel,
+                    onPlaygroundTap: {
+                        triggerPlaygroundGeneration()
+                    },
+                    isProcessingPlayground: isProcessingPlayground
+                )
                     .frame(maxHeight: .infinity)
                 
                 OnThisOutfitSection(
@@ -88,6 +100,9 @@ struct OccasionOutputView: View {
                     isBookmarked: viewModel.isCurrentLookBookmarked,
                     onBookmarkTap: {
                         viewModel.toggleBookmark()
+                    },
+                    onPlaygroundTap: {
+                        triggerPlaygroundGeneration()
                     }
                 )
                 .offset(y: -24)
@@ -112,13 +127,13 @@ struct OccasionOutputView: View {
                     .zIndex(10)
             }
 
-            if viewModel.isLoading {
+            if viewModel.isLoading || isProcessingPlayground {
                 generationLoadingOverlay
                     .transition(.opacity)
                     .zIndex(20)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: viewModel.isLoading)
+        .animation(.easeInOut(duration: 0.25), value: viewModel.isLoading || isProcessingPlayground)
         .alert(
             "Couldn't Save Look",
             isPresented: Binding(
@@ -161,6 +176,29 @@ struct OccasionOutputView: View {
         .sheet(isPresented: $isShowingProfileSheet) {
             ProfileHubView()
         }
+        .outfitPlaygroundSheet(
+            isPresented: $isShowingPlayground,
+            package: playgroundPackage,
+            sourceImage: Image("mock_result_1"),
+            onGenerated: { resultCG in
+                let uiImage = UIImage(cgImage: resultCG)
+                isProcessingPlayground = true
+                Task {
+                    let transparentPng = await OutfitAttributeMapper.removeBackground(from: uiImage) ?? uiImage.pngData()
+                    await MainActor.run {
+                        if let transparentPng {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                viewModel.currentLook?.lookImageData = transparentPng
+                            }
+                        }
+                        self.isProcessingPlayground = false
+                    }
+                }
+            },
+            onCancellation: {
+                isProcessingPlayground = false
+            }
+        )
         .alert("AI Generation Error", isPresented: $viewModel.isShowingErrorAlert, presenting: viewModel.errorMessage) { _ in
             Button("OK", role: .cancel) {}
         } message: { message in
@@ -169,6 +207,10 @@ struct OccasionOutputView: View {
         .task {
             let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
             await viewModel.generateLooksIfNeeded(profile: activeProfile)
+            updatePlaygroundPackage()
+        }
+        .onChange(of: viewModel.selectedLookIndex) { _, _ in
+            updatePlaygroundPackage()
         }
         .task(id: viewModel.currentLook?.id) {
             // Crop the garments of the look on screen for the "On this outfit" thumbnails.
@@ -186,10 +228,19 @@ struct OccasionOutputView: View {
                 }
                 
                 Spacer()
-                
-                CircularIconButton(systemName: "ellipsis") {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        isShowingMoreMenu.toggle()
+
+                HStack(spacing: 12) {
+                    if !viewModel.isCallerSuppliedLooks {
+                        CircularIconButton(systemName: "plus.app") {
+                            let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+                            viewModel.generateAdditionalLook(profile: activeProfile)
+                        }
+                    }
+
+                    CircularIconButton(systemName: "info.bubble") {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                            isShowingMoreMenu.toggle()
+                        }
                     }
                 }
             }
@@ -356,11 +407,15 @@ struct OccasionOutputView: View {
                 }
                 
                 VStack(spacing: 6) {
-                    Text("Curating Your Looks")
+                    Text(isProcessingPlayground ? "Styling With AI" : "Curating Your Looks")
                         .font(AppTypography.sfProSemiboldExtended(size: 19))
                         .foregroundStyle(AppColors.espressoTitle)
                     
-                    Text("Styling ensembles tailored to your silhouette and \(viewModel.occasion.title)...")
+                    Text(
+                        isProcessingPlayground
+                            ? "Preparing visual outfit mapper and loading Image Playground..."
+                            : "Styling ensembles tailored to your silhouette and \(viewModel.occasion.title)..."
+                    )
                         .font(AppTypography.caption)
                         .foregroundStyle(AppColors.mutedCaption)
                         .multilineTextAlignment(.center)
@@ -379,6 +434,66 @@ struct OccasionOutputView: View {
                     .strokeBorder(Color.white.opacity(0.8), lineWidth: 1)
             )
             .padding(.horizontal, 32)
+        }
+    }
+    
+    // MARK: - Image Playground Actions (C5-46)
+    
+    private func updatePlaygroundPackage() {
+        guard let currentLook = viewModel.currentLook else { return }
+        let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+        self.playgroundPackage = OutfitAttributeMapper.mapOutfitLookToPlayground(
+            look: currentLook,
+            occasion: viewModel.occasion,
+            userProfile: activeProfile
+        )
+    }
+    
+    private func triggerPlaygroundGeneration() {
+        guard let currentLook = viewModel.currentLook else { return }
+        
+        // Show loading indicator immediately when user taps Generate
+        isProcessingPlayground = true
+        
+        if playgroundPackage == nil || playgroundPackage?.lookIndex != currentLook.lookIndex {
+            updatePlaygroundPackage()
+        }
+        
+        #if canImport(ImagePlayground)
+        if #available(iOS 18.2, *) {
+            if ImagePlaygroundViewController.isAvailable {
+                // Ensure state is cleanly settled before presenting remote XPC sheet
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    self.isShowingPlayground = true
+                }
+                return
+            }
+        }
+        #endif
+        
+        simulatePlaygroundGeneration(for: currentLook)
+    }
+    
+    private func simulatePlaygroundGeneration(for look: OutfitLook) {
+        isProcessingPlayground = true
+        Task {
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            let assetName = "mock_result_\(look.lookIndex + 1)"
+            if let uiImg = UIImage(named: assetName) ?? UIImage(named: "mock_result_1") {
+                let transparentPng = await OutfitAttributeMapper.removeBackground(from: uiImg) ?? uiImg.pngData()
+                await MainActor.run {
+                    if let transparentPng {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            look.lookImageData = transparentPng
+                        }
+                    }
+                    self.isProcessingPlayground = false
+                }
+            } else {
+                await MainActor.run {
+                    self.isProcessingPlayground = false
+                }
+            }
         }
     }
 }
