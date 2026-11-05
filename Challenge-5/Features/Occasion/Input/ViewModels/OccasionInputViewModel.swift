@@ -326,34 +326,35 @@ public final class OccasionInputViewModel {
             var combinedPersona = ""
             var combinedFit = ""
 
-            // 1. Extract per-image all fashion keywords (color, cut, fit, material, pattern, genre vibe)
-            for (index, imageData) in images.enumerated() {
-                if let profile = await ReferenceImageStyleAnalyzer.shared.analyzeStyleProfile(from: [imageData]) {
-                    var tags: [String] = []
-                    if !profile.genreVibe.isEmpty { tags.append("Vibe: \(profile.genreVibe)") }
-                    if !profile.fit.isEmpty { tags.append("Fit: \(profile.fit)") }
-                    tags.append(contentsOf: profile.cuts)
-                    tags.append(contentsOf: profile.materials)
-                    tags.append(contentsOf: profile.patterns)
-                    if !profile.colors.isEmpty { tags.append("Tone: \(profile.colors)") }
-                    results[index] = tags
+            // 1. Extract per-image profiles in a single VLM session (fast, single-load)
+            let individualProfiles = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualProfiles(for: images)
 
-                    if combinedGenreVibe.isEmpty && !profile.genreVibe.isEmpty { combinedGenreVibe = profile.genreVibe }
-                    if combinedPersona.isEmpty && !profile.persona.isEmpty { combinedPersona = profile.persona }
-                    if combinedFit.isEmpty && !profile.fit.isEmpty { combinedFit = profile.fit }
+            for (index, maybeProfile) in individualProfiles.enumerated() {
+                guard let profile = maybeProfile else { continue }
+                var tags: [String] = []
+                if !profile.genreVibe.isEmpty { tags.append("Vibe: \(profile.genreVibe)") }
+                if !profile.fit.isEmpty { tags.append("Fit: \(profile.fit)") }
+                tags.append(contentsOf: profile.cuts)
+                tags.append(contentsOf: profile.materials)
+                tags.append(contentsOf: profile.patterns)
+                if !profile.colors.isEmpty { tags.append("Tone: \(profile.colors)") }
+                results[index] = tags
 
-                    for cut in profile.cuts where !gatheredCuts.contains(cut) {
-                        gatheredCuts.append(cut)
-                    }
-                    for mat in profile.materials where !gatheredMaterials.contains(mat) {
-                        gatheredMaterials.append(mat)
-                    }
-                    for pat in profile.patterns where !gatheredPatterns.contains(pat) {
-                        gatheredPatterns.append(pat)
-                    }
-                    if !profile.colors.isEmpty && !gatheredColors.contains(profile.colors) {
-                        gatheredColors.append(profile.colors)
-                    }
+                if combinedGenreVibe.isEmpty && !profile.genreVibe.isEmpty { combinedGenreVibe = profile.genreVibe }
+                if combinedPersona.isEmpty && !profile.persona.isEmpty { combinedPersona = profile.persona }
+                if combinedFit.isEmpty && !profile.fit.isEmpty { combinedFit = profile.fit }
+
+                for cut in profile.cuts where !gatheredCuts.contains(cut) {
+                    gatheredCuts.append(cut)
+                }
+                for mat in profile.materials where !gatheredMaterials.contains(mat) {
+                    gatheredMaterials.append(mat)
+                }
+                for pat in profile.patterns where !gatheredPatterns.contains(pat) {
+                    gatheredPatterns.append(pat)
+                }
+                if !profile.colors.isEmpty && !gatheredColors.contains(profile.colors) {
+                    gatheredColors.append(profile.colors)
                 }
             }
 

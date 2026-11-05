@@ -223,12 +223,12 @@ public actor VLMEngine {
         You are an expert fashion stylist and computer vision analyst.
         Analyze the clothing garments worn by the person in this photo.
         Extract:
-        - genreVibe: fashion aesthetic (e.g. Coquette, Modern Streetwear, Indonesian Batik Heritage, Clean Minimalist, Old Money, Resort Casual).
-        - persona: stylistic persona (e.g. Romantic Feminine, Chic Professional, Trendy Youthful, Elegant Tailored).
-        - fit: fit & proportions (e.g. Cropped & Tiered, Slim Fit, Oversized / Boxy, Relaxed, Tailored).
-        - cuts: specific clothing cuts (e.g. crop top, halter top, blazer, suit jacket, button-down shirt, wide-leg trousers, pencil skirt, tiered ruffle skirt, shorts). Do NOT default to "gown" unless it is genuinely an evening gown.
-        - materials: tactile fabrics (e.g. cotton poplin, chiffon, lace, denim, silk, linen, wool twill, ribbed knit).
-        - patterns: garment surface pattern (e.g. traditional Indonesian batik, floral, pinstripe, solid, houndstooth, plaid).
+        - genreVibe: fashion aesthetic (e.g. Indonesian Batik Heritage, Clean Minimalist, Coquette, Modern Streetwear, Chic Professional, Old Money, Resort Casual).
+        - persona: stylistic persona (e.g. Cultural Heritage, Romantic Feminine, Chic Professional, Trendy Youthful, Elegant Tailored).
+        - fit: fit & proportions (e.g. Relaxed, Cropped, Tailored, Slim Fit, Oversized).
+        - cuts: specific garment cuts (e.g. crop top, halter top, blazer, suit jacket, button-down shirt, wide-leg trousers, pencil skirt, tiered ruffle skirt, batik shirt, kebaya, shorts). Strictly avoid "gown" or "dress" unless it is genuinely a full evening gown.
+        - materials: tactile fabrics (e.g. cotton poplin, chiffon, lace, denim, silk, linen, wool twill, ribbed knit, batik fabric).
+        - patterns: garment surface pattern (e.g. traditional Indonesian batik, floral, pinstripe, solid, houndstooth, plaid). If traditional Indonesian batik or ethnic pattern is present, identify it explicitly as "traditional batik".
         - colors: 2 to 4 prominent garment colors (e.g. warm camel, rich crimson, soft ivory, navy, pastel pink). Focus strictly on clothes and ignore background walls, floors, or room lighting.
 
         Output valid JSON only matching the schema:
@@ -270,7 +270,7 @@ public actor VLMEngine {
         llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.1))
         llama_sampler_chain_add(sampler, llama_sampler_init_dist(42))
 
-        var outputText = "{\n"
+        var outputText = ""
         let vocab = llama_model_get_vocab(model)
         let eosToken = llama_vocab_eos(vocab)
 
@@ -346,8 +346,17 @@ public actor VLMEngine {
         clean = clean.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if let start = clean.firstIndex(of: "{"),
-           let end = clean.lastIndex(of: "}") {
-            return String(clean[start...end])
+           let end = clean.lastIndex(of: "}"),
+           start <= end {
+            var candidate = String(clean[start...end])
+            while candidate.hasPrefix("{\n{") || candidate.hasPrefix("{{") || candidate.hasPrefix("{\n {") {
+                candidate.removeFirst()
+                candidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            // Sanitize trailing commas before closing braces/brackets
+            candidate = candidate.replacingOccurrences(of: #",\s*\]"#, with: "]", options: .regularExpression)
+            candidate = candidate.replacingOccurrences(of: #",\s*\}"#, with: "}", options: .regularExpression)
+            return candidate
         }
         return clean
     }

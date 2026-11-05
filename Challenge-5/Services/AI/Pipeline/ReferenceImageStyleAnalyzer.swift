@@ -206,6 +206,53 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
 
     // MARK: - Primary Analysis API
 
+    /// Analyzes an array of reference images in a single VLM session without reloading weights between images.
+    public func analyzeIndividualProfiles(for imagesData: [Data]) async -> [ReferenceImageStyleProfile?] {
+        guard !imagesData.isEmpty else { return [] }
+
+        // 1. Native On-Device Qwen 2.5 VL 3B Multimodal Inference (Physical iPhone & TestFlight)
+        if await VLMEngine.shared.isAvailable {
+            print("👁️ [ReferenceImageStyleAnalyzer] Starting single-session batch VLM analysis for \(imagesData.count) images...")
+
+            // Pre-load VLM once for the entire batch
+            do {
+                try await VLMEngine.shared.loadIfNeeded()
+            } catch {
+                print("⚠️ [ReferenceImageStyleAnalyzer] Failed to pre-load VLM: \(error.localizedDescription)")
+            }
+
+            var profiles: [ReferenceImageStyleProfile?] = []
+            for (idx, data) in imagesData.enumerated() {
+                do {
+                    let profile = try await VLMEngine.shared.analyzeImage(data: data)
+                    print("✅ [ReferenceImageStyleAnalyzer] Image \(idx) VLM analysis succeeded: genre=\(profile.genreVibe), cuts=\(profile.cuts.joined(separator: ", "))")
+                    profiles.append(profile)
+                } catch {
+                    print("⚠️ [ReferenceImageStyleAnalyzer] Image \(idx) VLM failed: \(error.localizedDescription), falling back to on-device vision")
+                    let fallback = await analyzeFashionOnDevice(imagesData: [data])
+                    profiles.append(fallback)
+                }
+            }
+
+            // Unload VLM weights once at the end of the entire batch
+            await VLMEngine.shared.unload()
+            return profiles
+        }
+
+        // 2. Developer LAN Bridge (if custom endpoint is configured in settings)
+        if let vlmProfile = await queryLocalVLMServer(imagesData: imagesData) {
+            return [vlmProfile]
+        }
+
+        // 3. Fallback: on-device Apple Vision
+        var profiles: [ReferenceImageStyleProfile?] = []
+        for data in imagesData {
+            let fallback = await analyzeFashionOnDevice(imagesData: [data])
+            profiles.append(fallback)
+        }
+        return profiles
+    }
+
     /// Analyzes reference photos and returns a structured `ReferenceImageStyleProfile`.
     public func analyzeStyleProfile(from imagesData: [Data]) async -> ReferenceImageStyleProfile? {
         guard !imagesData.isEmpty else { return nil }
@@ -224,89 +271,52 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
         }
         cacheLock.unlock()
 
-        // 1. Native On-Device Qwen 2.5 VL 3B Multimodal Inference (Physical iPhone & TestFlight)
-        if await VLMEngine.shared.isAvailable {
-            print("👁️ [ReferenceImageStyleAnalyzer] Running native on-device VLM (Qwen 2.5 VL 3B)...")
-            var gatheredCuts: [String] = []
-            var gatheredMaterials: [String] = []
-            var gatheredPatterns: [String] = []
-            var gatheredColors: [String] = []
-            var finalGenreVibe = ""
-            var finalPersona = ""
-            var finalFit = ""
+        let individualProfiles = await analyzeIndividualProfiles(for: imagesData)
+        var gatheredCuts: [String] = []
+        var gatheredMaterials: [String] = []
+        var gatheredPatterns: [String] = []
+        var gatheredColors: [String] = []
+        var finalGenreVibe = ""
+        var finalPersona = ""
+        var finalFit = ""
 
-            for data in imagesData {
-                do {
-                    let profile = try await VLMEngine.shared.analyzeImage(data: data)
-                    if finalGenreVibe.isEmpty && !profile.genreVibe.isEmpty { finalGenreVibe = profile.genreVibe }
-                    if finalPersona.isEmpty && !profile.persona.isEmpty { finalPersona = profile.persona }
-                    if finalFit.isEmpty && !profile.fit.isEmpty { finalFit = profile.fit }
+        for maybeProfile in individualProfiles {
+            guard let profile = maybeProfile else { continue }
+            if finalGenreVibe.isEmpty && !profile.genreVibe.isEmpty { finalGenreVibe = profile.genreVibe }
+            if finalPersona.isEmpty && !profile.persona.isEmpty { finalPersona = profile.persona }
+            if finalFit.isEmpty && !profile.fit.isEmpty { finalFit = profile.fit }
 
-                    for cut in profile.cuts where !gatheredCuts.contains(cut) {
-                        gatheredCuts.append(cut)
-                    }
-                    for mat in profile.materials where !gatheredMaterials.contains(mat) {
-                        gatheredMaterials.append(mat)
-                    }
-                    for pat in profile.patterns where !gatheredPatterns.contains(pat) {
-                        gatheredPatterns.append(pat)
-                    }
-                    if !profile.colors.isEmpty && !gatheredColors.contains(profile.colors) {
-                        gatheredColors.append(profile.colors)
-                    }
-                } catch {
-                    print("⚠️ [ReferenceImageStyleAnalyzer] Native VLM pass failed for image: \(error.localizedDescription)")
-                }
+            for cut in profile.cuts where !gatheredCuts.contains(cut) {
+                gatheredCuts.append(cut)
             }
-
-            // Immediately unload VLM weights to reclaim ~2.6 GB VRAM/RAM for the rest of the app and text LLM
-            await VLMEngine.shared.unload()
-
-            if !gatheredCuts.isEmpty || !gatheredMaterials.isEmpty || !gatheredPatterns.isEmpty || !gatheredColors.isEmpty {
-                let mergedProfile = ReferenceImageStyleProfile(
-                    genreVibe: finalGenreVibe,
-                    persona: finalPersona,
-                    fit: finalFit,
-                    cuts: gatheredCuts,
-                    materials: gatheredMaterials,
-                    patterns: gatheredPatterns,
-                    colors: gatheredColors.joined(separator: " • ")
-                )
-                print("✅ [ReferenceImageStyleAnalyzer] Extracted profile via Native Qwen 2.5 VL:")
-                print("   Genre: \(mergedProfile.genreVibe) | Fit: \(mergedProfile.fit)")
-                print("   Cuts: \(mergedProfile.cuts.joined(separator: ", "))")
-                print("   Patterns: \(mergedProfile.patterns.joined(separator: ", "))")
-                print("   Colors: \(mergedProfile.colors)")
-                cacheLock.lock()
-                cachedProfile = (dataHash, mergedProfile)
-                cacheLock.unlock()
-
-                return mergedProfile
+            for mat in profile.materials where !gatheredMaterials.contains(mat) {
+                gatheredMaterials.append(mat)
+            }
+            for pat in profile.patterns where !gatheredPatterns.contains(pat) {
+                gatheredPatterns.append(pat)
+            }
+            if !profile.colors.isEmpty && !gatheredColors.contains(profile.colors) {
+                gatheredColors.append(profile.colors)
             }
         }
 
-        // 2. Developer LAN Bridge (if custom endpoint is configured in settings)
-        if let vlmProfile = await queryLocalVLMServer(imagesData: imagesData) {
-            print("👁️ [ReferenceImageStyleAnalyzer] Extracted profile via external VLM bridge:")
-            print("   Genre: \(vlmProfile.genreVibe) | Fit: \(vlmProfile.fit)")
-            print("   Cuts: \(vlmProfile.cuts.joined(separator: ", "))")
-            print("   Colors: \(vlmProfile.colors)")
-
+        if !gatheredCuts.isEmpty || !gatheredMaterials.isEmpty || !gatheredPatterns.isEmpty || !gatheredColors.isEmpty {
+            let mergedProfile = ReferenceImageStyleProfile(
+                genreVibe: finalGenreVibe,
+                persona: finalPersona,
+                fit: finalFit,
+                cuts: gatheredCuts,
+                materials: gatheredMaterials,
+                patterns: gatheredPatterns,
+                colors: gatheredColors.joined(separator: " • ")
+            )
             cacheLock.lock()
-            cachedProfile = (dataHash, vlmProfile)
+            cachedProfile = (dataHash, mergedProfile)
             cacheLock.unlock()
-
-            return vlmProfile
+            return mergedProfile
         }
 
-        // 3. Fallback: On-device Apple Vision & CoreImage color clustering
-        let onDeviceProfile = await analyzeFashionOnDevice(imagesData: imagesData)
-        if let profile = onDeviceProfile {
-            cacheLock.lock()
-            cachedProfile = (dataHash, profile)
-            cacheLock.unlock()
-        }
-        return onDeviceProfile
+        return nil
     }
 
     /// Analyzes reference photos and returns a formatted string descriptor ready for Qwen 2.5 3B prompt injection.
