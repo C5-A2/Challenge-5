@@ -17,6 +17,8 @@ struct OccasionOutputBottomBar: View {
     var onBookmarkTap: (() -> Void)? = nil
     var isAddLookDisabled: Bool = false
     var onAddLookTap: (() -> Void)? = nil
+    /// Visualizes the current look with Image Playground.
+    var onPlaygroundTap: (() -> Void)? = nil
     
     
     init(
@@ -25,7 +27,8 @@ struct OccasionOutputBottomBar: View {
         isBookmarkDisabled: Bool = false,
         onBookmarkTap: (() -> Void)? = nil,
         isAddLookDisabled: Bool = false,
-        onAddLookTap: (() -> Void)? = nil
+        onAddLookTap: (() -> Void)? = nil,
+        onPlaygroundTap: (() -> Void)? = nil
     ) {
         self.onInfoTap = onInfoTap
         self.isBookmarked = isBookmarked
@@ -33,6 +36,7 @@ struct OccasionOutputBottomBar: View {
         self.onBookmarkTap = onBookmarkTap
         self.isAddLookDisabled = isAddLookDisabled
         self.onAddLookTap = onAddLookTap
+        self.onPlaygroundTap = onPlaygroundTap
     }
     
     
@@ -43,6 +47,11 @@ struct OccasionOutputBottomBar: View {
             }
             
             Spacer()
+            
+            CircularIconButton(systemName: "wand.and.stars") {
+                onPlaygroundTap?()
+            }
+            .accessibilityLabel("Visualize Look with Image Playground")
             
             CircularIconButton(
                 systemName: "plus",

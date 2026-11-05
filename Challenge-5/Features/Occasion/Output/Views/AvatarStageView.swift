@@ -11,14 +11,23 @@ struct AvatarStageView: View {
     
     
     var viewModel: OccasionOutputViewModel
+    /// Tapping the centered look that has no generated image yet opens Image Playground.
+    var onPlaygroundTap: (() -> Void)? = nil
+    var isProcessingPlayground: Bool = false
     
     @State private var dragOffset: CGFloat = 0
     
     private let cardSpacing: CGFloat = 126
     
     
-    init(viewModel: OccasionOutputViewModel) {
+    init(
+        viewModel: OccasionOutputViewModel,
+        onPlaygroundTap: (() -> Void)? = nil,
+        isProcessingPlayground: Bool = false
+    ) {
         self.viewModel = viewModel
+        self.onPlaygroundTap = onPlaygroundTap
+        self.isProcessingPlayground = isProcessingPlayground
     }
     
     
@@ -79,7 +88,11 @@ struct AvatarStageView: View {
             .opacity(opacity)
             .zIndex(Double(centerFactor))
             .onTapGesture {
-                handleCardTap(at: index)
+                if isCenter && isWithoutGeneratedImage(at: index) {
+                    onPlaygroundTap?()
+                } else {
+                    handleCardTap(at: index)
+                }
             }
         }
     }
@@ -137,6 +150,15 @@ struct AvatarStageView: View {
                 }
             }
         )
+    }
+    
+    /// A finished look still showing the mock placeholder (no Image Playground image yet).
+    /// The loading card isn't a look yet, so it never opens Image Playground.
+    private func isWithoutGeneratedImage(at index: Int) -> Bool {
+        guard viewModel.looks.indices.contains(index) else { return false }
+        let look = viewModel.looks[index]
+        guard let data = look.lookImageData else { return true }
+        return OccasionOutputViewModel.isPlaceholderData(data, lookIndex: look.lookIndex)
     }
     
     private func assetName(for index: Int) -> String {

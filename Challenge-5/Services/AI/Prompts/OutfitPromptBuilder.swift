@@ -414,6 +414,7 @@ struct OutfitPromptBuilder: Sendable {
     private static let garmentNamingRule = """
     GARMENT NAMES:
     - Write each "name" as [cut or detail] + [garment type]. The cut or detail is the neckline, collar, sleeve, closure, waist or silhouette that makes the piece specific.
+    - Do NOT put color words in the name; the color belongs only in "colorName".
     - Do NOT use vague words such as "tailored", "structured", "elegant", "classic", "chic", "sophisticated", "modern" or "refined" in the name. Describe the cut that creates that effect instead.
     - Every garment in this look must name a different kind of detail, and must not reuse a detail from the previous looks.
     """
