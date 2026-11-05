@@ -318,6 +318,13 @@ public final class OccasionInputViewModel {
         Task { @MainActor [weak self] in
             guard let self else { return }
             var results: [Int: [String]] = [:]
+            var gatheredCuts: [String] = []
+            var gatheredMaterials: [String] = []
+            var gatheredPatterns: [String] = []
+            var gatheredColors: [String] = []
+            var combinedGenreVibe = ""
+            var combinedPersona = ""
+            var combinedFit = ""
 
             // 1. Extract per-image all fashion keywords (color, cut, fit, material, pattern, genre vibe)
             for (index, imageData) in images.enumerated() {
@@ -330,11 +337,37 @@ public final class OccasionInputViewModel {
                     tags.append(contentsOf: profile.patterns)
                     if !profile.colors.isEmpty { tags.append("Tone: \(profile.colors)") }
                     results[index] = tags
+
+                    if combinedGenreVibe.isEmpty && !profile.genreVibe.isEmpty { combinedGenreVibe = profile.genreVibe }
+                    if combinedPersona.isEmpty && !profile.persona.isEmpty { combinedPersona = profile.persona }
+                    if combinedFit.isEmpty && !profile.fit.isEmpty { combinedFit = profile.fit }
+
+                    for cut in profile.cuts where !gatheredCuts.contains(cut) {
+                        gatheredCuts.append(cut)
+                    }
+                    for mat in profile.materials where !gatheredMaterials.contains(mat) {
+                        gatheredMaterials.append(mat)
+                    }
+                    for pat in profile.patterns where !gatheredPatterns.contains(pat) {
+                        gatheredPatterns.append(pat)
+                    }
+                    if !profile.colors.isEmpty && !gatheredColors.contains(profile.colors) {
+                        gatheredColors.append(profile.colors)
+                    }
                 }
             }
 
-            // 2. Extract full multi-line context string across all attached images
-            let fullContext = await ReferenceImageStyleAnalyzer.shared.analyzeStyle(from: images)
+            // 2. Synthesize multi-line context string directly from the extracted profiles (zero redundant inference)
+            let combinedProfile = ReferenceImageStyleProfile(
+                genreVibe: combinedGenreVibe,
+                persona: combinedPersona,
+                fit: combinedFit,
+                cuts: gatheredCuts,
+                materials: gatheredMaterials,
+                patterns: gatheredPatterns,
+                colors: gatheredColors.joined(separator: " • ")
+            )
+            let fullContext = combinedProfile.formattedPromptContext.isEmpty ? nil : combinedProfile.formattedPromptContext
 
             // Only update if images count hasn't changed while processing
             if self.referenceImages.count == images.count {

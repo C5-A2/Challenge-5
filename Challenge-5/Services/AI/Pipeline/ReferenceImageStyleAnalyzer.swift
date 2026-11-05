@@ -68,6 +68,70 @@ public struct ReferenceImageStyleProfile: Sendable, Codable, Equatable {
         self.colors = colors
     }
 
+    enum CodingKeys: String, CodingKey {
+        case genreVibe
+        case persona
+        case fit
+        case cuts
+        case materials
+        case patterns
+        case colors
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.genreVibe = (try? container.decode(String.self, forKey: .genreVibe)) ?? ""
+        self.persona = (try? container.decode(String.self, forKey: .persona)) ?? ""
+        self.fit = (try? container.decode(String.self, forKey: .fit)) ?? ""
+
+        // Flexible array or comma-separated string decoding for cuts
+        if let cutsArray = try? container.decode([String].self, forKey: .cuts) {
+            self.cuts = cutsArray
+        } else if let cutsString = try? container.decode(String.self, forKey: .cuts) {
+            self.cuts = cutsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        } else {
+            self.cuts = []
+        }
+
+        // Flexible array or string for materials
+        if let matsArray = try? container.decode([String].self, forKey: .materials) {
+            self.materials = matsArray
+        } else if let matsString = try? container.decode(String.self, forKey: .materials) {
+            self.materials = matsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        } else {
+            self.materials = []
+        }
+
+        // Flexible array or string for patterns
+        if let patsArray = try? container.decode([String].self, forKey: .patterns) {
+            self.patterns = patsArray
+        } else if let patsString = try? container.decode(String.self, forKey: .patterns) {
+            self.patterns = patsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        } else {
+            self.patterns = []
+        }
+
+        // Flexible string or array for colors
+        if let colorsString = try? container.decode(String.self, forKey: .colors) {
+            self.colors = colorsString
+        } else if let colorsArray = try? container.decode([String].self, forKey: .colors) {
+            self.colors = colorsArray.joined(separator: ", ")
+        } else {
+            self.colors = ""
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(genreVibe, forKey: .genreVibe)
+        try container.encode(persona, forKey: .persona)
+        try container.encode(fit, forKey: .fit)
+        try container.encode(cuts, forKey: .cuts)
+        try container.encode(materials, forKey: .materials)
+        try container.encode(patterns, forKey: .patterns)
+        try container.encode(colors, forKey: .colors)
+    }
+
     /// Formats the profile into a high-density structured context block for the Qwen 2.5 3B prompt.
     public var formattedPromptContext: String {
         var lines: [String] = []
@@ -107,8 +171,8 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
 
     public static let shared = ReferenceImageStyleAnalyzer()
 
-    /// Primary local VLM endpoint URL (Mac LAN IP or localhost loopback).
-    public static var localVLMEndpoint: URL? = URL(string: "http://192.168.1.3:8080/v1/analyze")
+    /// Primary local VLM endpoint URL (optional developer LAN bridge).
+    public static var localVLMEndpoint: URL? = nil
 
     /// Candidate VLM server endpoints attempted in order.
     private static var candidateVLMEndpoints: [URL] {
@@ -119,12 +183,6 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
         }
         if let primary = localVLMEndpoint, !endpoints.contains(primary) {
             endpoints.append(primary)
-        }
-        if let lanURL = URL(string: "http://192.168.1.3:8080/v1/analyze"), !endpoints.contains(lanURL) {
-            endpoints.append(lanURL)
-        }
-        if let localURL = URL(string: "http://127.0.0.1:8080/v1/analyze"), !endpoints.contains(localURL) {
-            endpoints.append(localURL)
         }
         return endpoints
     }
@@ -141,6 +199,9 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
         "clothing", "apparel", "garment", "outfit", "wear", "costume", "dress code", "fashion"
     ]
 
+    private let cacheLock = NSLock()
+    private var cachedProfile: (hash: Int, profile: ReferenceImageStyleProfile)? = nil
+
     private init() {}
 
     // MARK: - Primary Analysis API
@@ -149,17 +210,103 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
     public func analyzeStyleProfile(from imagesData: [Data]) async -> ReferenceImageStyleProfile? {
         guard !imagesData.isEmpty else { return nil }
 
-        // 1. Attempt local VLM server if reachable (Mac LAN / Simulator)
+        var hasher = Hasher()
+        for data in imagesData {
+            hasher.combine(data)
+        }
+        let dataHash = hasher.finalize()
+
+        cacheLock.lock()
+        if let cached = cachedProfile, cached.hash == dataHash {
+            cacheLock.unlock()
+            print("👁️ [ReferenceImageStyleAnalyzer] Returning cached reference style profile.")
+            return cached.profile
+        }
+        cacheLock.unlock()
+
+        // 1. Native On-Device Qwen 2.5 VL 3B Multimodal Inference (Physical iPhone & TestFlight)
+        if await VLMEngine.shared.isAvailable {
+            print("👁️ [ReferenceImageStyleAnalyzer] Running native on-device VLM (Qwen 2.5 VL 3B)...")
+            var gatheredCuts: [String] = []
+            var gatheredMaterials: [String] = []
+            var gatheredPatterns: [String] = []
+            var gatheredColors: [String] = []
+            var finalGenreVibe = ""
+            var finalPersona = ""
+            var finalFit = ""
+
+            for data in imagesData {
+                do {
+                    let profile = try await VLMEngine.shared.analyzeImage(data: data)
+                    if finalGenreVibe.isEmpty && !profile.genreVibe.isEmpty { finalGenreVibe = profile.genreVibe }
+                    if finalPersona.isEmpty && !profile.persona.isEmpty { finalPersona = profile.persona }
+                    if finalFit.isEmpty && !profile.fit.isEmpty { finalFit = profile.fit }
+
+                    for cut in profile.cuts where !gatheredCuts.contains(cut) {
+                        gatheredCuts.append(cut)
+                    }
+                    for mat in profile.materials where !gatheredMaterials.contains(mat) {
+                        gatheredMaterials.append(mat)
+                    }
+                    for pat in profile.patterns where !gatheredPatterns.contains(pat) {
+                        gatheredPatterns.append(pat)
+                    }
+                    if !profile.colors.isEmpty && !gatheredColors.contains(profile.colors) {
+                        gatheredColors.append(profile.colors)
+                    }
+                } catch {
+                    print("⚠️ [ReferenceImageStyleAnalyzer] Native VLM pass failed for image: \(error.localizedDescription)")
+                }
+            }
+
+            // Immediately unload VLM weights to reclaim ~2.6 GB VRAM/RAM for the rest of the app and text LLM
+            await VLMEngine.shared.unload()
+
+            if !gatheredCuts.isEmpty || !gatheredMaterials.isEmpty || !gatheredPatterns.isEmpty || !gatheredColors.isEmpty {
+                let mergedProfile = ReferenceImageStyleProfile(
+                    genreVibe: finalGenreVibe,
+                    persona: finalPersona,
+                    fit: finalFit,
+                    cuts: gatheredCuts,
+                    materials: gatheredMaterials,
+                    patterns: gatheredPatterns,
+                    colors: gatheredColors.joined(separator: " • ")
+                )
+                print("✅ [ReferenceImageStyleAnalyzer] Extracted profile via Native Qwen 2.5 VL:")
+                print("   Genre: \(mergedProfile.genreVibe) | Fit: \(mergedProfile.fit)")
+                print("   Cuts: \(mergedProfile.cuts.joined(separator: ", "))")
+                print("   Patterns: \(mergedProfile.patterns.joined(separator: ", "))")
+                print("   Colors: \(mergedProfile.colors)")
+                cacheLock.lock()
+                cachedProfile = (dataHash, mergedProfile)
+                cacheLock.unlock()
+
+                return mergedProfile
+            }
+        }
+
+        // 2. Developer LAN Bridge (if custom endpoint is configured in settings)
         if let vlmProfile = await queryLocalVLMServer(imagesData: imagesData) {
-            print("👁️ [ReferenceImageStyleAnalyzer] Extracted profile via Qwen 2.5 VL server:")
+            print("👁️ [ReferenceImageStyleAnalyzer] Extracted profile via external VLM bridge:")
             print("   Genre: \(vlmProfile.genreVibe) | Fit: \(vlmProfile.fit)")
             print("   Cuts: \(vlmProfile.cuts.joined(separator: ", "))")
             print("   Colors: \(vlmProfile.colors)")
+
+            cacheLock.lock()
+            cachedProfile = (dataHash, vlmProfile)
+            cacheLock.unlock()
+
             return vlmProfile
         }
 
-        // 2. High-fidelity on-device fashion feature extraction with smart color sampling
-        return await analyzeFashionOnDevice(imagesData: imagesData)
+        // 3. Fallback: On-device Apple Vision & CoreImage color clustering
+        let onDeviceProfile = await analyzeFashionOnDevice(imagesData: imagesData)
+        if let profile = onDeviceProfile {
+            cacheLock.lock()
+            cachedProfile = (dataHash, profile)
+            cacheLock.unlock()
+        }
+        return onDeviceProfile
     }
 
     /// Analyzes reference photos and returns a formatted string descriptor ready for Qwen 2.5 3B prompt injection.

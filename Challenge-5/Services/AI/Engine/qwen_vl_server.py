@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
+[DEPRECATED FOR PRODUCTION]
 Qwen2.5-VL-3B-Instruct Local Inference & HTTP Bridge Server
+
+NOTE: Challenge-5 now runs Qwen 2.5 VL 3B 100% natively on-device in Swift via VLMEngine.swift
+using llama.cpp mtmd and Metal GPU acceleration on physical iOS devices and TestFlight.
+This script is preserved for optional standalone offline Python scripting/benchmarking only.
 
 Provides:
 1. HTTP API at POST /v1/analyze for iOS Simulator / Mac app to extract rich fashion keywords.

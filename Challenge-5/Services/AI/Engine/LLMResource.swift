@@ -79,6 +79,7 @@ public struct LLMResource: Sendable {
 
         // 3. Try standard project development paths
         let candidatePaths = [
+            Bundle.main.bundleURL.appendingPathComponent("\(name).\(modelExtension)").path,
             Bundle.main.bundleURL.appendingPathComponent("Resources/\(name).\(modelExtension)").path,
             "/Users/bryansamuel/ADA/C5/Challenge-5/Challenge-5/Resources/\(name).\(modelExtension)"
         ]
