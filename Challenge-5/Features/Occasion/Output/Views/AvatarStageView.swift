@@ -234,25 +234,27 @@ struct AvatarStageView: View {
                 )
                 .frame(width: 200, height: 30)
             
-            HStack(spacing: 6) {
-                ForEach(0..<viewModel.looks.count, id: \.self) { index in
-                    Circle()
-                        .fill(
-                            index == viewModel.selectedLookIndex
-                                ? Color.white
-                                : Color.white.opacity(0.45)
-                        )
-                        .frame(
-                            width: index == viewModel.selectedLookIndex ? 7.5 : 5,
-                            height: index == viewModel.selectedLookIndex ? 7.5 : 5
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(Color.black.opacity(0.18), lineWidth: 0.5)
-                        )
-                        .onTapGesture {
-                            viewModel.selectLook(at: index)
-                        }
+            if viewModel.looks.count > 1 {
+                HStack(spacing: 6) {
+                    ForEach(0..<viewModel.looks.count, id: \.self) { index in
+                        Circle()
+                            .fill(
+                                index == viewModel.selectedLookIndex
+                                    ? Color.white
+                                    : Color.white.opacity(0.45)
+                            )
+                            .frame(
+                                width: index == viewModel.selectedLookIndex ? 7.5 : 5,
+                                height: index == viewModel.selectedLookIndex ? 7.5 : 5
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.black.opacity(0.18), lineWidth: 0.5)
+                            )
+                            .onTapGesture {
+                                viewModel.selectLook(at: index)
+                            }
+                    }
                 }
             }
         }

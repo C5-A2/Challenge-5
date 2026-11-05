@@ -230,9 +230,11 @@ struct OccasionOutputView: View {
                 Spacer()
 
                 HStack(spacing: 12) {
-                    CircularIconButton(systemName: "plus.app") {
-                        let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
-                        viewModel.generateAdditionalLook(profile: activeProfile)
+                    if !viewModel.isCallerSuppliedLooks {
+                        CircularIconButton(systemName: "plus.app") {
+                            let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+                            viewModel.generateAdditionalLook(profile: activeProfile)
+                        }
                     }
 
                     CircularIconButton(systemName: "info.bubble") {
