@@ -25,19 +25,18 @@ struct ProfileHubView: View {
 
     // MARK: - SwiftData Query
 
-    @Environment(\.modelContext) private var modelContext
     @Query private var userProfiles: [UserProfile]
     @Environment(\.dismiss) private var dismiss
 
     // MARK: - Sheet Navigation State
 
     @State private var activeSheet: ActiveProfileSheet? = nil
-    @State private var didTriggerDebugAutoFill: Bool = false
 
     private enum ActiveProfileSheet: Identifiable {
         case skinScan
         case bodyScan
         case metrics
+        case debugForm
 
         var id: Int { hashValue }
     }
@@ -99,6 +98,8 @@ struct ProfileHubView: View {
                 bodyScanFlowSheet
             case .metrics:
                 metricsFlowPlaceholder
+            case .debugForm:
+                TemporaryProfileFormSheet()
             }
         }
     }
@@ -131,27 +132,25 @@ struct ProfileHubView: View {
             .padding(.top, 4)
     }
 
-    // MARK: - Debug Auto-Select Section
+    // MARK: - Debug Manual Profile Form Section
 
     private var debugAutoFillSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button {
-                forceAutoSelectDebugProfile()
+                activeSheet = .debugForm
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "wand.and.stars")
+                    Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 15, weight: .semibold))
 
-                    Text("Force Auto-Select Profile (Debug)")
+                    Text("Set Profile Manually (Debug)")
                         .font(.system(size: 14.5, weight: .semibold))
 
                     Spacer()
 
-                    if currentProfile?.hasCompletedProfileSetup == true && currentProfile?.frontBodyPhotoData != nil {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(AppColors.lightingOptimal)
-                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
@@ -163,13 +162,13 @@ struct ProfileHubView: View {
             .buttonStyle(.plain)
 
             if let profile = currentProfile,
-               (profile.frontBodyPhotoData != nil || didTriggerDebugAutoFill) {
+               (profile.colorSeason != nil || profile.bodyType != nil || profile.frontBodyPhotoData != nil) {
                 HStack(spacing: 12) {
                     if let frontData = profile.frontBodyPhotoData,
                        let uiImage = UIImage(data: frontData) {
                         Image(uiImage: uiImage)
                             .resizable()
-                            .scaledToFill()
+                            .scaledToFit()
                             .frame(width: 40, height: 52)
                             .background(AppColors.canvasBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -180,11 +179,11 @@ struct ProfileHubView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Debug Profile Active")
+                        Text("Active Profile Summary")
                             .font(.system(size: 12.5, weight: .semibold))
                             .foregroundStyle(AppColors.espressoTitle)
 
-                        Text("\(profile.colorSeason?.rawValue ?? "Not Set") • \(profile.bodyType?.displayName ?? "Not Set") • Front Scan \(profile.frontBodyPhotoData != nil ? "Ready" : "Missing")")
+                        Text("\(profile.colorSeason?.rawValue ?? "Not Set") • \(profile.bodyType?.displayName ?? "Not Set") • Front Scan \(profile.frontBodyPhotoData != nil ? "Set" : "Not Set")")
                             .font(.system(size: 11.5))
                             .foregroundStyle(AppColors.mutedCaption)
                             .lineLimit(2)
@@ -200,43 +199,6 @@ struct ProfileHubView: View {
                         .strokeBorder(AppColors.subtleBorder, lineWidth: 1)
                 )
             }
-        }
-    }
-
-    private func forceAutoSelectDebugProfile() {
-        let profile: UserProfile
-        if let existing = userProfiles.first {
-            profile = existing
-        } else {
-            profile = UserProfile()
-            modelContext.insert(profile)
-        }
-
-        let sample = UserProfile.mockSample
-        profile.colorSeason = .trueAutumn
-        profile.bodyType = .hourglass
-        profile.torsoBalance = .balanced
-        profile.measurements = sample.measurements
-        profile.styleVision = profile.styleVision ?? .confident
-
-        let debugFrontImage = UIImage(named: "mock_result_2") ?? UIImage(named: "mock_result_1")
-        if let frontPNG = debugFrontImage?.pngData() {
-            profile.frontBodyPhotoData = frontPNG
-            if profile.facePhotoData == nil {
-                profile.facePhotoData = frontPNG
-            }
-        }
-        profile.updatedAt = Date()
-
-        do {
-            try modelContext.save()
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                didTriggerDebugAutoFill = true
-            }
-            print("✅ [ProfileHubView] Force auto-selected debug profile: ColorSeason=\(profile.colorSeason?.rawValue ?? "-"), BodyType=\(profile.bodyType?.rawValue ?? "-"), FrontBodyScan=\(profile.frontBodyPhotoData?.count ?? 0) bytes")
-        } catch {
-            print("❌ [ProfileHubView] Failed to save debug profile: \(error.localizedDescription)")
         }
     }
 
