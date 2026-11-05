@@ -31,7 +31,8 @@ struct OutfitPromptBuilder: Sendable {
     /// Dynamically assembles the system prompt, appending directives and rules only for fields the user filled.
     public func buildSystemPrompt(
         occasion: OccasionItem,
-        profile: UserProfile?
+        profile: UserProfile?,
+        analyzedImageStyle: String? = nil
     ) -> String {
         var directives: [String] = []
         var rulesets: [String] = []
@@ -103,9 +104,20 @@ struct OutfitPromptBuilder: Sendable {
             """)
         }
 
-        // 6. User Preference Reference Images (if attached by user)
+        // 6. User Preference Reference Images (VLM Embedded Context)
         let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
-        if hasReferenceImages {
+        if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
+            directives.append("6. USER REFERENCE IMAGES (VLM EMBEDDED): Deeply reflect the extracted silhouettes, fabric textures, and styling cues while adhering to body and color rules.")
+            rulesets.append("""
+            ======================================================================
+            USER PREFERENCE REFERENCE IMAGES (VLM EMBEDDED CONTEXT)
+            ======================================================================
+            The Vision-Language Model extracted the following visual attributes from the user's reference images:
+            \(analyzedStyle)
+
+            Tailor the garments, cuts, layering, and fabric textures across all 5 looks to incorporate this aesthetic direction.
+            """)
+        } else if hasReferenceImages {
             let count = occasion.referenceImagesData.isEmpty ? (occasion.referenceImageData != nil ? 1 : 0) : occasion.referenceImagesData.count
             directives.append("6. USER PREFERENCE REFERENCE IMAGES: Subtly adjust the outfit styling (aesthetic vibe, layering style, textures, and mood) to incorporate the user's personal visual preferences while adhering to body and color rules.")
             rulesets.append("""
@@ -227,7 +239,8 @@ struct OutfitPromptBuilder: Sendable {
     /// Assembles the user prompt specifying only the user-filled details (excluding date).
     public func buildUserPrompt(
         occasion: OccasionItem,
-        profile: UserProfile?
+        profile: UserProfile?,
+        analyzedImageStyle: String? = nil
     ) -> String {
         var lines: [String] = []
 
@@ -250,9 +263,14 @@ struct OutfitPromptBuilder: Sendable {
             lines.append("- Style Vision (MUST be reflected): \(visionNames)")
         }
 
-        // Append Reference Images if attached
+        // Append Reference Images with VLM visual context if available
         let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
-        if hasReferenceImages {
+        if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
+            lines.append("""
+            - User Reference Images (VLM Embedded Context):
+            \(analyzedStyle)
+            """)
+        } else if hasReferenceImages {
             let count = occasion.referenceImagesData.isEmpty ? (occasion.referenceImageData != nil ? 1 : 0) : occasion.referenceImagesData.count
             lines.append("- User Reference Images: \(count) attached (subtly reflect user aesthetic preference)")
         }
@@ -285,7 +303,7 @@ struct OutfitPromptBuilder: Sendable {
     ///   - lookIndex: The 0-based index of the look to generate (0–4).
     ///   - previousLooks: Summaries of already-generated looks injected into the system prompt
     ///     so the model avoids repeating garment names, colors, and silhouettes.
-    ///   - analyzedImageStyle: Style descriptors extracted from user reference photos via Apple Vision.
+    ///   - analyzedImageStyle: Style descriptors extracted from user reference photos via Vision-Language Model.
     public func buildFormattedPrompt(
         occasion: OccasionItem,
         profile: UserProfile?,
@@ -304,7 +322,8 @@ struct OutfitPromptBuilder: Sendable {
             occasion: occasion,
             profile: profile,
             lookIndex: lookIndex,
-            previousLooks: previousLooks
+            previousLooks: previousLooks,
+            analyzedImageStyle: analyzedImageStyle
         )
 
         // Qwen 2.5 uses ChatML tokens (<|im_start|> ... <|im_end|>)
@@ -405,9 +424,22 @@ struct OutfitPromptBuilder: Sendable {
             rules.append("STYLE VISION (reflect in garments):\n\(visionsDetails)")
         }
 
-        // Reference images (Approach 1: Injects Apple Vision analyzed descriptors)
+        // Reference images: Injects VLM visual context
         if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
-            rules.append("USER REFERENCE PHOTO AESTHETIC (analyzed via on-device Vision): \(analyzedStyle). Incorporate these visual aesthetic cues, textures, and vibes into the outfit.")
+            rules.append("""
+            ======================================================================
+            USER REFERENCE PHOTO VISUAL CONTEXT (VLM EMBEDDED ATTRIBUTES)
+            ======================================================================
+            The user provided reference images that demonstrate their visual taste and intended outfit mood.
+            The Vision-Language Model has extracted the following attributes from the reference photos:
+            \(analyzedStyle)
+
+            CRITICAL INSTRUCTIONS FOR REFERENCE IMAGE INTEGRATION:
+            1. Silhouette & Drape: Actively reflect the cuts, outerwear structure, and bottom proportions from the reference context.
+            2. Fabric & Texture: Prioritize the extracted fabrics, weaves, and material finishes from the reference context.
+            3. Layering & Styling: Replicate the layering dynamics and styling cues from the reference context.
+            4. Palette Harmony: Select colors strictly from the user's Color Palette that harmonize with the reference image's color mood and contrast level.
+            """)
         } else {
             let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
             if hasReferenceImages {
@@ -501,7 +533,8 @@ struct OutfitPromptBuilder: Sendable {
         occasion: OccasionItem,
         profile: UserProfile?,
         lookIndex: Int,
-        previousLooks: [GeneratedLookSummary] = []
+        previousLooks: [GeneratedLookSummary] = [],
+        analyzedImageStyle: String? = nil
     ) -> String {
         var lines: [String] = ["Generate look \(lookIndex + 1) for: \(occasion.title)"]
 
@@ -517,7 +550,13 @@ struct OutfitPromptBuilder: Sendable {
         }
 
         let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
-        if hasReferenceImages {
+        if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
+            lines.append("""
+            Reference images visual context:
+            \(analyzedStyle)
+            -> Synthesize these silhouettes, fabrics, and aesthetic cues directly into look \(lookIndex + 1).
+            """)
+        } else if hasReferenceImages {
             let count = occasion.referenceImagesData.isEmpty ? 1 : occasion.referenceImagesData.count
             lines.append("Reference images: \(count) attached")
         }

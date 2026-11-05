@@ -46,6 +46,15 @@ public final class OccasionInputViewModel {
     /// The saved look behind each reference photo, in the same order as `referenceImages`.
     /// `nil` for photos from the camera or the photo library.
     public private(set) var referenceSavedLookIDs: [UUID?] = []
+
+    /// Extracted VLM / Vision keywords per reference image index for developer inspection & debug.
+    public private(set) var referenceImageKeywords: [Int: [String]] = [:]
+
+    /// Full multi-line VLM visual context injected into Qwen 2.5 3B prompt.
+    public private(set) var fullExtractedVLMContext: String? = nil
+
+    /// Indicates whether background VLM keyword extraction is actively running.
+    public private(set) var isAnalyzingReferencePhotos: Bool = false
     
     /// Presentation state of the three reference sources (Camera, Open from Photos, From Library).
     public var isShowingReferenceCamera: Bool = false
@@ -97,6 +106,10 @@ public final class OccasionInputViewModel {
         self.initialDresscode = dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialVisions = selectedVisions
         self.initialReferenceImages = referenceImages
+
+        if !referenceImages.isEmpty {
+            analyzeReferenceImages()
+        }
     }
     
     public init(from occasion: OccasionDetail) {
@@ -112,6 +125,10 @@ public final class OccasionInputViewModel {
         self.initialDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialVisions = Set(occasion.visions)
         self.initialReferenceImages = occasion.referenceImages
+
+        if !occasion.referenceImages.isEmpty {
+            analyzeReferenceImages()
+        }
     }
     
     init(from occasion: OccasionItem) {
@@ -127,6 +144,10 @@ public final class OccasionInputViewModel {
         self.initialDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialVisions = Set(occasion.visions)
         self.initialReferenceImages = occasion.referenceImagesData
+
+        if !occasion.referenceImagesData.isEmpty {
+            analyzeReferenceImages()
+        }
     }
     
     // MARK: - Computed Properties
@@ -268,13 +289,65 @@ public final class OccasionInputViewModel {
         if referenceSavedLookIDs.indices.contains(index) {
             referenceSavedLookIDs.remove(at: index)
         }
+        analyzeReferenceImages()
     }
     
     /// Adds references up to the limit, keeping `referenceImages` and `referenceSavedLookIDs` in sync.
     private func appendReferences(_ newReferences: [(image: Data, savedLookID: UUID?)]) {
         let addedReferences = newReferences.prefix(remainingReferenceCount)
+        guard !addedReferences.isEmpty else { return }
         referenceImages += addedReferences.map(\.image)
         referenceSavedLookIDs += addedReferences.map(\.savedLookID)
+        analyzeReferenceImages()
+    }
+
+    // MARK: - Reference Keyword Analysis (VLM Debug)
+
+    /// Asynchronously extracts VLM keywords for all attached reference images.
+    public func analyzeReferenceImages() {
+        guard !referenceImages.isEmpty else {
+            referenceImageKeywords = [:]
+            fullExtractedVLMContext = nil
+            isAnalyzingReferencePhotos = false
+            return
+        }
+
+        let images = referenceImages
+        isAnalyzingReferencePhotos = true
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            var results: [Int: [String]] = [:]
+
+            // 1. Extract per-image all fashion keywords (color, cut, fit, material, pattern, genre vibe)
+            for (index, imageData) in images.enumerated() {
+                if let profile = await ReferenceImageStyleAnalyzer.shared.analyzeStyleProfile(from: [imageData]) {
+                    var tags: [String] = []
+                    if !profile.genreVibe.isEmpty { tags.append("Vibe: \(profile.genreVibe)") }
+                    if !profile.fit.isEmpty { tags.append("Fit: \(profile.fit)") }
+                    tags.append(contentsOf: profile.cuts)
+                    tags.append(contentsOf: profile.materials)
+                    tags.append(contentsOf: profile.patterns)
+                    if !profile.colors.isEmpty { tags.append("Tone: \(profile.colors)") }
+                    results[index] = tags
+                }
+            }
+
+            // 2. Extract full multi-line context string across all attached images
+            let fullContext = await ReferenceImageStyleAnalyzer.shared.analyzeStyle(from: images)
+
+            // Only update if images count hasn't changed while processing
+            if self.referenceImages.count == images.count {
+                self.referenceImageKeywords = results
+                self.fullExtractedVLMContext = fullContext
+            }
+            self.isAnalyzingReferencePhotos = false
+        }
+    }
+
+    /// Returns extracted visual keywords for a specific reference photo index.
+    public func extractedKeywords(for index: Int) -> [String] {
+        return referenceImageKeywords[index] ?? []
     }
     
     /// Loads the photos picked in "Open from Photos" as reference JPEGs and adds them.
@@ -409,6 +482,9 @@ public final class OccasionInputViewModel {
         referenceImages = []
         referenceSavedLookIDs = []
         referencePhotoPickerItems = []
+        referenceImageKeywords = [:]
+        fullExtractedVLMContext = nil
+        isAnalyzingReferencePhotos = false
         isShowingVisionPicker = false
         isShowingDiscardAlert = false
     }
@@ -424,5 +500,6 @@ public final class OccasionInputViewModel {
         referencePhotoPickerItems = []
         isShowingVisionPicker = false
         isShowingDiscardAlert = false
+        analyzeReferenceImages()
     }
 }

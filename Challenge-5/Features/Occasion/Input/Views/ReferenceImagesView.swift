@@ -103,19 +103,26 @@ struct ReferenceImagesView: View {
                         .strokeBorder(AppColors.inputBorder, lineWidth: 1)
                 )
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: AppDimensions.elementSpacing) {
-                        if isEditable && viewModel.canAddMoreReferences {
-                            addReferenceTile
+                VStack(alignment: .leading, spacing: 10) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: AppDimensions.elementSpacing) {
+                            if isEditable && viewModel.canAddMoreReferences {
+                                addReferenceTile
+                            }
+                            ForEach(Array(viewModel.referenceImages.enumerated()), id: \.offset) { index, imageData in
+                                referenceThumbnail(imageData, at: index)
+                            }
+                            if isEditable && viewModel.isLoadingReferencePhotos {
+                                ProgressView()
+                                    .frame(width: ReferencePickerConstants.Row.tileWidth,
+                                           height: ReferencePickerConstants.Row.tileHeight)
+                            }
                         }
-                        ForEach(Array(viewModel.referenceImages.enumerated()), id: \.offset) { index, imageData in
-                            referenceThumbnail(imageData, at: index)
-                        }
-                        if isEditable && viewModel.isLoadingReferencePhotos {
-                            ProgressView()
-                                .frame(width: ReferencePickerConstants.Row.tileWidth,
-                                       height: ReferencePickerConstants.Row.tileHeight)
-                        }
+                    }
+
+                    // Developer Debug Banner showing active VLM extracted context for Qwen 2.5
+                    if !viewModel.referenceImages.isEmpty && (!viewModel.referenceImageKeywords.isEmpty || viewModel.isAnalyzingReferencePhotos) {
+                        debugContextBanner
                     }
                 }
             }
@@ -147,27 +154,121 @@ struct ReferenceImagesView: View {
     }
 
     private func referenceThumbnail(_ imageData: Data, at index: Int) -> some View {
-        ZStack(alignment: .topTrailing) {
-            thumbnailImage(imageData)
-                .frame(width: ReferencePickerConstants.Row.tileWidth, height: ReferencePickerConstants.Row.tileHeight)
-                .clipShape(.rect(cornerRadius: AppDimensions.chipCornerRadius))
-            if isEditable {
-                Button {
-                    viewModel.removeReferenceImage(at: index)
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(AppTypography.caption.weight(.bold))
-                        .foregroundStyle(AppColors.bodyText)
-                        .frame(width: ReferencePickerConstants.Row.removeButtonSize,
-                               height: ReferencePickerConstants.Row.removeButtonSize)
-                        .background(AppColors.cardBackground)
-                        .clipShape(Circle())
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack(alignment: .topTrailing) {
+                thumbnailImage(imageData)
+                    .frame(width: ReferencePickerConstants.Row.tileWidth, height: ReferencePickerConstants.Row.tileHeight)
+                    .clipShape(.rect(cornerRadius: AppDimensions.chipCornerRadius))
+                if isEditable {
+                    Button {
+                        viewModel.removeReferenceImage(at: index)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(AppTypography.caption.weight(.bold))
+                            .foregroundStyle(AppColors.bodyText)
+                            .frame(width: ReferencePickerConstants.Row.removeButtonSize,
+                                   height: ReferencePickerConstants.Row.removeButtonSize)
+                            .background(AppColors.cardBackground)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(ReferencePickerConstants.Row.removeButtonInset)
+                    .accessibilityLabel("Remove reference photo \(index + 1)")
                 }
-                .buttonStyle(.plain)
-                .padding(ReferencePickerConstants.Row.removeButtonInset)
-                .accessibilityLabel("Remove reference photo \(index + 1)")
+            }
+
+            // Developer debug keywords at the bottom of the reference image
+            keywordsBottomView(for: index)
+        }
+        .frame(width: ReferencePickerConstants.Row.tileWidth)
+    }
+
+    @ViewBuilder
+    private func keywordsBottomView(for index: Int) -> some View {
+        let keywords = viewModel.extractedKeywords(for: index)
+        if !keywords.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(keywords, id: \.self) { keyword in
+                    Text(keyword)
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(AppColors.primaryBlue)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 3)
+                        .frame(maxWidth: ReferencePickerConstants.Row.tileWidth, alignment: .leading)
+                        .background(AppColors.primaryBlue.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+            }
+        } else if viewModel.isAnalyzingReferencePhotos {
+            HStack(spacing: 4) {
+                ProgressView()
+                    .scaleEffect(0.7)
+                Text("Analyzing…")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(AppColors.mutedCaption)
+            }
+            .frame(width: ReferencePickerConstants.Row.tileWidth, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var debugContextBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppColors.primaryBlue)
+                Text("VLM CONTEXT FOR QWEN 2.5 (DEBUG)")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(AppColors.primaryBlue)
+                Spacer()
+                Text("Full Prompt Text")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(AppColors.primaryBlue.opacity(0.7))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(AppColors.primaryBlue.opacity(0.08))
+                    .clipShape(Capsule())
+            }
+
+            if let fullContext = viewModel.fullExtractedVLMContext, !fullContext.isEmpty {
+                Text(fullContext)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(AppColors.espressoTitle)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            } else if viewModel.isAnalyzingReferencePhotos {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Extracting full visual context via VLM / Vision engine…")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(AppColors.mutedCaption)
+                }
+                .padding(.vertical, 4)
+            } else {
+                let allKeywords = (0..<viewModel.referenceImages.count)
+                    .flatMap { viewModel.extractedKeywords(for: $0) }
+                if !allKeywords.isEmpty {
+                    Text(allKeywords.joined(separator: " • "))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppColors.espressoTitle)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
             }
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.primaryBlue.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(AppColors.primaryBlue.opacity(0.2), lineWidth: 1)
+        )
     }
 
     @ViewBuilder

@@ -17,6 +17,25 @@ public struct LLMResource: Sendable {
     ]
     public static let modelExtension = "gguf"
 
+    /// VLM (Vision-Language Model) files for extracting detailed aesthetic keywords from reference photos.
+    public static let vlmModelFilename = "Qwen2.5-VL-3B-Instruct-Q4_K_M"
+    public static let vlmProjectorFilename = "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0"
+
+    /// Checks if the Qwen 2.5 VL 3B weights and vision projector are available on disk.
+    public static var isVLMModelAvailable: Bool {
+        candidateURL(for: vlmModelFilename) != nil && candidateURL(for: vlmProjectorFilename) != nil
+    }
+
+    /// URL for the VLM model file if found on disk.
+    public static var vlmModelURL: URL? {
+        candidateURL(for: vlmModelFilename)
+    }
+
+    /// URL for the VLM vision projector file if found on disk.
+    public static var vlmProjectorURL: URL? {
+        candidateURL(for: vlmProjectorFilename)
+    }
+
     /// The name of the active model currently found on disk.
     public static var activeModelFilename: String {
         for name in supportedModelFilenames {

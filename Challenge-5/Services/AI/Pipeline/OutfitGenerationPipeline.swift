@@ -104,13 +104,13 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        // 2. Approach 1: Analyze user reference photos via Apple Vision on Neural Engine
+        // 2. Analyze user reference photos via VLM / On-Device Vision Engine
         let allImageData = occasion.referenceImagesData.isEmpty
             ? (occasion.referenceImageData.map { [$0] } ?? [])
             : occasion.referenceImagesData
         let analyzedImageStyle = await ReferenceImageStyleAnalyzer.shared.analyzeStyle(from: allImageData)
         if let style = analyzedImageStyle {
-            print("👁️ [OutfitGenerationPipeline] Reference images analyzed via Apple Vision: \"\(style)\"")
+            print("👁️ [OutfitGenerationPipeline] Reference images analyzed (VLM embedded context):\n\(style)")
         }
 
         // 3. Sequential generation: one LLM call = one look.
@@ -190,11 +190,14 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        // 2. Approach 1: Analyze user reference photos via Apple Vision on Neural Engine
+        // 2. Analyze user reference photos via VLM / On-Device Vision Engine
         let allImageData = occasion.referenceImagesData.isEmpty
             ? (occasion.referenceImageData.map { [$0] } ?? [])
             : occasion.referenceImagesData
         let analyzedImageStyle = await ReferenceImageStyleAnalyzer.shared.analyzeStyle(from: allImageData)
+        if let style = analyzedImageStyle {
+            print("👁️ [OutfitGenerationPipeline] Reference images analyzed (VLM embedded context):\n\(style)")
+        }
 
         // 3. Extract summaries of all previous looks generated for this occasion (e.g. 5 previous looks or more)
         let previousSummaries = existingLooks.map { GeneratedLookSummary(from: $0) }
