@@ -84,8 +84,20 @@ public struct HumanDetector: Sendable {
                 isFullBody: false,
                 orientation: .uncertain,
                 isOrientationMatch: false,
-                message: "Tidak ada orang yang terdeteksi di dalam foto.",
+                message: "Tidak ada manusia yang terdeteksi. Pastikan ada orang di dalam foto.",
                 confidence: 0
+            )
+        }
+
+        // Jika terdeteksi lebih dari 1 orang
+        if humanRectangles.count > 1 {
+            return HumanDetectionResult(
+                isHumanPresent: true,
+                isFullBody: false,
+                orientation: .uncertain,
+                isOrientationMatch: false,
+                message: "Terdeteksi \(humanRectangles.count) orang di dalam foto. Pastikan hanya ada 1 orang.",
+                confidence: 0.8
             )
         }
 
@@ -115,12 +127,15 @@ public struct HumanDetector: Sendable {
         let la = joints[.leftAnkle]
         let ra = joints[.rightAnkle]
 
-        let hasUpper = (ls?.confidence ?? 0 > 0.15) || (rs?.confidence ?? 0 > 0.15) || (neck?.confidence ?? 0 > 0.15) || (nose?.confidence ?? 0 > 0.15)
-        let hasMid = (lh?.confidence ?? 0 > 0.15) || (rh?.confidence ?? 0 > 0.15) || (root?.confidence ?? 0 > 0.15)
-        let hasLower = (la?.confidence ?? 0 > 0.15) || (ra?.confidence ?? 0 > 0.15) || (lk?.confidence ?? 0 > 0.15) || (rk?.confidence ?? 0 > 0.15)
+        let hasHead = (nose?.confidence ?? 0 > 0.15) || (neck?.confidence ?? 0 > 0.15)
+        let hasShoulders = (ls?.confidence ?? 0 > 0.15) || (rs?.confidence ?? 0 > 0.15)
+        let hasHips = (lh?.confidence ?? 0 > 0.15) || (rh?.confidence ?? 0 > 0.15) || (root?.confidence ?? 0 > 0.15)
+        let hasLegs = (la?.confidence ?? 0 > 0.15) || (ra?.confidence ?? 0 > 0.15) || (lk?.confidence ?? 0 > 0.15) || (rk?.confidence ?? 0 > 0.15)
 
-        // Untuk pemindaian tubuh, kepala/leher, pinggul, dan kaki harus terdeteksi
-        guard hasUpper && hasMid && hasLower else {
+        let isFullBody = hasHead && hasShoulders && hasHips && hasLegs
+
+        // Untuk pemindaian tubuh, kepala/leher, bahu, pinggul, dan kaki harus terdeteksi
+        guard isFullBody else {
             return HumanDetectionResult(
                 isHumanPresent: true,
                 isFullBody: false,
@@ -137,64 +152,48 @@ public struct HumanDetector: Sendable {
         let confidences = joints.values.map { $0.confidence }
         let avgConfidence = confidences.isEmpty ? 0 : confidences.reduce(0, +) / Float(confidences.count)
 
-        // 5. Pencocokan dengan Sudut Hadap yang Diharapkan
+        // 5. Pencocokan dengan Sudut Hadap yang Diharapkan (Selaras dengan CobaBodyScan)
         switch expectedType {
         case .front:
-            if orientation == .front {
+            let isMatch = (orientation == .front || orientation == .uncertain)
+            if isMatch {
                 return HumanDetectionResult(
                     isHumanPresent: true,
                     isFullBody: true,
-                    orientation: .front,
+                    orientation: orientation,
                     isOrientationMatch: true,
-                    message: "Foto tampak depan terverifikasi.",
-                    confidence: avgConfidence
-                )
-            } else if orientation == .side {
-                return HumanDetectionResult(
-                    isHumanPresent: true,
-                    isFullBody: true,
-                    orientation: .side,
-                    isOrientationMatch: false,
-                    message: "Foto terdeteksi tampak samping. Mohon menghadap lurus ke kamera.",
+                    message: "Tampak Depan terverifikasi (Full Body).",
                     confidence: avgConfidence
                 )
             } else {
                 return HumanDetectionResult(
                     isHumanPresent: true,
                     isFullBody: true,
-                    orientation: .uncertain,
+                    orientation: orientation,
                     isOrientationMatch: false,
-                    message: "Sudut hadap depan belum jelas. Pastikan berdiri tegak lurus menghadap kamera.",
+                    message: "Foto ini terdeteksi sebagai Tampak Samping. Mohon berdiri menghadap lurus ke kamera.",
                     confidence: avgConfidence
                 )
             }
 
         case .side:
-            if orientation == .side {
+            let isMatch = (orientation == .side || orientation == .uncertain)
+            if isMatch {
                 return HumanDetectionResult(
                     isHumanPresent: true,
                     isFullBody: true,
-                    orientation: .side,
+                    orientation: orientation,
                     isOrientationMatch: true,
-                    message: "Foto tampak samping terverifikasi.",
-                    confidence: avgConfidence
-                )
-            } else if orientation == .front {
-                return HumanDetectionResult(
-                    isHumanPresent: true,
-                    isFullBody: true,
-                    orientation: .front,
-                    isOrientationMatch: false,
-                    message: "Foto terdeteksi tampak depan. Mohon berputar 90° menghadap ke samping.",
+                    message: "Tampak Samping terverifikasi (Full Body).",
                     confidence: avgConfidence
                 )
             } else {
                 return HumanDetectionResult(
                     isHumanPresent: true,
                     isFullBody: true,
-                    orientation: .uncertain,
+                    orientation: orientation,
                     isOrientationMatch: false,
-                    message: "Sudut hadap samping belum jelas. Pastikan berputar 90° menghadap ke samping profil.",
+                    message: "Foto ini terdeteksi sebagai Tampak Depan. Mohon berputar 90° (tampak samping).",
                     confidence: avgConfidence
                 )
             }

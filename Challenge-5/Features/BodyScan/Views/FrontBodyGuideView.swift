@@ -6,9 +6,13 @@
 //
 
 import SwiftUI
+import PhotosUI
 
-/// Visual guidance view presenting essential Do(s) and Don't(s)
-/// before capturing front-body photo for body shape analysis (C5-87).
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// Visual preparation view before capturing front-body photo for body shape analysis (C5-87).
 struct FrontBodyGuideView: View {
 
     // MARK: - Dependencies
@@ -16,32 +20,72 @@ struct FrontBodyGuideView: View {
     @Bindable var viewModel: BodyScanViewModel
     var onDismiss: (() -> Void)? = nil
 
-    // MARK: - Environment
+    // MARK: - State & Environment
 
+    @State private var selectedPickerItem: PhotosPickerItem? = nil
     @Environment(\.dismiss) private var dismiss
 
     // MARK: - Body
 
     var body: some View {
         ZStack {
-            AppColors.canvasBackground
+            Color.white
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // Top Sheet Drag Indicator
+                Capsule()
+                    .fill(Color(hex: "#D6D1CA"))
+                    .frame(width: 38, height: 5)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
+
                 headerBar
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppDimensions.sectionSpacing) {
-                        doDontSection
+                    VStack(spacing: 24) {
+                        illustrationCard
+                            .padding(.top, 24)
 
-                        Spacer(minLength: 16)
+                        Text("For the most accurate results, stand upright facing the camera directly in fitted clothing against a plain, contrasting wall.")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(Color(hex: "#1C1C1E"))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(2.5)
+                            .padding(.horizontal, 8)
+
+                        PhotosPicker(selection: $selectedPickerItem, matching: .images) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "photo.on.rectangle.angled")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text("Choose from Gallery")
+                                    .font(.system(size: 14, weight: .semibold))
+                            }
+                            .foregroundStyle(Color(hex: "#007AFF"))
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                        }
+                        .padding(.top, 4)
+
+                        Spacer(minLength: 24)
                     }
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-                    .padding(.top, 12)
-                    .padding(.bottom, 24)
                 }
-
-                bottomActionBar
+            }
+        }
+        .onChange(of: selectedPickerItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self) {
+                    #if canImport(UIKit)
+                    if let uiImage = UIImage(data: data) {
+                        await MainActor.run {
+                            viewModel.setFrontPhoto(uiImage)
+                            selectedPickerItem = nil
+                        }
+                    }
+                    #endif
+                }
             }
         }
     }
@@ -50,135 +94,71 @@ struct FrontBodyGuideView: View {
 
     private var headerBar: some View {
         HStack {
-            CircularIconButton(systemName: "xmark") {
+            // Left: Back (<) Button
+            Button {
                 if let onDismiss = onDismiss {
                     onDismiss()
                 } else {
                     dismiss()
                 }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                    .frame(width: 44, height: 44)
+                    .background(Color(hex: "#EFEFF0"))
+                    .clipShape(Circle())
             }
+            .buttonStyle(.plain)
 
             Spacer()
 
-            Text("Body Type Scan")
-                .font(AppTypography.cardHeadline)
-                .foregroundStyle(AppColors.espressoTitle)
+            Text("Body Type Scan (Front)")
+                .font(.system(size: 16, weight: .bold).width(.expanded))
+                .foregroundStyle(Color(hex: "#1C1C1E"))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
 
             Spacer()
 
-            // Balance circular icon button on the left
-            Color.clear
-                .frame(width: 44, height: 44)
-        }
-        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
-    }
-
-    // MARK: - Do(s) & Don't(s) Section
-
-    private var doDontSection: some View {
-        VStack(spacing: 16) {
-            // Column Headers
-            HStack {
-                Text("Do(s)")
-                    .font(AppTypography.cardHeadline)
-                    .foregroundStyle(Color(hex: "#34C759"))
-                    .frame(maxWidth: .infinity)
-
-                Text("Don't(s)")
-                    .font(AppTypography.cardHeadline)
-                    .foregroundStyle(Color(hex: "#FF3B30"))
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.bottom, 4)
-
-            // Pair 1: Direct front angle vs tilted angle
-            HStack(alignment: .top, spacing: 16) {
-                GuideDoDontCard(
-                    image: guideImage(named: "front_body_angle_do", fallbackSystemName: "figure.stand"),
-                    label: "Face the Camera Directly",
-                    isDo: true
-                )
-
-                GuideDoDontCard(
-                    image: guideImage(named: "front_body_angle_dont", fallbackSystemName: "person.crop.circle.badge.exclamationmark"),
-                    label: "Tilt or Angle Your Body",
-                    isDo: false
-                )
-            }
-
-            Divider()
-                .padding(.vertical, 4)
-
-            // Pair 2: Upright stance vs relaxed/slouched pose
-            HStack(alignment: .top, spacing: 16) {
-                GuideDoDontCard(
-                    image: guideImage(named: "front_body_posture_do", fallbackSystemName: "figure.stand.line.dotted.figure.stand"),
-                    label: "Upright Pose",
-                    isDo: true
-                )
-
-                GuideDoDontCard(
-                    image: guideImage(named: "front_body_posture_dont", fallbackSystemName: "figure.walk"),
-                    label: "Relaxed Pose",
-                    isDo: false
-                )
-            }
-
-            Divider()
-                .padding(.vertical, 4)
-
-            // Pair 3: Tight clothing against plain wall vs baggy clothing with clutter
-            HStack(alignment: .top, spacing: 16) {
-                GuideDoDontCard(
-                    image: guideImage(named: "front_body_clothing_do", fallbackSystemName: "tshirt"),
-                    label: "Tight Clothing and Infront of Contrast Colored Wall",
-                    isDo: true
-                )
-
-                GuideDoDontCard(
-                    image: guideImage(named: "front_body_clothing_dont", fallbackSystemName: "shippingbox.fill"),
-                    label: "Baggy Clothing and Infront of Objects",
-                    isDo: false
-                )
-            }
-        }
-        .padding(AppDimensions.cardInternalPadding)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius)
-                .stroke(AppColors.subtleBorder, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.04), radius: 8, y: 3)
-    }
-
-    // MARK: - Bottom Action Bar
-
-    private var bottomActionBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-
-            PrimaryPillButton(title: "Take Picture") {
+            // Right: Camera Button
+            Button {
                 viewModel.currentStep = .frontCamera
                 viewModel.startCamera()
+            } label: {
+                Image(systemName: "camera")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.black)
+                    .clipShape(Circle())
             }
-            .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-            .padding(.vertical, 16)
+            .buttonStyle(.plain)
         }
-        .background(AppColors.cardBackground)
+        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+        .padding(.vertical, 8)
     }
 
-    // MARK: - Asset Helper
+    // MARK: - Center Illustration Card
 
-    private func guideImage(named assetName: String, fallbackSystemName: String) -> Image {
-        #if canImport(UIKit)
-        if UIImage(named: assetName) != nil {
-            return Image(assetName)
+    private var illustrationCard: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: .black.opacity(0.07), radius: 16, x: 0, y: 4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.black.opacity(0.04), lineWidth: 1)
+                )
+
+            Image("bodyfront")
+                .renderingMode(.original)
+                .resizable()
+                .scaledToFit()
+                .padding(28)
         }
-        #endif
-        return Image(systemName: fallbackSystemName)
+        .aspectRatio(1.0, contentMode: .fit)
+        .frame(maxWidth: .infinity)
     }
 }
 

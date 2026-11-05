@@ -118,7 +118,7 @@ public final class BodyScanViewModel {
     }
 
     public var canProceedWithMetrics: Bool {
-        isHeightValid && isWeightValid && isAgeValid
+        isHeightValid
     }
 
     public var validationErrorMessage: String? {
@@ -126,14 +126,6 @@ public final class BodyScanViewModel {
             return "Height must be greater than 0 cm."
         } else if !isHeightValid {
             return "Height must be between \(Int(PhysicalMetricsValidator.minHeightCm)) cm and \(Int(PhysicalMetricsValidator.maxHeightCm)) cm."
-        } else if weightKg <= 0 {
-            return "Weight must be greater than 0 kg."
-        } else if !isWeightValid {
-            return "Weight must be between \(Int(PhysicalMetricsValidator.minWeightKg)) kg and \(Int(PhysicalMetricsValidator.maxWeightKg)) kg."
-        } else if age <= 0 {
-            return "Age must be greater than 0."
-        } else if !isAgeValid {
-            return "Age must be between \(PhysicalMetricsValidator.minAge) and \(PhysicalMetricsValidator.maxAge) years."
         }
         return nil
     }
@@ -155,6 +147,7 @@ public final class BodyScanViewModel {
     public var originalBustCircumferenceCm: Double?
     public var originalWaistCircumferenceCm: Double?
     public var originalHipCircumferenceCm: Double?
+    public var originalTorsoLengthCm: Double?
     public var isMeasurementsEdited: Bool = false
 
     /// Classification outputs (C5-94).
@@ -163,14 +156,41 @@ public final class BodyScanViewModel {
     public var classifiedTorsoBalance: TorsoBalance?
     public var computedTorsoToHeightRatio: Double?
 
-    /// Vision-detected vertical anatomical level lines on the photo (normalized [0, 1] for UIKit / SwiftUI)
+    /// Vision-detected pose results for skeleton overlay (CobaBodyScan PoseOverlayView)
+    public var frontPoseResult: PoseAnalysisResult?
+    public var sidePoseResult: PoseAnalysisResult?
+
+    /// Vision-detected vertical anatomical level lines on the front photo (normalized [0, 1] for UIKit / SwiftUI)
     public var detectedShoulderY: Double?
     public var detectedBustY: Double?
     public var detectedWaistY: Double?
     public var detectedHipY: Double?
 
+    /// Vision-detected vertical anatomical level lines on the side photo (normalized [0, 1] for UIKit / SwiftUI)
+    public var detectedSideBustY: Double?
+    public var detectedSideWaistY: Double?
+    public var detectedSideHipY: Double?
+
+    /// Horizontal slice bounds (normalizedLeft, normalizedRight) on front and side silhouettes
+    public var frontChestBounds: (Double, Double)?
+    public var frontWaistBounds: (Double, Double)?
+    public var frontHipBounds: (Double, Double)?
+
+    public var sideChestBounds: (Double, Double)?
+    public var sideWaistBounds: (Double, Double)?
+    public var sideHipBounds: (Double, Double)?
+
+    /// Cross-sectional width (front) and depth (side) in centimeters
+    public var chestWidthCm: Double?
+    public var chestDepthCm: Double?
+    public var waistWidthCm: Double?
+    public var waistDepthCm: Double?
+    public var hipWidthCm: Double?
+    public var hipDepthCm: Double?
+
     /// Torso Proportion metrics (CobaBodyScan Section 6)
     public var torsoLengthCm: Double?
+    public var shoulderToWaistCm: Double?
     public var torsoRatioPercent: Double?
     public var lowerBodyRatioPercent: Double?
 
@@ -182,8 +202,9 @@ public final class BodyScanViewModel {
 
     #if canImport(UIKit)
     public func setFrontPhoto(_ image: UIImage) {
-        self.frontImage = image
-        self.frontImageData = image.jpegData(compressionQuality: 0.85)
+        let fixed = ImageOrientationHelper.fixOrientation(image: image)
+        self.frontImage = fixed
+        self.frontImageData = fixed.jpegData(compressionQuality: 0.85)
         self.isFrontValidating = true
         self.frontValidationResult = nil
         self.isFrontAngleConfirmed = false
@@ -191,8 +212,8 @@ public final class BodyScanViewModel {
         self.isFrontFittedClothingConfirmed = false
         self.currentStep = .frontReview
 
-        Task { [image] in
-            let result = await HumanDetector.detectHuman(image: image, expectedType: .front)
+        Task { [fixed] in
+            let result = await HumanDetector.detectHuman(image: fixed, expectedType: .front)
             await MainActor.run {
                 self.frontValidationResult = result
                 self.isFrontValidating = false
@@ -212,8 +233,9 @@ public final class BodyScanViewModel {
     }
 
     public func setSidePhoto(_ image: UIImage) {
-        self.sideImage = image
-        self.sideImageData = image.jpegData(compressionQuality: 0.85)
+        let fixed = ImageOrientationHelper.fixOrientation(image: image)
+        self.sideImage = fixed
+        self.sideImageData = fixed.jpegData(compressionQuality: 0.85)
         self.isSideValidating = true
         self.sideValidationResult = nil
         self.isSideAngleConfirmed = false
@@ -221,8 +243,8 @@ public final class BodyScanViewModel {
         self.isSideFittedClothingConfirmed = false
         self.currentStep = .sideReview
 
-        Task { [image] in
-            let result = await HumanDetector.detectHuman(image: image, expectedType: .side)
+        Task { [fixed] in
+            let result = await HumanDetector.detectHuman(image: fixed, expectedType: .side)
             await MainActor.run {
                 self.sideValidationResult = result
                 self.isSideValidating = false
@@ -349,6 +371,9 @@ public final class BodyScanViewModel {
             let frontPose = try await BodyPoseAnalyzer.analyzePose(image: frontImg)
             let sidePose = try? await BodyPoseAnalyzer.analyzePose(image: sideImg)
 
+            self.frontPoseResult = frontPose
+            self.sidePoseResult = sidePose
+
             analysisProgressText = "Mengekstrak siluet dan mengestimasi lingkar dimensi..."
             let dimensions = await BodyDimensionCalculator.calculateDimensions(
                 frontImage: frontImg,
@@ -363,38 +388,80 @@ public final class BodyScanViewModel {
             self.waistCircumferenceCm = dimensions.waistCircumferenceCm
             self.hipCircumferenceCm = dimensions.hipCircumferenceCm
 
+            self.chestWidthCm = dimensions.chestWidthCm
+            self.chestDepthCm = dimensions.chestDepthCm
+            self.waistWidthCm = dimensions.waistWidthCm
+            self.waistDepthCm = dimensions.waistDepthCm
+            self.hipWidthCm = dimensions.hipWidthCm
+            self.hipDepthCm = dimensions.hipDepthCm
+
             self.originalShoulderWidthCm = dimensions.shoulderWidthCm
             self.originalBustCircumferenceCm = dimensions.bustCircumferenceCm
             self.originalWaistCircumferenceCm = dimensions.waistCircumferenceCm
             self.originalHipCircumferenceCm = dimensions.hipCircumferenceCm
+            self.originalTorsoLengthCm = dimensions.torsoLengthCm
             self.isMeasurementsEdited = false
 
-            // Extract Vision-detected vertical level lines for photo overlay
+            // Extract Vision-detected vertical level lines & horizontal slice bounds (matching CobaBodyScan)
             let shoulderY: Double = {
                 if let ls = frontPose.joints[.leftShoulder], let rs = frontPose.joints[.rightShoulder] {
                     return Double(ls.normalizedLocation.y + rs.normalizedLocation.y) / 2.0
                 } else if let s = frontPose.joints[.leftShoulder] ?? frontPose.joints[.rightShoulder] {
                     return Double(s.normalizedLocation.y)
                 }
-                return max(0.1, frontPose.chestLevelUIKitY - 0.08)
+                return max(0.1, dimensions.frontChestY - 0.08)
             }()
 
             self.detectedShoulderY = shoulderY
-            self.detectedBustY = frontPose.chestLevelUIKitY
-            self.detectedWaistY = frontPose.waistLevelUIKitY
-            self.detectedHipY = frontPose.hipLevelUIKitY
+            self.detectedBustY = dimensions.frontChestY
+            self.detectedWaistY = dimensions.frontWaistY
+            self.detectedHipY = dimensions.frontHipY
 
-            // Calculate Torso Proportion (CobaBodyScan Section 6)
-            let neckY = frontPose.joints[.neck]?.normalizedLocation.y ?? CGFloat(frontPose.chestLevelUIKitY - 0.05)
-            let hipJointY = frontPose.joints[.leftHip]?.normalizedLocation.y ?? CGFloat(frontPose.waistLevelUIKitY)
-            let totalHeightNorm = max(0.3, frontPose.feetBottomUIKitY - frontPose.headTopUIKitY)
-            let torsoFraction = abs(Double(hipJointY - neckY)) / totalHeightNorm
-            let torsoLenCm = torsoFraction * heightCm
-            let torsoPct = (torsoLenCm / heightCm) * 100.0
+            self.detectedSideBustY = dimensions.sideChestY
+            self.detectedSideWaistY = dimensions.sideWaistY
+            self.detectedSideHipY = dimensions.sideHipY
 
-            self.torsoLengthCm = round(torsoLenCm * 10) / 10
-            self.torsoRatioPercent = round(torsoPct * 10) / 10
-            self.lowerBodyRatioPercent = round((100.0 - torsoPct) * 10) / 10
+            if let fChest = dimensions.frontChestSlice {
+                self.frontChestBounds = (fChest.normalizedLeft, fChest.normalizedRight)
+            } else {
+                self.frontChestBounds = nil
+            }
+
+            if let fWaist = dimensions.frontWaistSlice {
+                self.frontWaistBounds = (fWaist.normalizedLeft, fWaist.normalizedRight)
+            } else {
+                self.frontWaistBounds = nil
+            }
+
+            if let fHip = dimensions.frontHipSlice {
+                self.frontHipBounds = (fHip.normalizedLeft, fHip.normalizedRight)
+            } else {
+                self.frontHipBounds = nil
+            }
+
+            if let sChest = dimensions.sideChestSlice {
+                self.sideChestBounds = (sChest.normalizedLeft, sChest.normalizedRight)
+            } else {
+                self.sideChestBounds = nil
+            }
+
+            if let sWaist = dimensions.sideWaistSlice {
+                self.sideWaistBounds = (sWaist.normalizedLeft, sWaist.normalizedRight)
+            } else {
+                self.sideWaistBounds = nil
+            }
+
+            if let sHip = dimensions.sideHipSlice {
+                self.sideHipBounds = (sHip.normalizedLeft, sHip.normalizedRight)
+            } else {
+                self.sideHipBounds = nil
+            }
+
+            // Torso Proportion (Unified with CobaBodyScan ScanSession.computeTorsoMeasurements)
+            self.torsoLengthCm = dimensions.torsoLengthCm
+            self.shoulderToWaistCm = dimensions.shoulderToWaistCm
+            self.torsoRatioPercent = dimensions.torsoToHeightRatio
+            self.lowerBodyRatioPercent = round((100.0 - dimensions.torsoToHeightRatio) * 10) / 10
 
             let classification = BodyClassifier.classify(
                 bustCm: dimensions.bustCircumferenceCm,
@@ -424,12 +491,27 @@ public final class BodyScanViewModel {
 
     // MARK: - Fine-Tuning & Persistence (C5-96)
 
-    /// Allow user to manually adjust calculated measurements via sliders / steppers in C5-96.
-    public func updateMeasurement(shoulder: Double?, bust: Double?, waist: Double?, hip: Double?) {
+    /// Allow user to manually adjust calculated measurements via text inputs / sliders in C5-96.
+    public func updateMeasurement(
+        shoulder: Double? = nil,
+        bust: Double? = nil,
+        waist: Double? = nil,
+        hip: Double? = nil,
+        torso: Double? = nil
+    ) {
         if let shoulder = shoulder { self.shoulderWidthCm = round(shoulder * 10) / 10 }
         if let bust = bust { self.bustCircumferenceCm = round(bust * 10) / 10 }
         if let waist = waist { self.waistCircumferenceCm = round(waist * 10) / 10 }
         if let hip = hip { self.hipCircumferenceCm = round(hip * 10) / 10 }
+        if let torso = torso {
+            self.torsoLengthCm = round(torso * 10) / 10
+            if heightCm > 0 {
+                let ratio = round((torso / heightCm) * 100.0 * 10) / 10
+                self.torsoRatioPercent = ratio
+                self.lowerBodyRatioPercent = round((100.0 - ratio) * 10) / 10
+                self.computedTorsoToHeightRatio = ratio
+            }
+        }
 
         self.isMeasurementsEdited = true
         reclassifyCurrentMeasurements()
@@ -441,6 +523,15 @@ public final class BodyScanViewModel {
         if let origB = originalBustCircumferenceCm { bustCircumferenceCm = origB }
         if let origW = originalWaistCircumferenceCm { waistCircumferenceCm = origW }
         if let origH = originalHipCircumferenceCm { hipCircumferenceCm = origH }
+        if let origT = originalTorsoLengthCm {
+            torsoLengthCm = origT
+            if heightCm > 0 {
+                let ratio = round((origT / heightCm) * 100.0 * 10) / 10
+                torsoRatioPercent = ratio
+                lowerBodyRatioPercent = round((100.0 - ratio) * 10) / 10
+                computedTorsoToHeightRatio = ratio
+            }
+        }
 
         self.isMeasurementsEdited = false
         reclassifyCurrentMeasurements()
@@ -448,17 +539,19 @@ public final class BodyScanViewModel {
 
     private func reclassifyCurrentMeasurements() {
         if let b = bustCircumferenceCm, let w = waistCircumferenceCm, let h = hipCircumferenceCm {
+            let activeTorsoLen = torsoLengthCm ?? ((computedTorsoToHeightRatio != nil) ? (computedTorsoToHeightRatio! * heightCm / 100.0) : nil)
             let reclassified = BodyClassifier.classify(
                 bustCm: b,
                 waistCm: w,
                 hipCm: h,
                 shoulderWidthCm: shoulderWidthCm,
                 enteredHeightCm: heightCm,
-                torsoLengthCm: (computedTorsoToHeightRatio != nil) ? (computedTorsoToHeightRatio! * heightCm / 100.0) : nil
+                torsoLengthCm: activeTorsoLen
             )
             self.classificationResult = reclassified
             self.classifiedBodyType = reclassified.bodyType
             self.classifiedTorsoBalance = reclassified.torsoBalance
+            self.computedTorsoToHeightRatio = reclassified.torsoToHeightRatio
         }
     }
 

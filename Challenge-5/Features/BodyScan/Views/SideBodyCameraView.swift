@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVFoundation
+import PhotosUI
 
 /// Live AVFoundation camera capture screen for Side Body posture and silhouette analysis (C5-88).
 /// Features vertical posture plumb line, horizontal level lines (head, chest, waist, feet),
@@ -21,6 +22,7 @@ struct SideBodyCameraView: View {
     @State private var isCapturing: Bool = false
     @State private var countdownRemaining: Int = 3
     @State private var selectedZoom: CGFloat = 1.0
+    @State private var selectedPickerItem: PhotosPickerItem? = nil
 
     // MARK: - Body
 
@@ -278,17 +280,16 @@ struct SideBodyCameraView: View {
             Spacer()
 
             HStack(alignment: .center) {
-                // Left: Close Button
-                Button {
-                    viewModel.currentStep = .sideGuide
-                } label: {
-                    Image(systemName: "xmark")
+                // Left: Choose from Gallery Button
+                PhotosPicker(selection: $selectedPickerItem, matching: .images) {
+                    Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.85))
                         .frame(width: 48, height: 48)
                         .background(Color.white.opacity(0.18))
                         .clipShape(Circle())
                 }
+                .disabled(isCapturing || viewModel.isCountingDown)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Center: Shutter Capture Button
@@ -326,6 +327,18 @@ struct SideBodyCameraView: View {
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 36)
+        }
+        .onChange(of: selectedPickerItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let uiImage = UIImage(data: data) {
+                    await MainActor.run {
+                        viewModel.setSidePhoto(uiImage)
+                        selectedPickerItem = nil
+                    }
+                }
+            }
         }
     }
 

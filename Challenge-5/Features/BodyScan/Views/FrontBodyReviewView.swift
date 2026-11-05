@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 #if canImport(UIKit)
 import UIKit
@@ -19,6 +20,7 @@ struct FrontBodyReviewView: View {
     // MARK: - State & Dependencies
 
     @Bindable var viewModel: BodyScanViewModel
+    @State private var selectedPickerItem: PhotosPickerItem? = nil
 
     // MARK: - Body
 
@@ -80,13 +82,38 @@ struct FrontBodyReviewView: View {
 
             Spacer()
 
-            // Balance circular icon button on the left
-            Color.clear
-                .frame(width: AppDimensions.circularIconSize, height: AppDimensions.circularIconSize)
+            // Gallery Picker on the right for quick photo replacement
+            PhotosPicker(selection: $selectedPickerItem, matching: .images) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.espressoTitle)
+                    .frame(width: AppDimensions.circularIconSize, height: AppDimensions.circularIconSize)
+                    .background(AppColors.cardBackground)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(AppColors.subtleBorder, lineWidth: 1)
+                    )
+            }
         }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
         .padding(.top, 12)
         .padding(.bottom, 8)
+        .onChange(of: selectedPickerItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self) {
+                    #if canImport(UIKit)
+                    if let uiImage = UIImage(data: data) {
+                        await MainActor.run {
+                            viewModel.setFrontPhoto(uiImage)
+                            selectedPickerItem = nil
+                        }
+                    }
+                    #endif
+                }
+            }
+        }
     }
 
     // MARK: - Photo Card

@@ -86,10 +86,8 @@ struct ProfilingFlowHostView: View {
             }
         case .sideCamera:
             SideBodyCameraView(viewModel: bodyViewModel)
-        case .sideReview:
+        case .sideReview, .metricsInput:
             SideBodyReviewView(viewModel: bodyViewModel)
-        case .metricsInput:
-            PhysicalMetricsInputView(viewModel: bodyViewModel)
         case .analysisResult:
             BodyAnalysisResultView(viewModel: bodyViewModel) {
                 onComplete()

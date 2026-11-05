@@ -6,9 +6,13 @@
 //
 
 import SwiftUI
+import PhotosUI
 
-/// Visual guidance view that presents essential Do(s) and Don't(s)
-/// before capturing facial photo for personal color analysis (C5-81).
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// Visual preparation view before capturing facial photo for personal color analysis (C5-81).
 struct SkinScanGuideView: View {
 
     // MARK: - Dependencies
@@ -16,34 +20,72 @@ struct SkinScanGuideView: View {
     @Bindable var viewModel: SkinScanViewModel
     var onDismiss: (() -> Void)? = nil
 
-    // MARK: - Environment
+    // MARK: - State & Environment
 
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedPickerItem: PhotosPickerItem? = nil
 
     // MARK: - Body
 
     var body: some View {
         ZStack {
-            AppColors.canvasBackground
+            Color.white
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // Top Sheet Drag Indicator
+                Capsule()
+                    .fill(Color(hex: "#D6D1CA"))
+                    .frame(width: 38, height: 5)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
+
                 headerBar
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppDimensions.sectionSpacing) {
-                        instructionHeader
+                    VStack(spacing: 24) {
+                        illustrationCard
+                            .padding(.top, 24)
 
-                        doDontSection
+                        Text("For the most accurate results, take a front-facing photo with a bare face, no accessories, hair tied back, natural daylight, and a plain neutral background.")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(Color(hex: "#1C1C1E"))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(2.5)
+                            .padding(.horizontal, 8)
 
-                        Spacer(minLength: 16)
+                        PhotosPicker(selection: $selectedPickerItem, matching: .images) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "photo.on.rectangle.angled")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text("Choose from Gallery")
+                                    .font(.system(size: 14, weight: .semibold))
+                            }
+                            .foregroundStyle(Color(hex: "#007AFF"))
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                        }
+                        .padding(.top, 4)
+
+                        Spacer(minLength: 24)
                     }
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
                 }
-
-                bottomActionBar
+            }
+        }
+        .onChange(of: selectedPickerItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self) {
+                    #if canImport(UIKit)
+                    if let uiImage = UIImage(data: data) {
+                        await MainActor.run {
+                            viewModel.setCapturedPhoto(uiImage)
+                            selectedPickerItem = nil
+                        }
+                    }
+                    #endif
+                }
             }
         }
     }
@@ -52,127 +94,69 @@ struct SkinScanGuideView: View {
 
     private var headerBar: some View {
         HStack {
-            CircularIconButton(systemName: "xmark") {
+            // Left: Back (<) Button
+            Button {
                 if let onDismiss = onDismiss {
                     onDismiss()
                 } else {
                     dismiss()
                 }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                    .frame(width: 44, height: 44)
+                    .background(Color(hex: "#EFEFF0"))
+                    .clipShape(Circle())
             }
+            .buttonStyle(.plain)
 
             Spacer()
-        }
-        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
-    }
 
-    // MARK: - Instruction Header
-
-    private var instructionHeader: some View {
-        VStack(spacing: 8) {
             Text("Skin Color Scan")
-                .font(AppTypography.screenHeader)
-                .foregroundStyle(AppColors.espressoTitle)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .font(.system(size: 17, weight: .bold).width(.expanded))
+                .foregroundStyle(Color(hex: "#1C1C1E"))
 
-            Text("Follow these visual guidelines to ensure optimal lighting and facial positioning for accurate color season analysis.")
-                .font(AppTypography.bodyRegular)
-                .foregroundStyle(AppColors.bodyText)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
+            Spacer()
 
-    // MARK: - Do(s) & Don't(s) Grid Section
-
-    private var doDontSection: some View {
-        VStack(spacing: 16) {
-            // Column Headers
-            HStack {
-                Text("Do(s)")
-                    .font(AppTypography.cardHeadline)
-                    .foregroundStyle(.green)
-                    .frame(maxWidth: .infinity)
-
-                Text("Don't(s)")
-                    .font(AppTypography.cardHeadline)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.bottom, 4)
-
-            // Pair 1: Bare Face vs Makeup
-            HStack(alignment: .top, spacing: 16) {
-                GuideDoDontCard(
-                    image: Image(systemName: "face.smiling"),
-                    label: "Bare Face Only\nNo filters or products",
-                    isDo: true
-                )
-
-                GuideDoDontCard(
-                    image: Image(systemName: "paintbrush.fill"),
-                    label: "Wearing Makeup\nAvoid foundation & blush",
-                    isDo: false
-                )
-            }
-
-            Divider()
-                .padding(.vertical, 4)
-
-            // Pair 2: Natural Daylight vs Artificial / Yellow Lighting
-            HStack(alignment: .top, spacing: 16) {
-                GuideDoDontCard(
-                    image: Image(systemName: "sun.max.fill"),
-                    label: "Natural Daylight\nFace toward a window",
-                    isDo: true
-                )
-
-                GuideDoDontCard(
-                    image: Image(systemName: "lightbulb.fill"),
-                    label: "Artificial Lighting\nAvoid harsh yellow light",
-                    isDo: false
-                )
-            }
-
-            Divider()
-                .padding(.vertical, 4)
-
-            // Pair 3: Direct Head Angle vs Tilted Angle
-            HStack(alignment: .top, spacing: 16) {
-                GuideDoDontCard(
-                    image: Image(systemName: "person.fill.viewfinder"),
-                    label: "Face Camera Directly\nCentered & upright posture",
-                    isDo: true
-                )
-
-                GuideDoDontCard(
-                    image: Image(systemName: "person.crop.circle.badge.exclamationmark"),
-                    label: "Tilt or Angle Head\nAvoid shadows & tilt",
-                    isDo: false
-                )
-            }
-        }
-        .padding(AppDimensions.cardInternalPadding)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
-        .shadow(color: .black.opacity(0.04), radius: 8, y: 3)
-    }
-
-    // MARK: - Bottom Action Bar
-
-    private var bottomActionBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-
-            PrimaryPillButton(title: "Let's Get Started") {
+            // Right: Camera Button
+            Button {
                 viewModel.currentStep = .camera
                 viewModel.startCamera()
+            } label: {
+                Image(systemName: "camera")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.black)
+                    .clipShape(Circle())
             }
-            .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-            .padding(.vertical, 16)
+            .buttonStyle(.plain)
         }
-        .background(AppColors.cardBackground)
+        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Center Illustration Card
+
+    private var illustrationCard: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: .black.opacity(0.07), radius: 16, x: 0, y: 4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.black.opacity(0.04), lineWidth: 1)
+                )
+
+            Image("skinsvg")
+                .renderingMode(.original)
+                .resizable()
+                .scaledToFit()
+                .padding(36)
+        }
+        .aspectRatio(1.0, contentMode: .fit)
+        .frame(maxWidth: .infinity)
     }
 }
 

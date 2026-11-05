@@ -36,32 +36,6 @@ struct SkinResultView: View {
         viewModel.selectedColorSeason ?? viewModel.predictedColorSeason ?? .trueSpring
     }
 
-    private var undertoneTitle: String {
-        switch activeSeason {
-        case .brightSpring, .trueSpring, .lightSpring:
-            return "Warm Spring Undertone"
-        case .lightSummer, .trueSummer, .softSummer:
-            return "Cool Summer Undertone"
-        case .softAutumn, .trueAutumn, .darkAutumn:
-            return "Warm Autumn Undertone"
-        case .darkWinter, .trueWinter, .brightWinter:
-            return "Cool Winter Undertone"
-        }
-    }
-
-    private var undertoneExplanation: String {
-        switch activeSeason {
-        case .brightSpring, .trueSpring, .lightSpring:
-            return "You have a permanent, underlying layer of golden, yellow, or peach hues beneath the surface of your skin."
-        case .lightSummer, .trueSummer, .softSummer:
-            return "You have a permanent, underlying layer of cool blue, rose, or gentle pink hues beneath the surface of your skin."
-        case .softAutumn, .trueAutumn, .darkAutumn:
-            return "You have a permanent, underlying layer of rich warm bronze, olive, or golden undertones beneath the surface of your skin."
-        case .darkWinter, .trueWinter, .brightWinter:
-            return "You have a permanent, underlying layer of cool blue, porcelain, or vivid cool undertones beneath the surface of your skin."
-        }
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -130,7 +104,7 @@ struct SkinResultView: View {
     // MARK: - Result Poster Card
 
     private var resultPosterCard: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             // Best Colors Badge
             Text("BEST COLORS FOR YOUR SEASON")
                 .font(AppTypography.caption.weight(.bold))
@@ -149,11 +123,20 @@ struct SkinResultView: View {
                 faceImage: viewModel.capturedFaceImage
             )
 
-            // Subtitle Label
-            Text(undertoneTitle)
-                .font(AppTypography.sfProSemiboldExtended(size: 16))
+            // Season Title (exact match with ColorSeason ruleset)
+            Text(activeSeason.rawValue)
+                .font(.system(size: 21, weight: .bold).width(.expanded))
                 .foregroundStyle(AppColors.espressoTitle)
                 .padding(.top, 4)
+
+            // Season Definition (exact match with ColorSeason.definition ruleset)
+            Text(activeSeason.definition)
+                .font(.system(size: 13.5))
+                .foregroundStyle(AppColors.bodyText)
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
         }
         .padding(.vertical, 22)
         .padding(.horizontal, AppDimensions.cardInternalPadding)
@@ -176,12 +159,12 @@ struct SkinResultView: View {
                     .font(.system(size: 16))
                     .foregroundStyle(Color(hex: "#C68B59"))
 
-                Text("Skin Undertone Analysis")
+                Text("Seasonal Essence & Tonal Aspects")
                     .font(AppTypography.cardHeadline)
                     .foregroundStyle(AppColors.espressoTitle)
             }
 
-            Text(undertoneExplanation)
+            Text(activeSeason.act)
                 .font(AppTypography.bodyRegular)
                 .foregroundStyle(AppColors.bodyText)
                 .lineSpacing(3)
@@ -189,15 +172,22 @@ struct SkinResultView: View {
             Divider()
                 .padding(.vertical, 2)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Seasonal Essence")
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Tonal Coordinates")
                     .font(AppTypography.caption.weight(.semibold))
                     .foregroundStyle(AppColors.espressoTitle)
 
-                Text(activeSeason.act)
+                Text("• Hue: \(activeSeason.hue)")
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.mutedCaption)
-                    .lineSpacing(2)
+
+                Text("• Value: \(activeSeason.value)")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.mutedCaption)
+
+                Text("• Chroma: \(activeSeason.chroma)")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.mutedCaption)
             }
         }
         .padding(AppDimensions.cardInternalPadding)
