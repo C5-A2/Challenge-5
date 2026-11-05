@@ -196,8 +196,6 @@ struct ReferenceImagesView: View {
                         .padding(.horizontal, 5)
                         .padding(.vertical, 3)
                         .frame(maxWidth: ReferencePickerConstants.Row.tileWidth, alignment: .leading)
-                        .background(AppColors.primaryBlue.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
             }
         } else if viewModel.isAnalyzingReferencePhotos {

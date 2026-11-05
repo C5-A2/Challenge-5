@@ -220,18 +220,19 @@ public actor VLMEngine {
 
         // 2. Structured System Prompt targeted at high-accuracy fashion categorization
         let systemPrompt = """
-        You are an expert fashion stylist and computer vision analyst.
-        Analyze the clothing garments worn by the person in this photo.
-        Extract:
-        - genreVibe: fashion aesthetic (e.g. Indonesian Batik Heritage, Clean Minimalist, Coquette, Modern Streetwear, Chic Professional, Old Money, Resort Casual).
-        - persona: stylistic persona (e.g. Cultural Heritage, Romantic Feminine, Chic Professional, Trendy Youthful, Elegant Tailored).
-        - fit: fit & proportions (e.g. Relaxed, Cropped, Tailored, Slim Fit, Oversized).
-        - cuts: specific garment cuts (e.g. crop top, halter top, blazer, suit jacket, button-down shirt, wide-leg trousers, pencil skirt, tiered ruffle skirt, batik shirt, kebaya, shorts). Strictly avoid "gown" or "dress" unless it is genuinely a full evening gown.
-        - materials: tactile fabrics (e.g. cotton poplin, chiffon, lace, denim, silk, linen, wool twill, ribbed knit, batik fabric).
-        - patterns: garment surface pattern (e.g. traditional Indonesian batik, floral, pinstripe, solid, houndstooth, plaid). If traditional Indonesian batik or ethnic pattern is present, identify it explicitly as "traditional batik".
-        - colors: 2 to 4 prominent garment colors (e.g. warm camel, rich crimson, soft ivory, navy, pastel pink). Focus strictly on clothes and ignore background walls, floors, or room lighting.
+        You are an expert fashion stylist AI with deep knowledge of Indonesian fashion, Asian street style, and global aesthetics.
+        Analyze ONLY the clothing worn by the person in this photo. Do NOT describe the background.
 
-        Output valid JSON only matching the schema:
+        Extract the following fields:
+        - genreVibe: The overall fashion aesthetic. Examples: "Indonesian Batik Heritage", "Kebaya Modern", "Clean Minimalist", "Coquette", "Modern Streetwear", "Chic Professional", "Old Money", "Resort Casual", "Fairy Feminine", "Y2K Street", "Cottagecore", "Soft Casual".
+        - persona: The stylistic persona. Examples: "Cultural Heritage", "Romantic Feminine", "Chic Professional", "Trendy Youthful", "Elegant Tailored", "Effortless Cool".
+        - fit: Fit and proportions. Examples: "Relaxed", "Cropped", "Tailored", "Slim Fit", "Oversized", "Fitted".
+        - cuts: List ALL visible garment pieces as specific cut names. You MUST identify each garment separately. Examples of valid cut names: "crop top", "cami top", "tank top", "halter top", "tube top", "off-shoulder top", "button-down shirt", "blazer", "suit jacket", "cardigan", "knit vest", "denim jacket", "mini skirt", "midi skirt", "maxi skirt", "tiered ruffle skirt", "wide-leg trousers", "straight-leg pants", "denim shorts", "bike shorts", "wide-leg jeans", "cargo pants", "batik kemeja", "kebaya", "kebaya encim", "batik dress", "wrap dress", "midi dress", "co-ord set". NEVER use "gown" unless the garment is literally a floor-length formal ball gown. NEVER output just "dress" — always specify the type (wrap dress, midi dress, sundress, etc.). A tiered skirt is NOT a gown. A maxi skirt is NOT a gown. A batik two-piece is NOT a gown.
+        - materials: Tactile fabrics visible. Examples: "cotton poplin", "chiffon", "lace", "denim", "silk", "linen", "ribbed knit", "batik fabric", "crochet", "mesh", "satin".
+        - patterns: Surface pattern on garments. Examples: "traditional Indonesian batik", "modern batik print", "floral", "solid", "pinstripe", "houndstooth", "plaid", "tie-dye". If traditional Indonesian batik motifs (parang, kawung, mega mendung, truntum, etc.) are present, always output "traditional Indonesian batik".
+        - colors: 2 to 4 prominent garment colors only (ignore background). Examples: "warm camel", "rich crimson", "soft ivory", "navy", "pastel pink", "cobalt blue", "sage green", "dusty rose".
+
+        Respond with ONLY a valid JSON object. No markdown, no explanation.
         {"genreVibe": "...", "persona": "...", "fit": "...", "cuts": [...], "materials": [...], "patterns": [...], "colors": "..."}
         """
 
@@ -267,7 +268,7 @@ public actor VLMEngine {
         defer {
             llama_sampler_free(sampler)
         }
-        llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.1))
+        llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.05))
         llama_sampler_chain_add(sampler, llama_sampler_init_dist(42))
 
         var outputText = ""
@@ -281,7 +282,7 @@ public actor VLMEngine {
 
         var curPos = newNPast
         var buffer = [CChar](repeating: 0, count: 256)
-        let maxOutputTokens = 350
+        let maxOutputTokens = 512
 
         for _ in 0..<maxOutputTokens {
             let curToken = llama_sampler_sample(sampler, lctx, -1)
