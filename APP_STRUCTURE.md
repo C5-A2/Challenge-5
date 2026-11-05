@@ -315,7 +315,7 @@ Challenge-5/
 │   │
 │   ├── Profile/                                   # ── Stack 12, 21 ── (Michael)
 │   │   ├── Views/
-│   │   │   ├── ProfileHubView.swift               # 3 folder cards hub (Color Season, Body Type, Measurements)
+│   │   │   ├── ProfileHubView.swift               # 2-tab hub (Color Season & Body Type, editable Bust/Waist/Hips/Torso, scrollable Retake)
 │   │   │   └── Components/
 │   │   │       └── FolderCardItem.swift           # Glassmorphic tab-folder card
 │   │   └── ViewModels/
@@ -323,23 +323,23 @@ Challenge-5/
 │   │
 │   ├── SkinScan/                                  # ── Stack 19 ── (Ricky)
 │   │   ├── Views/
-│   │   │   ├── SkinScanGuideView.swift            # Do & Don't face scan guide
-│   │   │   ├── FaceCameraView.swift               # Live camera + green dot lighting check
+│   │   │   ├── SkinScanGuideView.swift            # Permission & Skin Color Scan guide (uses vector `skinsvg`, `bodyfront`, `bodyside`)
+│   │   │   ├── FaceCameraView.swift               # Live camera + photo gallery picker + green dot lighting check
 │   │   │   ├── FaceReviewView.swift               # Photo checklist + discard modal
-│   │   │   └── SkinResultView.swift               # Color Season wheel + undertone text
+│   │   │   └── SkinResultView.swift               # Color Season wheel + ColorSeason ruleset definition & tonal aspects
 │   │   └── ViewModels/
 │   │       └── SkinScanViewModel.swift
 │   │
 │   ├── BodyScan/                                  # ── Stack 20 ── (Ricky)
 │   │   ├── Views/
-│   │   │   ├── FrontBodyGuideView.swift           # Front body Do & Don't
-│   │   │   ├── FrontBodyCameraView.swift          # Camera + alignment guides
+│   │   │   ├── FrontBodyGuideView.swift           # Front body scan guide (vector `bodyfront`)
+│   │   │   ├── FrontBodyCameraView.swift          # Camera + photo gallery picker + alignment guides
 │   │   │   ├── FrontBodyReviewView.swift          # Review front capture
-│   │   │   ├── SideBodyGuideView.swift            # Side body Do & Don't
-│   │   │   ├── SideBodyCameraView.swift           # Camera + vertical alignment
-│   │   │   ├── SideBodyReviewView.swift           # Review side capture
-│   │   │   ├── PhysicalMetricsInputView.swift     # Age, Weight, Height, Size S–XXL
-│   │   │   └── BodyAnalysisResultView.swift       # Body type visual + torso balance
+│   │   │   ├── SideBodyGuideView.swift            # Side body scan guide (vector `bodyside`)
+│   │   │   ├── SideBodyCameraView.swift           # Camera + photo gallery picker + vertical alignment
+│   │   │   ├── SideBodyReviewView.swift           # Review side capture + half-sheet modal trigger for Height input
+│   │   │   ├── PhysicalMetricsInputView.swift     # Half-screen modal (`.presentationDetents([.medium])`) for Height (cm) input
+│   │   │   └── BodyAnalysisResultView.swift       # CobaBodyScan Front/Side pose & slice overlay + editable Bust/Waist/Hips/Torso + Torso classification
 │   │   └── ViewModels/
 │   │       └── BodyScanViewModel.swift
 │   │
@@ -617,6 +617,7 @@ enum ColorSeason: String, Codable, CaseIterable, Identifiable, Sendable {
     var chroma: String
     var palette: [ColorSwatch]
     var sampleSwatches: [ColorSwatch]
+    var wheelHexColors: [String]
     var systemPrompt: String
     var llmPromptContext: String
     
