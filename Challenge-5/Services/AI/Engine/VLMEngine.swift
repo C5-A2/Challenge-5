@@ -58,6 +58,7 @@ public enum VLMEngineError: Error, LocalizedError {
 /// - 100% On-Device execution on iOS physical devices and TestFlight (no external server or LAN bridge needed).
 /// - Full Metal GPU acceleration (`ctxParams.use_gpu = true` and `modelParams.n_gpu_layers = 99`).
 /// - Zero-copy memory buffer ingestion (`mtmd_helper_bitmap_init_from_buf`).
+/// - Free-form natural language fashion styling output (resilient, no JSON parsing failure).
 /// - Lifecycle memory reclamation (`unload()` releases VRAM/RAM immediately after analysis to avoid iOS Jetsam pressure).
 /// - Safe mock fallback for Xcode Previews and Simulator.
 public actor VLMEngine {
@@ -154,20 +155,15 @@ public actor VLMEngine {
 
     // MARK: - Multimodal Analysis API
 
-    /// Analyzes an outfit image buffer and extracts a structured `ReferenceImageStyleProfile`.
-    public func analyzeImage(data: Data) async throws -> ReferenceImageStyleProfile {
+    /// Analyzes an outfit image buffer and extracts natural language fashion styling descriptions.
+    ///
+    /// - Returns: A dense, natural descriptive paragraph detailing garments, cut, silhouette, textures,
+    ///   patterns, and colors without constraining into fragile JSON structures.
+    public func analyzeImage(data: Data) async throws -> String {
         #if targetEnvironment(simulator)
         // High quality mock for Simulator / Previews
-        try? await Task.sleep(nanoseconds: 400_000_000)
-        return ReferenceImageStyleProfile(
-            genreVibe: "Modern Chic",
-            persona: "Elevated Minimalist",
-            fit: "Tailored Regular",
-            cuts: ["Tailored Blazer", "Wide-Leg Trousers"],
-            materials: ["Wool Crepe", "Silk"],
-            patterns: ["Solid"],
-            colors: "Camel, ivory, and soft charcoal"
-        )
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        return "Tailored camel wool blazer worn open over a crisp ivory top with high-waisted wide-leg trousers. Clean minimalist aesthetic with structured silhouette and neutral tones."
         #else
         guard !isAnalyzing else {
             print("⚠️ [VLMEngine] Rejecting concurrent vision analysis pass.")
@@ -218,26 +214,23 @@ public actor VLMEngine {
             mtmd_bitmap_free(validBitmap)
         }
 
-        // 2. Structured System Prompt targeted at high-accuracy fashion categorization
+        // 2. Free-form natural language styling prompt (NO JSON)
         let systemPrompt = """
-        You are an expert fashion stylist AI with deep knowledge of Indonesian fashion, Asian street style, and global aesthetics.
-        Analyze ONLY the clothing worn by the person in this photo. Do NOT describe the background.
+        You are an expert fashion stylist and visual analyst with deep knowledge of global, Asian, and Indonesian fashion aesthetics.
+        Describe ONLY the clothing and outfit worn by the person in this photo in clear, concise natural English (2 to 4 sentences).
+        Highlight:
+        - Specific garment pieces and cut names (e.g. crop top, halter top, camisole, blazer, suit jacket, cardigan, button-down shirt, wide-leg trousers, pleated skirt, tiered ruffle skirt, maxi skirt, batik blouse, kebaya, denim shorts).
+        - Fit and silhouette (e.g. relaxed, tailored, oversized, fitted, cropped).
+        - Fabrics and materials (e.g. linen, silk, denim, cotton poplin, lace, knitwear, chiffon, batik).
+        - Surface patterns (e.g. traditional Indonesian batik motif, floral, pinstripe, solid).
+        - Prominent garment colors (ignore the room background and walls).
+        - Overall aesthetic vibe.
 
-        Extract the following fields:
-        - genreVibe: The overall fashion aesthetic. Examples: "Indonesian Batik Heritage", "Kebaya Modern", "Clean Minimalist", "Coquette", "Modern Streetwear", "Chic Professional", "Old Money", "Resort Casual", "Fairy Feminine", "Y2K Street", "Cottagecore", "Soft Casual".
-        - persona: The stylistic persona. Examples: "Cultural Heritage", "Romantic Feminine", "Chic Professional", "Trendy Youthful", "Elegant Tailored", "Effortless Cool".
-        - fit: Fit and proportions. Examples: "Relaxed", "Cropped", "Tailored", "Slim Fit", "Oversized", "Fitted".
-        - cuts: List ALL visible garment pieces as specific cut names. You MUST identify each garment separately. Examples of valid cut names: "crop top", "cami top", "tank top", "halter top", "tube top", "off-shoulder top", "button-down shirt", "blazer", "suit jacket", "cardigan", "knit vest", "denim jacket", "mini skirt", "midi skirt", "maxi skirt", "tiered ruffle skirt", "wide-leg trousers", "straight-leg pants", "denim shorts", "bike shorts", "wide-leg jeans", "cargo pants", "batik kemeja", "kebaya", "kebaya encim", "batik dress", "wrap dress", "midi dress", "co-ord set". NEVER use "gown" unless the garment is literally a floor-length formal ball gown. NEVER output just "dress" — always specify the type (wrap dress, midi dress, sundress, etc.). A tiered skirt is NOT a gown. A maxi skirt is NOT a gown. A batik two-piece is NOT a gown.
-        - materials: Tactile fabrics visible. Examples: "cotton poplin", "chiffon", "lace", "denim", "silk", "linen", "ribbed knit", "batik fabric", "crochet", "mesh", "satin".
-        - patterns: Surface pattern on garments. Examples: "traditional Indonesian batik", "modern batik print", "floral", "solid", "pinstripe", "houndstooth", "plaid", "tie-dye". If traditional Indonesian batik motifs (parang, kawung, mega mendung, truntum, etc.) are present, always output "traditional Indonesian batik".
-        - colors: 2 to 4 prominent garment colors only (ignore background). Examples: "warm camel", "rich crimson", "soft ivory", "navy", "pastel pink", "cobalt blue", "sage green", "dusty rose".
-
-        Respond with ONLY a valid JSON object. No markdown, no explanation.
-        {"genreVibe": "...", "persona": "...", "fit": "...", "cuts": [...], "materials": [...], "patterns": [...], "colors": "..."}
+        Be direct, factual, and descriptive. Do NOT output JSON. Write natural fluent sentences.
         """
 
-        let userPrompt = "<__media__>\nExtract the clothing style profile from this image."
-        let fullPrompt = "<|im_start|>system\n\(systemPrompt)<|im_end|>\n<|im_start|>user\n\(userPrompt)<|im_end|>\n<|im_start|>assistant\n```json\n"
+        let userPrompt = "<__media__>\nDescribe the outfit and clothing style in this image."
+        let fullPrompt = "<|im_start|>system\n\(systemPrompt)<|im_end|>\n<|im_start|>user\n\(userPrompt)<|im_end|>\n<|im_start|>assistant\n"
 
         // 3. Multimodal Tokenization
         let outputChunks = mtmd_input_chunks_init()
@@ -268,7 +261,7 @@ public actor VLMEngine {
         defer {
             llama_sampler_free(sampler)
         }
-        llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.05))
+        llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.2))
         llama_sampler_chain_add(sampler, llama_sampler_init_dist(42))
 
         var outputText = ""
@@ -282,7 +275,7 @@ public actor VLMEngine {
 
         var curPos = newNPast
         var buffer = [CChar](repeating: 0, count: 256)
-        let maxOutputTokens = 512
+        let maxOutputTokens = 300
 
         for _ in 0..<maxOutputTokens {
             let curToken = llama_sampler_sample(sampler, lctx, -1)
@@ -297,11 +290,6 @@ public actor VLMEngine {
             if n > 0 {
                 let piece = String(cString: buffer)
                 outputText.append(piece)
-
-                // If output closes the JSON and ends code fence, we can stop early
-                if piece.contains("```") && outputText.contains("}") {
-                    break
-                }
             }
 
             batch.n_tokens = 1
@@ -317,49 +305,8 @@ public actor VLMEngine {
             curPos += 1
         }
 
-        // 6. Extract and parse structured JSON
-        let cleanJSON = Self.extractJSON(from: outputText)
-        guard let jsonData = cleanJSON.data(using: .utf8) else {
-            throw VLMEngineError.jsonParsingFailed("Cannot convert output to utf8 data: \(cleanJSON)")
-        }
-
-        do {
-            let profile = try JSONDecoder().decode(ReferenceImageStyleProfile.self, from: jsonData)
-            return profile
-        } catch {
-            print("⚠️ [VLMEngine] JSON decoding error: \(error.localizedDescription) for raw output:\n\(cleanJSON)")
-            throw VLMEngineError.jsonParsingFailed(error.localizedDescription)
-        }
+        let cleanText = outputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleanText
         #endif
     }
-
-    /// Helper to extract clean JSON block from LLM markdown fences.
-    public static func extractJSON(from text: String) -> String {
-        var clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if clean.hasPrefix("```json") {
-            clean = String(clean.dropFirst(7))
-        } else if clean.hasPrefix("```") {
-            clean = String(clean.dropFirst(3))
-        }
-        if clean.hasSuffix("```") {
-            clean = String(clean.dropLast(3))
-        }
-        clean = clean.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if let start = clean.firstIndex(of: "{"),
-           let end = clean.lastIndex(of: "}"),
-           start <= end {
-            var candidate = String(clean[start...end])
-            while candidate.hasPrefix("{\n{") || candidate.hasPrefix("{{") || candidate.hasPrefix("{\n {") {
-                candidate.removeFirst()
-                candidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            // Sanitize trailing commas before closing braces/brackets
-            candidate = candidate.replacingOccurrences(of: #",\s*\]"#, with: "]", options: .regularExpression)
-            candidate = candidate.replacingOccurrences(of: #",\s*\}"#, with: "}", options: .regularExpression)
-            return candidate
-        }
-        return clean
-    }
 }
-

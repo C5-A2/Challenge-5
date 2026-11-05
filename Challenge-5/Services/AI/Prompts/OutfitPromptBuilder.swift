@@ -304,26 +304,34 @@ struct OutfitPromptBuilder: Sendable {
     ///   - previousLooks: Summaries of already-generated looks injected into the system prompt
     ///     so the model avoids repeating garment names, colors, and silhouettes.
     ///   - analyzedImageStyle: Style descriptors extracted from user reference photos via Vision-Language Model.
+    ///   - targetReferenceDescription: Specific 1-by-1 reference text for this particular look.
+    ///   - targetReferenceIndex: 1-based index of the reference photo being targeted.
     public func buildFormattedPrompt(
         occasion: OccasionItem,
         profile: UserProfile?,
         lookIndex: Int = 0,
         previousLooks: [GeneratedLookSummary] = [],
-        analyzedImageStyle: String? = nil
+        analyzedImageStyle: String? = nil,
+        targetReferenceDescription: String? = nil,
+        targetReferenceIndex: Int? = nil
     ) -> String {
         let system = buildSingleLookSystemPrompt(
             occasion: occasion,
             profile: profile,
             lookIndex: lookIndex,
             previousLooks: previousLooks,
-            analyzedImageStyle: analyzedImageStyle
+            analyzedImageStyle: analyzedImageStyle,
+            targetReferenceDescription: targetReferenceDescription,
+            targetReferenceIndex: targetReferenceIndex
         )
         let user = buildSingleLookUserPrompt(
             occasion: occasion,
             profile: profile,
             lookIndex: lookIndex,
             previousLooks: previousLooks,
-            analyzedImageStyle: analyzedImageStyle
+            analyzedImageStyle: analyzedImageStyle,
+            targetReferenceDescription: targetReferenceDescription,
+            targetReferenceIndex: targetReferenceIndex
         )
 
         // Qwen 2.5 uses ChatML tokens (<|im_start|> ... <|im_end|>)
@@ -376,7 +384,9 @@ struct OutfitPromptBuilder: Sendable {
         profile: UserProfile?,
         lookIndex: Int,
         previousLooks: [GeneratedLookSummary],
-        analyzedImageStyle: String? = nil
+        analyzedImageStyle: String? = nil,
+        targetReferenceDescription: String? = nil,
+        targetReferenceIndex: Int? = nil
     ) -> String {
         var rules: [String] = []
 
@@ -424,8 +434,23 @@ struct OutfitPromptBuilder: Sendable {
             rules.append("STYLE VISION (reflect in garments):\n\(visionsDetails)")
         }
 
-        // Reference images: Injects VLM visual context
-        if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
+        // Reference images: Injects target reference 1-by-1 or overall visual context
+        if let targetRef = targetReferenceDescription, !targetRef.isEmpty {
+            let refNum = targetReferenceIndex != nil ? "REFERENCE PHOTO \(targetReferenceIndex!)" : "REFERENCE PHOTO"
+            rules.append("""
+            ======================================================================
+            PRIMARY INSPIRATION: USER \(refNum)
+            ======================================================================
+            This look must be directly styled and inspired by the user's \(refNum.lowercased()):
+            \"\(targetRef)\"
+
+            CRITICAL STYLING INSTRUCTIONS FOR THIS LOOK:
+            1. Cut & Silhouette: Recreate or closely echo the garment cuts, proportions, and layering dynamic from this reference photo.
+            2. Fabric & Texture: Prioritize the tactile fabrics, textures, and material finishes from this reference photo.
+            3. Palette Harmony: Select colors strictly from the user's seasonal Color Palette that harmonize with this reference photo's color mood and contrast.
+            4. Body Shape Fit: Adapt the silhouette to flatter the user's specific body shape rules.
+            """)
+        } else if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
             rules.append("""
             ======================================================================
             USER REFERENCE PHOTO VISUAL CONTEXT (VLM EMBEDDED ATTRIBUTES)
@@ -535,7 +560,9 @@ struct OutfitPromptBuilder: Sendable {
         profile: UserProfile?,
         lookIndex: Int,
         previousLooks: [GeneratedLookSummary] = [],
-        analyzedImageStyle: String? = nil
+        analyzedImageStyle: String? = nil,
+        targetReferenceDescription: String? = nil,
+        targetReferenceIndex: Int? = nil
     ) -> String {
         var lines: [String] = ["Generate look \(lookIndex + 1) for: \(occasion.title)"]
 
@@ -551,7 +578,14 @@ struct OutfitPromptBuilder: Sendable {
         }
 
         let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
-        if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
+        if let targetRef = targetReferenceDescription, !targetRef.isEmpty {
+            let refNum = targetReferenceIndex ?? (lookIndex + 1)
+            lines.append("""
+            PRIMARY INSPIRATION (Reference Photo \(refNum)):
+            \"\(targetRef)\"
+            -> Directly translate this reference photo's cuts, silhouette, and aesthetic vibe into look \(lookIndex + 1).
+            """)
+        } else if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
             lines.append("""
             Reference images visual context:
             \(analyzedStyle)

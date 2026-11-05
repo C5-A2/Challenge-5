@@ -112,13 +112,17 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        // 2. Analyze user reference photos via VLM / On-Device Vision Engine
+        // 2. Analyze user reference photos via VLM (scan 1-by-1, cached)
         let allImageData = occasion.referenceImagesData.isEmpty
             ? (occasion.referenceImageData.map { [$0] } ?? [])
             : occasion.referenceImagesData
+        let referenceDescriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(for: allImageData)
         let analyzedImageStyle = await ReferenceImageStyleAnalyzer.shared.analyzeStyle(from: allImageData)
-        if let style = analyzedImageStyle {
-            print("👁️ [OutfitGenerationPipeline] Reference images analyzed (VLM embedded context):\n\(style)")
+        if !referenceDescriptions.isEmpty {
+            print("👁️ [OutfitGenerationPipeline] \(referenceDescriptions.count) reference image(s) analyzed 1-by-1:")
+            for (i, desc) in referenceDescriptions.enumerated() {
+                print("   • Ref \(i + 1): \(desc)")
+            }
         }
 
         // 3. Sequential generation: one LLM call = one look.
@@ -135,15 +139,25 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
         for lookIndex in 0..<totalLooks {
             let temperature = temperatures[lookIndex]
-            print("🔧 [OutfitGenerationPipeline] Building prompt for look \(lookIndex)/\(totalLooks - 1) (temp: \(temperature))…")
 
-            // Build a single-look prompt, injecting summaries of all previously generated looks and Vision cues.
+            // Map reference images 1-by-1 to looks:
+            // Look 0 uses Ref 1, Look 1 uses Ref 2, Look 2 uses Ref 3.
+            let targetRefDesc: String? = lookIndex < referenceDescriptions.count
+                ? referenceDescriptions[lookIndex]
+                : nil
+            let targetRefIndex: Int? = targetRefDesc != nil ? (lookIndex + 1) : nil
+
+            print("🔧 [OutfitGenerationPipeline] Building prompt for look \(lookIndex)/\(totalLooks - 1) (temp: \(temperature), target: \(targetRefIndex != nil ? "Ref \(targetRefIndex!)" : "overall aesthetic"))…")
+
+            // Build a single-look prompt, injecting 1-by-1 reference inspiration and past look summaries.
             let prompt = promptBuilder.buildFormattedPrompt(
                 occasion: occasion,
                 profile: profile,
                 lookIndex: lookIndex,
                 previousLooks: previousSummaries,
-                analyzedImageStyle: analyzedImageStyle
+                analyzedImageStyle: analyzedImageStyle,
+                targetReferenceDescription: targetRefDesc,
+                targetReferenceIndex: targetRefIndex
             )
             print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) prompt built (\(prompt.count) chars). Running \(LLMResource.activeModelFilename)…")
 
@@ -198,27 +212,35 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        // 2. Analyze user reference photos via VLM / On-Device Vision Engine
+        // 2. Analyze user reference photos via VLM (scan 1-by-1, cached)
         let allImageData = occasion.referenceImagesData.isEmpty
             ? (occasion.referenceImageData.map { [$0] } ?? [])
             : occasion.referenceImagesData
+        let referenceDescriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(for: allImageData)
         let analyzedImageStyle = await ReferenceImageStyleAnalyzer.shared.analyzeStyle(from: allImageData)
-        if let style = analyzedImageStyle {
-            print("👁️ [OutfitGenerationPipeline] Reference images analyzed (VLM embedded context):\n\(style)")
+        if !referenceDescriptions.isEmpty {
+            print("👁️ [OutfitGenerationPipeline] Single look reference images analyzed (\(referenceDescriptions.count) photos available).")
         }
 
         // 3. Extract summaries of all previous looks generated for this occasion (e.g. 5 previous looks or more)
         let previousSummaries = existingLooks.map { GeneratedLookSummary(from: $0) }
 
-        print("🔧 [OutfitGenerationPipeline] Generating single look \(lookIndex) (temperature: \(temperature), previous looks appended: \(previousSummaries.count))…")
+        let targetRefDesc: String? = lookIndex < referenceDescriptions.count
+            ? referenceDescriptions[lookIndex]
+            : nil
+        let targetRefIndex: Int? = targetRefDesc != nil ? (lookIndex + 1) : nil
 
-        // 4. Build single-look prompt injecting all previous looks and vision style
+        print("🔧 [OutfitGenerationPipeline] Generating single look \(lookIndex) (temperature: \(temperature), target: \(targetRefIndex != nil ? "Ref \(targetRefIndex!)" : "overall aesthetic"))…")
+
+        // 4. Build single-look prompt injecting target reference (1-by-1) and general visual cues
         let prompt = promptBuilder.buildFormattedPrompt(
             occasion: occasion,
             profile: profile,
             lookIndex: lookIndex,
             previousLooks: previousSummaries,
-            analyzedImageStyle: analyzedImageStyle
+            analyzedImageStyle: analyzedImageStyle,
+            targetReferenceDescription: targetRefDesc,
+            targetReferenceIndex: targetRefIndex
         )
 
         // 5. Run LLM generation with temperature

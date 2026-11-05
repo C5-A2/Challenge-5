@@ -47,7 +47,10 @@ public final class OccasionInputViewModel {
     /// `nil` for photos from the camera or the photo library.
     public private(set) var referenceSavedLookIDs: [UUID?] = []
 
-    /// Extracted VLM / Vision keywords per reference image index for developer inspection & debug.
+    /// Descriptive styling text extracted per reference image by the on-device VLM (e.g. index 0 -> description for photo 1).
+    public private(set) var referenceImageDescriptions: [Int: String] = [:]
+
+    /// Extracted VLM styling keywords per reference image index for developer inspection & debug.
     public private(set) var referenceImageKeywords: [Int: [String]] = [:]
 
     /// Full multi-line VLM visual context injected into Qwen 2.5 3B prompt.
@@ -303,9 +306,10 @@ public final class OccasionInputViewModel {
 
     // MARK: - Reference Keyword Analysis (VLM Debug)
 
-    /// Asynchronously extracts VLM keywords for all attached reference images.
+    /// Asynchronously extracts VLM styling descriptions for all attached reference images 1-by-1.
     public func analyzeReferenceImages() {
         guard !referenceImages.isEmpty else {
+            referenceImageDescriptions = [:]
             referenceImageKeywords = [:]
             fullExtractedVLMContext = nil
             isAnalyzingReferencePhotos = false
@@ -317,66 +321,36 @@ public final class OccasionInputViewModel {
 
         Task { @MainActor [weak self] in
             guard let self else { return }
-            var results: [Int: [String]] = [:]
-            var gatheredCuts: [String] = []
-            var gatheredMaterials: [String] = []
-            var gatheredPatterns: [String] = []
-            var gatheredColors: [String] = []
-            var combinedGenreVibe = ""
-            var combinedPersona = ""
-            var combinedFit = ""
 
-            // 1. Extract per-image profiles in a single VLM session (fast, single-load)
-            let individualProfiles = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualProfiles(for: images)
+            // 1. Scan images 1-by-1 in a single VLM session (fast, single-load, cached)
+            let descriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(for: images)
 
-            for (index, maybeProfile) in individualProfiles.enumerated() {
-                guard let profile = maybeProfile else { continue }
-                var tags: [String] = []
-                if !profile.genreVibe.isEmpty { tags.append("Vibe: \(profile.genreVibe)") }
-                if !profile.fit.isEmpty { tags.append("Fit: \(profile.fit)") }
-                tags.append(contentsOf: profile.cuts)
-                tags.append(contentsOf: profile.materials)
-                tags.append(contentsOf: profile.patterns)
-                if !profile.colors.isEmpty { tags.append("Tone: \(profile.colors)") }
-                results[index] = tags
+            var descDict: [Int: String] = [:]
+            var keywordDict: [Int: [String]] = [:]
 
-                if combinedGenreVibe.isEmpty && !profile.genreVibe.isEmpty { combinedGenreVibe = profile.genreVibe }
-                if combinedPersona.isEmpty && !profile.persona.isEmpty { combinedPersona = profile.persona }
-                if combinedFit.isEmpty && !profile.fit.isEmpty { combinedFit = profile.fit }
-
-                for cut in profile.cuts where !gatheredCuts.contains(cut) {
-                    gatheredCuts.append(cut)
-                }
-                for mat in profile.materials where !gatheredMaterials.contains(mat) {
-                    gatheredMaterials.append(mat)
-                }
-                for pat in profile.patterns where !gatheredPatterns.contains(pat) {
-                    gatheredPatterns.append(pat)
-                }
-                if !profile.colors.isEmpty && !gatheredColors.contains(profile.colors) {
-                    gatheredColors.append(profile.colors)
-                }
+            for (index, desc) in descriptions.enumerated() {
+                descDict[index] = desc
+                keywordDict[index] = [desc]
             }
 
-            // 2. Synthesize multi-line context string directly from the extracted profiles (zero redundant inference)
-            let combinedProfile = ReferenceImageStyleProfile(
-                genreVibe: combinedGenreVibe,
-                persona: combinedPersona,
-                fit: combinedFit,
-                cuts: gatheredCuts,
-                materials: gatheredMaterials,
-                patterns: gatheredPatterns,
-                colors: gatheredColors.joined(separator: " • ")
-            )
-            let fullContext = combinedProfile.formattedPromptContext.isEmpty ? nil : combinedProfile.formattedPromptContext
+            // 2. Synthesize multi-image context string for the Qwen 2.5 LLM
+            let fullContext = descriptions.enumerated().map { idx, desc in
+                "• Reference Photo \(idx + 1): \(desc)"
+            }.joined(separator: "\n\n")
 
             // Only update if images count hasn't changed while processing
             if self.referenceImages.count == images.count {
-                self.referenceImageKeywords = results
-                self.fullExtractedVLMContext = fullContext
+                self.referenceImageDescriptions = descDict
+                self.referenceImageKeywords = keywordDict
+                self.fullExtractedVLMContext = fullContext.isEmpty ? nil : fullContext
             }
             self.isAnalyzingReferencePhotos = false
         }
+    }
+
+    /// Returns extracted visual styling description for a specific reference photo index.
+    public func description(for index: Int) -> String? {
+        return referenceImageDescriptions[index]
     }
 
     /// Returns extracted visual keywords for a specific reference photo index.
@@ -516,6 +490,7 @@ public final class OccasionInputViewModel {
         referenceImages = []
         referenceSavedLookIDs = []
         referencePhotoPickerItems = []
+        referenceImageDescriptions = [:]
         referenceImageKeywords = [:]
         fullExtractedVLMContext = nil
         isAnalyzingReferencePhotos = false

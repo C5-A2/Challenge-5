@@ -185,25 +185,24 @@ struct ReferenceImagesView: View {
 
     @ViewBuilder
     private func keywordsBottomView(for index: Int) -> some View {
-        let keywords = viewModel.extractedKeywords(for: index)
-        if !keywords.isEmpty {
-            VStack(alignment: .leading, spacing: 3) {
-                ForEach(keywords, id: \.self) { keyword in
-                    Text(keyword)
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(AppColors.primaryBlue)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 3)
-                        .frame(maxWidth: ReferencePickerConstants.Row.tileWidth, alignment: .leading)
-                }
+        if let desc = viewModel.description(for: index), !desc.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Ref \(index + 1) -> Look \(index + 1)")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(AppColors.primaryBlue)
+                Text(desc)
+                    .font(.system(size: 9, weight: .regular))
+                    .foregroundStyle(AppColors.bodyText)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: ReferencePickerConstants.Row.tileWidth, alignment: .leading)
         } else if viewModel.isAnalyzingReferencePhotos {
             HStack(spacing: 4) {
                 ProgressView()
                     .scaleEffect(0.7)
-                Text("Analyzing…")
-                    .font(.system(size: 10.5, weight: .medium))
+                Text("Scanning…")
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(AppColors.mutedCaption)
             }
             .frame(width: ReferencePickerConstants.Row.tileWidth, alignment: .leading)
@@ -217,11 +216,11 @@ struct ReferenceImagesView: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(AppColors.primaryBlue)
-                Text("VLM CONTEXT FOR QWEN 2.5 (DEBUG)")
+                Text("VLM CONTEXT (SCAN 1-BY-1)")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(AppColors.primaryBlue)
                 Spacer()
-                Text("Full Prompt Text")
+                Text("Used 1-by-1 for LLM")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(AppColors.primaryBlue.opacity(0.7))
                     .padding(.horizontal, 6)
@@ -230,33 +229,38 @@ struct ReferenceImagesView: View {
                     .clipShape(Capsule())
             }
 
-            if let fullContext = viewModel.fullExtractedVLMContext, !fullContext.isEmpty {
-                Text(fullContext)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(AppColors.espressoTitle)
-                    .lineSpacing(4)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
-            } else if viewModel.isAnalyzingReferencePhotos {
+            if viewModel.isAnalyzingReferencePhotos && viewModel.referenceImageDescriptions.isEmpty {
                 HStack(spacing: 6) {
                     ProgressView()
                         .scaleEffect(0.8)
-                    Text("Extracting full visual context via VLM / Vision engine…")
+                    Text("Scanning reference photos via VLM (1 by 1)…")
                         .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(AppColors.mutedCaption)
                 }
                 .padding(.vertical, 4)
-            } else {
-                let allKeywords = (0..<viewModel.referenceImages.count)
-                    .flatMap { viewModel.extractedKeywords(for: $0) }
-                if !allKeywords.isEmpty {
-                    Text(allKeywords.joined(separator: " • "))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppColors.espressoTitle)
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
+            } else if !viewModel.referenceImageDescriptions.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(viewModel.referenceImageDescriptions.keys.sorted()), id: \.self) { idx in
+                        if let text = viewModel.referenceImageDescriptions[idx] {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("• Target for Look \(idx + 1) (from Photo \(idx + 1)):")
+                                    .font(.system(size: 10.5, weight: .bold))
+                                    .foregroundStyle(AppColors.primaryBlue)
+                                Text(text)
+                                    .font(.system(size: 11.5, weight: .regular))
+                                    .foregroundStyle(AppColors.espressoTitle)
+                                    .lineSpacing(2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
                 }
+                .textSelection(.enabled)
+            } else if let fullContext = viewModel.fullExtractedVLMContext, !fullContext.isEmpty {
+                Text(fullContext)
+                    .font(.system(size: 11.5, weight: .regular))
+                    .foregroundStyle(AppColors.espressoTitle)
+                    .textSelection(.enabled)
             }
         }
         .padding(12)

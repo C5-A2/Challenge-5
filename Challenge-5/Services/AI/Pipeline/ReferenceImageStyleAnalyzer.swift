@@ -9,25 +9,15 @@ import Foundation
 
 /// Structured stylistic and visual profile extracted from reference images by the Vision-Language Model.
 public struct ReferenceImageStyleProfile: Sendable, Codable, Equatable {
-    /// Fashion Genre & Aesthetic Vibe (e.g. "Quiet Luxury", "Old Money", "Modern Streetwear", "Clean Minimalist")
+    /// Natural language description of the outfit styling.
+    public var textDescription: String
+
     public var genreVibe: String
-
-    /// Stylistic Persona (e.g. "Elevated Minimalist", "Chic Professional", "Relaxed Creative")
     public var persona: String
-
-    /// Fit & Proportions (e.g. "Oversized / Boxy", "Relaxed Fit", "Tailored Regular", "Fitted / Slim")
     public var fit: String
-
-    /// Garment Cuts & Silhouettes (e.g. "Structured blazer cut", "High-rise wide-leg trousers", "Cropped clean hem")
     public var cuts: [String]
-
-    /// Materials & Tactile Fabrics (e.g. "Matte wool twill", "Crisp cotton poplin", "Ribbed knit", "Raw denim")
     public var materials: [String]
-
-    /// Patterns & Surface Details (e.g. "Solid / Unpatterned", "Pinstripe weave", "Houndstooth", "Textured knit")
     public var patterns: [String]
-
-    /// Color Mood & Palette Tone (e.g. "Warm camel and oatmeal neutrals with soft charcoal contrast")
     public var colors: String
 
     // MARK: - Backward Compatibility Properties
@@ -35,7 +25,7 @@ public struct ReferenceImageStyleProfile: Sendable, Codable, Equatable {
         [genreVibe, persona].filter { !$0.isEmpty }
     }
     public var silhouettes: [String] {
-        cuts.isEmpty ? [fit] : cuts
+        cuts.isEmpty ? (fit.isEmpty ? [] : [fit]) : cuts
     }
     public var texturesAndFabrics: [String] {
         materials + patterns
@@ -48,6 +38,7 @@ public struct ReferenceImageStyleProfile: Sendable, Codable, Equatable {
     }
 
     public init(
+        textDescription: String = "",
         genreVibe: String = "",
         persona: String = "",
         fit: String = "",
@@ -56,6 +47,7 @@ public struct ReferenceImageStyleProfile: Sendable, Codable, Equatable {
         patterns: [String] = [],
         colors: String = ""
     ) {
+        self.textDescription = textDescription
         self.genreVibe = genreVibe
         self.persona = persona
         self.fit = fit
@@ -65,224 +57,124 @@ public struct ReferenceImageStyleProfile: Sendable, Codable, Equatable {
         self.colors = colors
     }
 
-    enum CodingKeys: String, CodingKey {
-        case genreVibe
-        case persona
-        case fit
-        case cuts
-        case materials
-        case patterns
-        case colors
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.genreVibe = (try? container.decode(String.self, forKey: .genreVibe)) ?? ""
-        self.persona = (try? container.decode(String.self, forKey: .persona)) ?? ""
-        self.fit = (try? container.decode(String.self, forKey: .fit)) ?? ""
-
-        // Flexible array or comma-separated string decoding for cuts
-        if let cutsArray = try? container.decode([String].self, forKey: .cuts) {
-            self.cuts = cutsArray
-        } else if let cutsString = try? container.decode(String.self, forKey: .cuts) {
-            self.cuts = cutsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        } else {
-            self.cuts = []
-        }
-
-        // Flexible array or string for materials
-        if let matsArray = try? container.decode([String].self, forKey: .materials) {
-            self.materials = matsArray
-        } else if let matsString = try? container.decode(String.self, forKey: .materials) {
-            self.materials = matsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        } else {
-            self.materials = []
-        }
-
-        // Flexible array or string for patterns
-        if let patsArray = try? container.decode([String].self, forKey: .patterns) {
-            self.patterns = patsArray
-        } else if let patsString = try? container.decode(String.self, forKey: .patterns) {
-            self.patterns = patsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        } else {
-            self.patterns = []
-        }
-
-        // Flexible string or array for colors
-        if let colorsString = try? container.decode(String.self, forKey: .colors) {
-            self.colors = colorsString
-        } else if let colorsArray = try? container.decode([String].self, forKey: .colors) {
-            self.colors = colorsArray.joined(separator: ", ")
-        } else {
-            self.colors = ""
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(genreVibe, forKey: .genreVibe)
-        try container.encode(persona, forKey: .persona)
-        try container.encode(fit, forKey: .fit)
-        try container.encode(cuts, forKey: .cuts)
-        try container.encode(materials, forKey: .materials)
-        try container.encode(patterns, forKey: .patterns)
-        try container.encode(colors, forKey: .colors)
-    }
-
     /// Formats the profile into a high-density structured context block for the Qwen 2.5 3B prompt.
     public var formattedPromptContext: String {
+        if !textDescription.isEmpty {
+            return textDescription
+        }
         var lines: [String] = []
-
-        if !genreVibe.isEmpty {
-            lines.append("• Genre & Aesthetic Vibe: \(genreVibe)")
-        }
-        if !persona.isEmpty {
-            lines.append("• Stylistic Persona: \(persona)")
-        }
-        if !fit.isEmpty {
-            lines.append("• Fit & Proportions: \(fit)")
-        }
-        if !cuts.isEmpty {
-            lines.append("• Cut & Silhouettes: \(cuts.joined(separator: ", "))")
-        }
-        if !materials.isEmpty {
-            lines.append("• Materials & Fabrics: \(materials.joined(separator: ", "))")
-        }
-        if !patterns.isEmpty {
-            lines.append("• Pattern & Surface: \(patterns.joined(separator: ", "))")
-        }
-        if !colors.isEmpty {
-            lines.append("• Color Mood & Tone: \(colors)")
-        }
-
+        if !genreVibe.isEmpty { lines.append("• Aesthetic: \(genreVibe)") }
+        if !cuts.isEmpty { lines.append("• Cuts: \(cuts.joined(separator: ", "))") }
+        if !materials.isEmpty { lines.append("• Materials: \(materials.joined(separator: ", "))") }
+        if !patterns.isEmpty { lines.append("• Pattern: \(patterns.joined(separator: ", "))") }
+        if !colors.isEmpty { lines.append("• Color Mood: \(colors)") }
         return lines.joined(separator: "\n")
     }
 }
 
-/// Analyzes user reference photos to extract detailed fashion attributes and keywords
+/// Analyzes user reference photos to extract detailed fashion styling descriptions
 /// using the on-device Qwen 2.5 VL 3B Vision-Language Model exclusively.
 ///
-/// All analysis is performed 100% on-device via `VLMEngine`. There is no Apple Vision,
-/// CoreImage, or any network-based fallback. If the VLM fails for a given image, that
-/// image simply returns `nil` — the caller decides whether to skip or surface an error.
+/// Features:
+/// - 1-by-1 image scanning: Each reference photo produces a distinct natural descriptive text.
+/// - In-memory LRU/thread-safe cache: Images analyzed in the form sheet are reused instantly in generation.
+/// - Single-session VLM loading: Loads model weights once for all images, unloads immediately to free memory.
 public final class ReferenceImageStyleAnalyzer: Sendable {
 
     public static let shared = ReferenceImageStyleAnalyzer()
 
     private let cacheLock = NSLock()
-    private var cachedProfile: (hash: Int, profile: ReferenceImageStyleProfile)? = nil
+    private var imageCache: [Int: String] = [:]
 
     private init() {}
 
-    // MARK: - Primary Analysis API
+    // MARK: - Primary 1-by-1 Analysis API
 
-    /// Analyzes an array of reference images in a single VLM session without reloading weights between images.
+    /// Analyzes an array of reference images 1-by-1 in a single VLM session without reloading weights between images.
     ///
-    /// - Returns: One optional `ReferenceImageStyleProfile` per input image. `nil` entries mean the
-    ///   VLM failed for that image (e.g. JSON parse error). The caller should skip `nil` entries.
-    public func analyzeIndividualProfiles(for imagesData: [Data]) async -> [ReferenceImageStyleProfile?] {
+    /// - Returns: An array of natural text styling descriptions, one corresponding to each input image.
+    public func analyzeIndividualImages(for imagesData: [Data]) async -> [String] {
         guard !imagesData.isEmpty else { return [] }
 
-        print("👁️ [ReferenceImageStyleAnalyzer] Starting single-session batch VLM analysis for \(imagesData.count) images...")
+        // Check cache for already analyzed images
+        var results: [String] = []
+        var uncachedIndices: [Int] = []
+        var uncachedData: [Data] = []
+
+        cacheLock.lock()
+        for (index, data) in imagesData.enumerated() {
+            var hasher = Hasher()
+            hasher.combine(data)
+            let hash = hasher.finalize()
+            if let cached = imageCache[hash] {
+                results.append(cached)
+            } else {
+                results.append("") // Placeholder to be filled
+                uncachedIndices.append(index)
+                uncachedData.append(data)
+            }
+        }
+        cacheLock.unlock()
+
+        if uncachedIndices.isEmpty {
+            print("👁️ [ReferenceImageStyleAnalyzer] All \(imagesData.count) reference images retrieved from cache.")
+            return results
+        }
+
+        print("👁️ [ReferenceImageStyleAnalyzer] Scanning \(uncachedIndices.count)/\(imagesData.count) reference images on-device via VLM (1-by-1)...")
 
         // Pre-load VLM once for the entire batch
         do {
             try await VLMEngine.shared.loadIfNeeded()
         } catch {
             print("⚠️ [ReferenceImageStyleAnalyzer] Failed to pre-load VLM: \(error.localizedDescription)")
-            // Return all nils — no fallback
-            return Array(repeating: nil, count: imagesData.count)
+            return results.filter { !$0.isEmpty }
         }
 
-        var profiles: [ReferenceImageStyleProfile?] = []
-        for (idx, data) in imagesData.enumerated() {
+        for (uIdx, data) in uncachedData.enumerated() {
+            let originalIndex = uncachedIndices[uIdx]
             do {
-                let profile = try await VLMEngine.shared.analyzeImage(data: data)
-                print("✅ [ReferenceImageStyleAnalyzer] Image \(idx) VLM succeeded: genre=\(profile.genreVibe), cuts=\(profile.cuts.joined(separator: ", "))")
-                profiles.append(profile)
+                let description = try await VLMEngine.shared.analyzeImage(data: data)
+                print("✅ [ReferenceImageStyleAnalyzer] Reference Photo \(originalIndex + 1) VLM description: \(description)")
+                results[originalIndex] = description
+
+                // Store in cache
+                var hasher = Hasher()
+                hasher.combine(data)
+                let hash = hasher.finalize()
+                cacheLock.lock()
+                imageCache[hash] = description
+                cacheLock.unlock()
             } catch {
-                print("⚠️ [ReferenceImageStyleAnalyzer] Image \(idx) VLM failed: \(error.localizedDescription)")
-                profiles.append(nil)
+                print("⚠️ [ReferenceImageStyleAnalyzer] Reference Photo \(originalIndex + 1) VLM failed: \(error.localizedDescription)")
             }
         }
 
         // Unload VLM weights once at the end of the entire batch to free ~2.6 GB VRAM
         await VLMEngine.shared.unload()
-        return profiles
+        return results.filter { !$0.isEmpty }
     }
 
-    /// Analyzes reference photos and returns a merged `ReferenceImageStyleProfile` combining all images.
-    public func analyzeStyleProfile(from imagesData: [Data]) async -> ReferenceImageStyleProfile? {
-        guard !imagesData.isEmpty else { return nil }
-
-        var hasher = Hasher()
-        for data in imagesData {
-            hasher.combine(data)
-        }
-        let dataHash = hasher.finalize()
-
-        cacheLock.lock()
-        if let cached = cachedProfile, cached.hash == dataHash {
-            cacheLock.unlock()
-            print("👁️ [ReferenceImageStyleAnalyzer] Returning cached reference style profile.")
-            return cached.profile
-        }
-        cacheLock.unlock()
-
-        let individualProfiles = await analyzeIndividualProfiles(for: imagesData)
-        var gatheredCuts: [String] = []
-        var gatheredMaterials: [String] = []
-        var gatheredPatterns: [String] = []
-        var gatheredColors: [String] = []
-        var finalGenreVibe = ""
-        var finalPersona = ""
-        var finalFit = ""
-
-        for maybeProfile in individualProfiles {
-            guard let profile = maybeProfile else { continue }
-            if finalGenreVibe.isEmpty && !profile.genreVibe.isEmpty { finalGenreVibe = profile.genreVibe }
-            if finalPersona.isEmpty && !profile.persona.isEmpty { finalPersona = profile.persona }
-            if finalFit.isEmpty && !profile.fit.isEmpty { finalFit = profile.fit }
-
-            for cut in profile.cuts where !gatheredCuts.contains(cut) {
-                gatheredCuts.append(cut)
-            }
-            for mat in profile.materials where !gatheredMaterials.contains(mat) {
-                gatheredMaterials.append(mat)
-            }
-            for pat in profile.patterns where !gatheredPatterns.contains(pat) {
-                gatheredPatterns.append(pat)
-            }
-            if !profile.colors.isEmpty && !gatheredColors.contains(profile.colors) {
-                gatheredColors.append(profile.colors)
-            }
-        }
-
-        guard !gatheredCuts.isEmpty || !gatheredMaterials.isEmpty || !gatheredPatterns.isEmpty || !gatheredColors.isEmpty else {
-            return nil
-        }
-
-        let mergedProfile = ReferenceImageStyleProfile(
-            genreVibe: finalGenreVibe,
-            persona: finalPersona,
-            fit: finalFit,
-            cuts: gatheredCuts,
-            materials: gatheredMaterials,
-            patterns: gatheredPatterns,
-            colors: gatheredColors.joined(separator: " • ")
-        )
-        cacheLock.lock()
-        cachedProfile = (dataHash, mergedProfile)
-        cacheLock.unlock()
-        return mergedProfile
-    }
-
-    /// Analyzes reference photos and returns a formatted string descriptor ready for Qwen 2.5 3B prompt injection.
+    /// Analyzes reference photos and returns a formatted string descriptor combining all individual images.
     public func analyzeStyle(from imagesData: [Data]) async -> String? {
-        let profile = await analyzeStyleProfile(from: imagesData)
-        guard let validProfile = profile, !validProfile.formattedPromptContext.isEmpty else {
-            return nil
+        let descriptions = await analyzeIndividualImages(for: imagesData)
+        guard !descriptions.isEmpty else { return nil }
+        return descriptions.enumerated().map { index, desc in
+            "Reference Photo \(index + 1): \(desc)"
+        }.joined(separator: "\n\n")
+    }
+
+    /// Backward compatibility method returning structured profiles.
+    public func analyzeIndividualProfiles(for imagesData: [Data]) async -> [ReferenceImageStyleProfile?] {
+        let descriptions = await analyzeIndividualImages(for: imagesData)
+        return descriptions.map { desc in
+            ReferenceImageStyleProfile(textDescription: desc)
         }
-        return validProfile.formattedPromptContext
+    }
+
+    /// Backward compatibility method returning a single merged profile.
+    public func analyzeStyleProfile(from imagesData: [Data]) async -> ReferenceImageStyleProfile? {
+        guard let combined = await analyzeStyle(from: imagesData) else { return nil }
+        return ReferenceImageStyleProfile(textDescription: combined)
     }
 }
