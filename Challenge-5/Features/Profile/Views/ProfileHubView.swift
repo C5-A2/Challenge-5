@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// Hub screen displaying user profile summary across 4 staggered folder cards:
 /// Color Season, Body Type, Measurements, and Character (Style Vision).
@@ -24,12 +25,14 @@ struct ProfileHubView: View {
 
     // MARK: - SwiftData Query
 
+    @Environment(\.modelContext) private var modelContext
     @Query private var userProfiles: [UserProfile]
     @Environment(\.dismiss) private var dismiss
 
     // MARK: - Sheet Navigation State
 
     @State private var activeSheet: ActiveProfileSheet? = nil
+    @State private var didTriggerDebugAutoFill: Bool = false
 
     private enum ActiveProfileSheet: Identifiable {
         case skinScan
@@ -78,6 +81,8 @@ struct ProfileHubView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         titleSection
 
+                        debugAutoFillSection
+
                         staggeredFolderGrid
                             .padding(.top, 12)
                             .padding(.bottom, 40)
@@ -124,6 +129,115 @@ struct ProfileHubView: View {
             .font(AppTypography.screenHeader)
             .foregroundStyle(AppColors.espressoTitle)
             .padding(.top, 4)
+    }
+
+    // MARK: - Debug Auto-Select Section
+
+    private var debugAutoFillSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                forceAutoSelectDebugProfile()
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 15, weight: .semibold))
+
+                    Text("Force Auto-Select Profile (Debug)")
+                        .font(.system(size: 14.5, weight: .semibold))
+
+                    Spacer()
+
+                    if currentProfile?.hasCompletedProfileSetup == true && currentProfile?.frontBodyPhotoData != nil {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(AppColors.lightingOptimal)
+                    }
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 13)
+                .background(AppColors.primaryBlack)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+            }
+            .buttonStyle(.plain)
+
+            if let profile = currentProfile,
+               (profile.frontBodyPhotoData != nil || didTriggerDebugAutoFill) {
+                HStack(spacing: 12) {
+                    if let frontData = profile.frontBodyPhotoData,
+                       let uiImage = UIImage(data: frontData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 40, height: 52)
+                            .background(AppColors.canvasBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(AppColors.subtleBorder, lineWidth: 1)
+                            )
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Debug Profile Active")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(AppColors.espressoTitle)
+
+                        Text("\(profile.colorSeason?.rawValue ?? "Not Set") • \(profile.bodyType?.displayName ?? "Not Set") • Front Scan \(profile.frontBodyPhotoData != nil ? "Ready" : "Missing")")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(AppColors.mutedCaption)
+                            .lineLimit(2)
+                    }
+
+                    Spacer()
+                }
+                .padding(10)
+                .background(AppColors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(AppColors.subtleBorder, lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    private func forceAutoSelectDebugProfile() {
+        let profile: UserProfile
+        if let existing = userProfiles.first {
+            profile = existing
+        } else {
+            profile = UserProfile()
+            modelContext.insert(profile)
+        }
+
+        let sample = UserProfile.mockSample
+        profile.colorSeason = .trueAutumn
+        profile.bodyType = .hourglass
+        profile.torsoBalance = .balanced
+        profile.measurements = sample.measurements
+        profile.styleVision = profile.styleVision ?? .confident
+
+        let debugFrontImage = UIImage(named: "mock_result_2") ?? UIImage(named: "mock_result_1")
+        if let frontPNG = debugFrontImage?.pngData() {
+            profile.frontBodyPhotoData = frontPNG
+            if profile.facePhotoData == nil {
+                profile.facePhotoData = frontPNG
+            }
+        }
+        profile.updatedAt = Date()
+
+        do {
+            try modelContext.save()
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                didTriggerDebugAutoFill = true
+            }
+            print("✅ [ProfileHubView] Force auto-selected debug profile: ColorSeason=\(profile.colorSeason?.rawValue ?? "-"), BodyType=\(profile.bodyType?.rawValue ?? "-"), FrontBodyScan=\(profile.frontBodyPhotoData?.count ?? 0) bytes")
+        } catch {
+            print("❌ [ProfileHubView] Failed to save debug profile: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Staggered Folder Grid

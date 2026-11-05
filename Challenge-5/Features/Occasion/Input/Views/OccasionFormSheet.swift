@@ -33,6 +33,7 @@ public struct OccasionFormSheet: View {
     private let initialMode: Mode
     
     @State private var isShowingDeleteConfirmation: Bool = false
+    @State private var isShowingSaveConfirmation: Bool = false
     
     // MARK: - Callbacks
     
@@ -127,12 +128,21 @@ public struct OccasionFormSheet: View {
                 }
             )
             .alert("Delete Occasion?", isPresented: $isShowingDeleteConfirmation) {
+                Button("Cancel", role: .cancel) { }
                 Button("Delete", role: .destructive) {
                     onDelete?()
+                    dismiss()
                 }
-                Button("Cancel", role: .cancel) { }
             } message: {
                 Text("Are you sure you want to delete this occasion? This action cannot be undone.")
+            }
+            .alert("Save Changes?", isPresented: $isShowingSaveConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Yes") {
+                    performSave()
+                }
+            } message: {
+                Text("Saving changes will regenerate your outfit recommendations. This action cannot be undone.")
             }
             .sheet(isPresented: $viewModel.isShowingVisionPicker) {
                 StyleVisionPickerSheet(viewModel: viewModel)
@@ -292,7 +302,7 @@ public struct OccasionFormSheet: View {
             DatePicker(
                 "Date",
                 selection: $viewModel.date,
-                in: Calendar.current.startOfDay(for: Date())...,
+                in: min(Calendar.current.startOfDay(for: Date()), Calendar.current.startOfDay(for: viewModel.date))...,
                 displayedComponents: [.date]
             )
             .font(AppTypography.bodyRegular)
@@ -309,14 +319,14 @@ public struct OccasionFormSheet: View {
             // 5. Reference Photos Section (Optional, Max 3)
             ReferenceImagesView(viewModel: viewModel, isEditable: true)
             
-            // 6. Delete Occasion Button
-            if onDelete != nil {
+            // 6. Delete Occasion Button (Only presented below the last question when editing)
+            if mode == .edit, onDelete != nil {
                 Button {
                     isShowingDeleteConfirmation = true
                 } label: {
                     Text("Delete Occasion")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color(hex: "#FF3B30"))
+                        .foregroundStyle(AppColors.destructiveRed)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                 }
@@ -425,6 +435,15 @@ public struct OccasionFormSheet: View {
     }
     
     private func handleSave() {
+        guard viewModel.isValid else { return }
+        if mode == .edit {
+            isShowingSaveConfirmation = true
+        } else {
+            performSave()
+        }
+    }
+    
+    private func performSave() {
         guard viewModel.isValid else { return }
         let detail = viewModel.createOccasionDetail()
         onSave?(detail)

@@ -20,9 +20,7 @@ struct OccasionOutputView: View {
     @State var viewModel: OccasionOutputViewModel
     
     @State private var isShowingDetailsSheet: Bool = false
-    @State private var isShowingMoreMenu: Bool = false
     @State private var isShowingOccasionDetailSheet: Bool = false
-    @State private var isShowingProfileSheet: Bool = false
     
     // Image Playground Integration (C5-46)
     @State private var isShowingPlayground: Bool = false
@@ -122,24 +120,6 @@ struct OccasionOutputView: View {
                     .zIndex(6)
             }
 
-            if isShowingMoreMenu {
-                Color.black.opacity(0.001)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            isShowingMoreMenu = false
-                        }
-                    }
-            }
-            
-            if isShowingMoreMenu {
-                liquidGlassMenu
-                    .padding(.top, 58)
-                    .padding(.trailing, AppDimensions.screenHorizontalPadding)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .topTrailing)))
-                    .zIndex(10)
-            }
-
             if viewModel.isLoading || isProcessingPlayground {
                 generationLoadingOverlay
                     .transition(.opacity)
@@ -173,7 +153,7 @@ struct OccasionOutputView: View {
                 viewModel: OccasionInputViewModel(from: viewModel.occasion),
                 initialMode: .view,
                 onSave: { updatedDetail in
-                    // Overwrite occasion attributes while preserving occasion.id
+                    // Overwrite occasion attributes while preserving the exact same occasion.id
                     viewModel.occasion.title = updatedDetail.title
                     viewModel.occasion.date = updatedDetail.date
                     viewModel.occasion.dresscode = updatedDetail.dresscode
@@ -186,7 +166,7 @@ struct OccasionOutputView: View {
                     try? modelContext.save()
                     isShowingOccasionDetailSheet = false
                     
-                    // Auto-generate fresh looks like a new occasion
+                    // Regenerate looks for the same occasion instance & occasion.id
                     let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
                     viewModel.regenerateLooks(profile: activeProfile)
                 },
@@ -203,13 +183,10 @@ struct OccasionOutputView: View {
                 }
             )
         }
-        .sheet(isPresented: $isShowingProfileSheet) {
-            ProfileHubView()
-        }
         .outfitPlaygroundSheet(
             isPresented: $isShowingPlayground,
             package: playgroundPackage,
-            sourceImage: Image("mock_result_1"),
+            sourceImage: activePlaygroundSourceImage,
             onGenerated: { resultCG in
                 let uiImage = UIImage(cgImage: resultCG)
                 isProcessingPlayground = true
@@ -268,10 +245,11 @@ struct OccasionOutputView: View {
                     }
                     .accessibilityLabel("Generate More Looks")
 
-                    CircularIconButton(systemName: "info.bubble") {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                            isShowingMoreMenu.toggle()
-                        }
+                    CircularIconButton(
+                        systemName: "info.bubble",
+                        isEnabled: !viewModel.isLoading
+                    ) {
+                        isShowingOccasionDetailSheet = true
                     }
                     .accessibilityLabel("Occasion Details")
                 }
@@ -293,138 +271,14 @@ struct OccasionOutputView: View {
             .padding(.top, 2)
         }
     }
-    
-    private var liquidGlassMenu: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isShowingMoreMenu = false
-                }
-                isShowingOccasionDetailSheet = true
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.espressoTitle)
-                        .frame(width: 20)
-                    
-                    Text("Edit")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(AppColors.espressoTitle)
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-            }
-            .buttonStyle(.plain)
-            
-            Divider()
-                .background(Color.white.opacity(0.35))
-                .padding(.horizontal, 12)
-            
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isShowingMoreMenu = false
-                }
-                isShowingProfileSheet = true
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "person.crop.circle")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.espressoTitle)
-                        .frame(width: 20)
-                    
-                    Text("Profile")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(AppColors.espressoTitle)
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-            }
-            .buttonStyle(.plain)
-            
-            Divider()
-                .background(Color.white.opacity(0.35))
-                .padding(.horizontal, 12)
-            
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isShowingMoreMenu = false
-                }
-                let activeProfile = userProfiles.first ?? UserProfile.mockSample
-                viewModel.regenerateLooks(profile: activeProfile)
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.espressoTitle)
-                        .frame(width: 20)
-                    
-                    Text("Regenerate")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(AppColors.espressoTitle)
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-            }
-            .buttonStyle(.plain)
-            
-            Divider()
-                .background(Color.white.opacity(0.35))
-                .padding(.horizontal, 12)
-            
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isShowingMoreMenu = false
-                }
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color(hex: "#FF3B30"))
-                        .frame(width: 20)
-                    
-                    Text("Delete")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Color(hex: "#FF3B30"))
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-            }
-            .buttonStyle(.plain)
+
+    private var activePlaygroundSourceImage: Image {
+        let activeProfile = userProfiles.first ?? viewModel.profile
+        if let frontData = activeProfile?.frontBodyPhotoData,
+           let uiImage = UIImage(data: frontData) {
+            return Image(uiImage: uiImage)
         }
-        .frame(width: 165)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.white.opacity(0.70))
-            }
-            .shadow(color: Color.black.opacity(0.12), radius: 18, y: 8)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.85),
-                            Color.white.opacity(0.20)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
+        return Image("mock_result_1")
     }
     
     // MARK: - Loading Overlay

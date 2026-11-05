@@ -234,6 +234,15 @@ final class OccasionOutputViewModel {
                 self?.vlmDebugDescriptions = descriptions
             }
             
+            if let modelContext = self.occasion.modelContext {
+                for look in newLooks {
+                    modelContext.insert(look)
+                    for garment in look.garments {
+                        modelContext.insert(garment)
+                    }
+                    look.occasion = self.occasion
+                }
+            }
             let finalDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
             withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                 self.vlmDebugDescriptions = finalDescriptions
@@ -243,6 +252,7 @@ final class OccasionOutputViewModel {
                 self.selectedLookIndex = 0
                 self.isLoading = false
             }
+            try? self.occasion.modelContext?.save()
         } catch {
             let errorMsg = error.localizedDescription
             print("\n❌ [OccasionOutputViewModel] LLM inference failed (\(LLMResource.activeModelFilename)): \(errorMsg)\n")
@@ -340,6 +350,7 @@ final class OccasionOutputViewModel {
     
     func regenerateLooks(profile: UserProfile? = nil) {
         guard !isLoading else { return }
+        let preservedOccasionID = occasion.id
         
         // Remove old non-bookmarked looks from context if persisted
         if let context = occasion.modelContext {
@@ -348,8 +359,10 @@ final class OccasionOutputViewModel {
             }
         }
         occasion.generatedLooks.removeAll()
+        garmentCropImages.removeAll()
+        isGeneratingMore = false
         
-        // Reset to generating state like a brand new occasion
+        // Reset to generating state like a brand new occasion while preserving occasion.id
         withAnimation(.easeInOut(duration: 0.2)) {
             self.selectedLookIndex = 0
             self.looks = OccasionOutputViewModel.makeMockLooks()
@@ -370,6 +383,15 @@ final class OccasionOutputViewModel {
                     self?.loadingStageSubtitle = stageSubtitle
                     self?.vlmDebugDescriptions = descriptions
                 }
+                if let modelContext = self.occasion.modelContext {
+                    for look in newLooks {
+                        modelContext.insert(look)
+                        for garment in look.garments {
+                            modelContext.insert(garment)
+                        }
+                        look.occasion = self.occasion
+                    }
+                }
                 let finalDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                     self.vlmDebugDescriptions = finalDescriptions
@@ -380,6 +402,7 @@ final class OccasionOutputViewModel {
                     self.isLoading = false
                 }
                 try? self.occasion.modelContext?.save()
+                print("🔄 [OccasionOutputViewModel] Regenerated \(newLooks.count) looks for same occasion id=\(preservedOccasionID.uuidString) (\(self.occasion.title))")
             } catch {
                 let errorMsg = error.localizedDescription
                 print("\n❌ [OccasionOutputViewModel] LLM CANNOT BE USED (\(LLMResource.activeModelFilename)): \(errorMsg)\n")

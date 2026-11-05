@@ -70,6 +70,9 @@ public final class OccasionInputViewModel {
     
     // MARK: - Initial State Tracking (For Unsaved Changes Detection)
     
+    /// Preserves the existing occasion's `UUID` when editing so saving updates the same occasion ID.
+    public let existingOccasionID: UUID?
+    
     private var initialTitle: String
     private var initialDate: Date
     private var initialDresscode: String
@@ -85,6 +88,7 @@ public final class OccasionInputViewModel {
         selectedVisions: Set<StyleVision> = [],
         referenceImages: [Data] = []
     ) {
+        self.existingOccasionID = nil
         self.title = title
         self.date = date
         self.dresscode = dresscode
@@ -100,6 +104,7 @@ public final class OccasionInputViewModel {
     }
     
     public init(from occasion: OccasionDetail) {
+        self.existingOccasionID = occasion.id
         self.title = occasion.title
         self.date = occasion.date
         self.dresscode = occasion.dresscode
@@ -115,25 +120,33 @@ public final class OccasionInputViewModel {
     }
     
     init(from occasion: OccasionItem) {
+        let resolvedRefs = occasion.referenceImagesData.isEmpty
+            ? (occasion.referenceImageData.map { [$0] } ?? [])
+            : occasion.referenceImagesData
+        self.existingOccasionID = occasion.id
         self.title = occasion.title
         self.date = occasion.date
         self.dresscode = occasion.dresscode
         self.selectedVisions = Set(occasion.visions)
-        self.referenceImages = occasion.referenceImagesData
-        self.referenceSavedLookIDs = Array(repeating: nil, count: occasion.referenceImagesData.count)
+        self.referenceImages = resolvedRefs
+        self.referenceSavedLookIDs = Array(repeating: nil, count: resolvedRefs.count)
         
         self.initialTitle = occasion.title.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialDate = occasion.date
         self.initialDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialVisions = Set(occasion.visions)
-        self.initialReferenceImages = occasion.referenceImagesData
+        self.initialReferenceImages = resolvedRefs
     }
     
     // MARK: - Computed Properties
     
-    /// Checks whether the occasion date is in the past (prior to today; today is allowed).
+    /// Checks whether the occasion date is in the past (prior to today; today is allowed,
+    /// as is keeping an existing occasion's original date when editing).
     public var isDateInPast: Bool {
-        Calendar.current.startOfDay(for: date) < Calendar.current.startOfDay(for: Date())
+        if existingOccasionID != nil && Calendar.current.isDate(date, inSameDayAs: initialDate) {
+            return false
+        }
+        return Calendar.current.startOfDay(for: date) < Calendar.current.startOfDay(for: Date())
     }
     
     /// Checks whether the required occasion fields are valid:
@@ -390,9 +403,10 @@ public final class OccasionInputViewModel {
     
     // MARK: - Submission
     
-    /// Builds an `OccasionDetail` model populated with the current form values.
+    /// Builds an `OccasionDetail` model populated with the current form values, preserving `existingOccasionID` if editing.
     public func createOccasionDetail() -> OccasionDetail {
         OccasionDetail(
+            id: existingOccasionID ?? UUID(),
             date: date,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             dresscode: dresscode.trimmingCharacters(in: .whitespacesAndNewlines),
