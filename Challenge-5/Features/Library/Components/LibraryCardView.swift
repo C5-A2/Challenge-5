@@ -45,35 +45,22 @@ public struct LibraryCardView: View {
     public var body: some View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 8) {
-                // Top: Blue Card Container with Bookmark Button
-                ZStack(alignment: .topTrailing) {
-                    AsyncLookThumbnailView(
-                        imageData: look.lookImageData,
-                        assetImageName: look.assetImageName,
-                        contentMode: .fill
-                    )
-                    .frame(maxWidth: .infinity)
-                    .frame(height: cardHeight)
-                    .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius, style: .continuous)
-                            .strokeBorder(AppColors.subtleBorder, lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
-                    
-                    // Top-trailing Bookmark Toggle Button
-                    BookmarkToggleButton(
-                        isBookmarked: Binding(
-                            get: { look.isBookmarked },
-                            set: { _ in onToggleBookmark() }
-                        ),
-                        style: .glassmorphicOverlay,
-                        size: 32,
-                        iconSize: 14,
-                        activeColor: AppColors.espressoTitle
-                    )
-                    .padding(10)
-                }
+                // Top: Card Container
+                AsyncLookThumbnailView(
+                    imageData: look.lookImageData,
+                    assetImageName: look.assetImageName,
+                    contentMode: .fit
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: cardHeight)
+                .padding(.vertical, 2)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius, style: .continuous)
+                        .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.04), radius: 6, y: 3)
                 
                 // Bottom: Keterangan garment persis di bawah card biru
                 garmentDescriptionView

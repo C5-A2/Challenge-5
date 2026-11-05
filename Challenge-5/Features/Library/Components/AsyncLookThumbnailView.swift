@@ -22,6 +22,7 @@ public struct AsyncLookThumbnailView: View {
     public let imageData: Data?
     public var assetImageName: String? = nil
     public var contentMode: ContentMode = .fill
+    public var alignment: Alignment = .top
     public var showPlaceholderIcon: Bool = true
     
     // MARK: - State
@@ -38,11 +39,13 @@ public struct AsyncLookThumbnailView: View {
         imageData: Data?,
         assetImageName: String? = nil,
         contentMode: ContentMode = .fill,
+        alignment: Alignment = .top,
         showPlaceholderIcon: Bool = false
     ) {
         self.imageData = imageData
         self.assetImageName = assetImageName
         self.contentMode = contentMode
+        self.alignment = alignment
         self.showPlaceholderIcon = showPlaceholderIcon
     }
     
@@ -71,8 +74,7 @@ public struct AsyncLookThumbnailView: View {
     // MARK: - Placeholder View
     
     private var placeholderView: some View {
-        // Clean solid placeholder color token matching Figma blue `#536493`
-        AppColors.libraryCardPlaceholder
+        Color.white
     }
     
     // MARK: - Async Image Loading
