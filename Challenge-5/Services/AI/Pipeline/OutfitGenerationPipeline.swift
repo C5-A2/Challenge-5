@@ -50,6 +50,14 @@ protocol OutfitGenerationPipelineProtocol {
         existingLooks: [OutfitLook],
         temperature: Float
     ) async throws -> OutfitLook
+
+    /// Generates a single additional outfit look, taking into account all previously generated looks
+    /// so the new look remains distinct and tailored.
+    func generateSingleLook(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        existingLooks: [OutfitLook]
+    ) async throws -> OutfitLook
 }
 
 // MARK: - Default Outfit Generation Pipeline
@@ -229,15 +237,25 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
 
         parsedLook.lookIndex = lookIndex
-
-        // Provide look image data using available assets (cycling through mock results 1..5)
-        let assetName = "mock_result_\((lookIndex % 5) + 1)"
-        if let image = UIImage(named: assetName), let data = image.jpegData(compressionQuality: 0.8) {
-            parsedLook.lookImageData = data
-        }
-
         return parsedLook
     }
+
+    /// Generates a single additional outfit look, taking into account all previously generated looks
+    /// so the new look remains distinct and tailored.
+    func generateSingleLook(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        existingLooks: [OutfitLook]
+    ) async throws -> OutfitLook {
+        try await generateSingleLook(
+            for: occasion,
+            profile: profile,
+            lookIndex: existingLooks.count,
+            existingLooks: existingLooks,
+            temperature: 0.75
+        )
+    }
+
 
     /// Synchronous generation for seamless instant UI transitions upon form submit.
     ///

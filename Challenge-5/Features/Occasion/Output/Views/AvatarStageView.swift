@@ -9,16 +9,22 @@ import SwiftUI
 
 struct AvatarStageView: View {
     
-    
     var viewModel: OccasionOutputViewModel
+    var onPlaygroundTap: (() -> Void)? = nil
+    var isProcessingPlayground: Bool = false
     
     @State private var dragOffset: CGFloat = 0
     
     private let cardSpacing: CGFloat = 126
     
-    
-    init(viewModel: OccasionOutputViewModel) {
+    init(
+        viewModel: OccasionOutputViewModel,
+        onPlaygroundTap: (() -> Void)? = nil,
+        isProcessingPlayground: Bool = false
+    ) {
         self.viewModel = viewModel
+        self.onPlaygroundTap = onPlaygroundTap
+        self.isProcessingPlayground = isProcessingPlayground
     }
     
     
@@ -64,14 +70,22 @@ struct AvatarStageView: View {
             ZStack(alignment: .center) {
                 if viewModel.isLookLoading(at: index) {
                     loadingRingCard(for: index, width: width, height: height, isCenter: isCenter)
-                } else {
-                    modelImageView(for: index)
+                } else if index < viewModel.looks.count,
+                   let data = viewModel.looks[index].lookImageData,
+                   !OccasionOutputViewModel.isPlaceholderData(data, lookIndex: viewModel.looks[index].lookIndex),
+                   let uiImage = UIImage(data: data) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
                         .frame(width: width, height: height)
                         .shadow(
                             color: Color.black.opacity(isCenter ? 0.08 : 0.03),
                             radius: isCenter ? 8 : 3,
                             y: isCenter ? 4 : 2
                         )
+                } else {
+                    playgroundPlaceholderView(for: index, isCenter: isCenter, width: width, height: height)
+                        .frame(width: width, height: height)
                 }
             }
             .frame(width: width, height: height)
@@ -79,7 +93,14 @@ struct AvatarStageView: View {
             .opacity(opacity)
             .zIndex(Double(centerFactor))
             .onTapGesture {
-                handleCardTap(at: index)
+                let isUngenerated = index >= viewModel.looks.count 
+                    || viewModel.looks[index].lookImageData == nil 
+                    || OccasionOutputViewModel.isPlaceholderData(viewModel.looks[index].lookImageData ?? Data(), lookIndex: viewModel.looks[index].lookIndex)
+                if isCenter && isUngenerated {
+                    onPlaygroundTap?()
+                } else {
+                    handleCardTap(at: index)
+                }
             }
         }
     }
@@ -115,49 +136,80 @@ struct AvatarStageView: View {
         .frame(width: width, height: height, alignment: .center)
     }
     
-    private func modelImageView(for index: Int) -> some View {
-        if viewModel.looks.indices.contains(index),
-           let data = viewModel.looks[index].lookImageData,
-           let uiImage = UIImage(data: data) {
-            return AnyView(
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFit()
-            )
-        }
-        let name = assetName(for: index)
-        return AnyView(
-            Group {
-                if let uiImage = UIImage(named: name) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                } else {
-                    fallbackSilhouette(for: index)
-                }
-            }
-        )
-    }
+    // MARK: - Image Playground Placeholder View (Cardless)
     
-    private func assetName(for index: Int) -> String {
-        let specificName = "mock_result_\(index + 1)"
-        if UIImage(named: specificName) != nil {
-            return specificName
-        }
-        let fallbackAssets = ["mock_result_1", "mock_result_2", "mock_result_3", "mock_result_4", "mock_result_5"]
-        return fallbackAssets[index % fallbackAssets.count]
-    }
-    
-    private func fallbackSilhouette(for index: Int) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(hex: "#536493"))
-            
+    @ViewBuilder
+    private func playgroundPlaceholderView(for index: Int, isCenter: Bool, width: CGFloat, height: CGFloat) -> some View {
+        ZStack(alignment: .center) {
+            // Icon Orang (Avatar Silhouette)
             Image(systemName: "figure.stand")
-                .font(.system(size: 76, weight: .light))
-                .foregroundStyle(.white.opacity(0.8))
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(AppColors.espressoTitle.opacity(isCenter ? 0.20 : 0.08))
+                .frame(height: height * 0.78)
+            
+            if isCenter {
+                VStack(spacing: 14) {
+                    // Logo Image Playground Default
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(hex: "#FF5E7E").opacity(0.25),
+                                        Color(hex: "#8B5CF6").opacity(0.25),
+                                        Color(hex: "#38BDF8").opacity(0.25)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 54, height: 54)
+                        
+                        Image(systemName: "apple.image.playground")
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(hex: "#8B5CF6"),
+                                        Color(hex: "#EC4899"),
+                                        Color(hex: "#F59E0B")
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    .shadow(color: Color.black.opacity(0.10), radius: 8, y: 3)
+                    
+                    // Tombol Generate
+                    Button {
+                        onPlaygroundTap?()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("Generate Look")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .background(
+                            Capsule()
+                                .fill(AppColors.espressoTitle)
+                                .shadow(color: .black.opacity(0.22), radius: 8, y: 3)
+                        )
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .offset(y: 8)
+            }
         }
     }
+    
+    
+
     
     
     private var dragGesture: some Gesture {

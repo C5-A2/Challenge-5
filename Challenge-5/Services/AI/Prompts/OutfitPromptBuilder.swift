@@ -479,6 +479,7 @@ struct OutfitPromptBuilder: Sendable {
         OUTPUT FORMAT: Return ONLY valid JSON, no markdown, no conversational text.
         IMPORTANT: Put all 3 garments inside ONE single "garments" array. Do NOT repeat the "garments" key.
         Allowed garment fields: "category", "name", "material", "colorName", "hexColor", "rationale" (6 fields only).
+        "name" must contain ONLY the garment item type without color adjectives (e.g. "Blouse", "Tailored Blazer", "Pleated Trousers"). Colors belong exclusively in "colorName".
         "colorName" and "hexColor" must be copied verbatim from the palette — do not invent colors.
         Keep rationales extremely concise:
         - "fitRationale": 1 short sentence.
