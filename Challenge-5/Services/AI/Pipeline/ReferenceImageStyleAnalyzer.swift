@@ -76,9 +76,9 @@ public struct ReferenceImageStyleProfile: Sendable, Codable, Equatable {
 /// using the on-device Qwen 2.5 VL 3B Vision-Language Model exclusively.
 ///
 /// Features:
-/// - 1-by-1 image scanning: Each reference photo produces a distinct natural descriptive text.
-/// - In-memory LRU/thread-safe cache: Images analyzed in the form sheet are reused instantly in generation.
-/// - Single-session VLM loading: Loads model weights once for all images, unloads immediately to free memory.
+/// - Post-submit 1-by-1 image scanning: Runs in the loading state right after form submission before main LLM generation.
+/// - Safe VRAM handoff: Releases any resident text LLM weights before loading VLM, and unloads VLM (~2.6 GB) immediately after scanning.
+/// - Debug persistence: Stores extracted VLM descriptions per occasion so `OccasionOutputView` can display them for developer inspection.
 public final class ReferenceImageStyleAnalyzer: Sendable {
 
     public static let shared = ReferenceImageStyleAnalyzer()
@@ -88,12 +88,40 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
 
     private init() {}
 
+    // MARK: - Debug Persistence Helpers
+
+    private static func debugStorageKey(for occasionID: UUID) -> String {
+        "vlm_debug_descriptions_\(occasionID.uuidString)"
+    }
+
+    /// Persists extracted 1-by-1 VLM descriptions for an occasion so `OccasionOutputView` can display them.
+    public func saveDescriptions(_ descriptions: [String], forOccasionID occasionID: UUID) {
+        let key = Self.debugStorageKey(for: occasionID)
+        if descriptions.isEmpty {
+            UserDefaults.standard.removeObject(forKey: key)
+        } else {
+            UserDefaults.standard.set(descriptions, forKey: key)
+        }
+    }
+
+    /// Retrieves previously extracted VLM descriptions for an occasion, if any.
+    public func savedDescriptions(forOccasionID occasionID: UUID) -> [String] {
+        let key = Self.debugStorageKey(for: occasionID)
+        return UserDefaults.standard.stringArray(forKey: key) ?? []
+    }
+
     // MARK: - Primary 1-by-1 Analysis API
 
     /// Analyzes an array of reference images 1-by-1 in a single VLM session without reloading weights between images.
     ///
+    /// - Parameters:
+    ///   - imagesData: Raw JPEG/PNG data buffers of user reference photos (up to 3).
+    ///   - onProgress: Optional `@MainActor` progress callback invoked with `(completedCount, totalCount, descriptionsSoFar)`.
     /// - Returns: An array of natural text styling descriptions, one corresponding to each input image.
-    public func analyzeIndividualImages(for imagesData: [Data]) async -> [String] {
+    public func analyzeIndividualImages(
+        for imagesData: [Data],
+        onProgress: (@MainActor @Sendable (Int, Int, [String]) -> Void)? = nil
+    ) async -> [String] {
         guard !imagesData.isEmpty else { return [] }
 
         // Check cache for already analyzed images
@@ -118,10 +146,21 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
 
         if uncachedIndices.isEmpty {
             print("👁️ [ReferenceImageStyleAnalyzer] All \(imagesData.count) reference images retrieved from cache.")
-            return results
+            let finalResults = results.filter { !$0.isEmpty }
+            await onProgress?(finalResults.count, imagesData.count, finalResults)
+            return finalResults
+        }
+
+        // Notify progress for any already-cached photos first
+        let initialCached = results.filter { !$0.isEmpty }
+        if !initialCached.isEmpty {
+            await onProgress?(initialCached.count, imagesData.count, initialCached)
         }
 
         print("👁️ [ReferenceImageStyleAnalyzer] Scanning \(uncachedIndices.count)/\(imagesData.count) reference images on-device via VLM (1-by-1)...")
+
+        // Ensure text LLM weights are released before loading VLM into Metal GPU memory
+        await LLMEngine.shared.releaseModelWeights()
 
         // Pre-load VLM once for the entire batch
         do {
@@ -145,12 +184,15 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
                 cacheLock.lock()
                 imageCache[hash] = description
                 cacheLock.unlock()
+
+                let snapshot = results.filter { !$0.isEmpty }
+                await onProgress?(snapshot.count, imagesData.count, snapshot)
             } catch {
                 print("⚠️ [ReferenceImageStyleAnalyzer] Reference Photo \(originalIndex + 1) VLM failed: \(error.localizedDescription)")
             }
         }
 
-        // Unload VLM weights once at the end of the entire batch to free ~2.6 GB VRAM
+        // Unload VLM weights once at the end of the entire batch to free ~2.6 GB VRAM before main LLM runs
         await VLMEngine.shared.unload()
         return results.filter { !$0.isEmpty }
     }
@@ -158,6 +200,14 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
     /// Analyzes reference photos and returns a formatted string descriptor combining all individual images.
     public func analyzeStyle(from imagesData: [Data]) async -> String? {
         let descriptions = await analyzeIndividualImages(for: imagesData)
+        guard !descriptions.isEmpty else { return nil }
+        return descriptions.enumerated().map { index, desc in
+            "Reference Photo \(index + 1): \(desc)"
+        }.joined(separator: "\n\n")
+    }
+
+    /// Formats an already-extracted array of individual descriptions into a combined context string.
+    public static func formatCombinedStyle(from descriptions: [String]) -> String? {
         guard !descriptions.isEmpty else { return nil }
         return descriptions.enumerated().map { index, desc in
             "Reference Photo \(index + 1): \(desc)"

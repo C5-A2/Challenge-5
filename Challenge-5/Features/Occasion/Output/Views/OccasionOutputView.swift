@@ -28,6 +28,7 @@ struct OccasionOutputView: View {
     @State private var isShowingPlayground: Bool = false
     @State private var playgroundPackage: OutfitPlaygroundPackage? = nil
     @State private var isProcessingPlayground: Bool = false
+    @State private var isVLMDebugExpanded: Bool = true
     
     
     var onDismiss: (() -> Void)? = nil
@@ -113,6 +114,14 @@ struct OccasionOutputView: View {
                 .padding(.bottom, 12)
             }
             
+            if !viewModel.isLoading && !isProcessingPlayground && viewModel.hasReferencePhotos {
+                vlmDebugOverlay
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 114)
+                    .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+                    .zIndex(6)
+            }
+
             if isShowingMoreMenu {
                 Color.black.opacity(0.001)
                     .ignoresSafeArea()
@@ -171,6 +180,9 @@ struct OccasionOutputView: View {
                     viewModel.occasion.visionKeywords = updatedDetail.visions.map(\.rawValue)
                     viewModel.occasion.referenceImagesData = updatedDetail.referenceImages
                     viewModel.occasion.referenceImageData = updatedDetail.referenceImages.first
+                    if updatedDetail.referenceImages.isEmpty {
+                        ReferenceImageStyleAnalyzer.shared.saveDescriptions([], forOccasionID: viewModel.occasion.id)
+                    }
                     try? modelContext.save()
                     isShowingOccasionDetailSheet = false
                     
@@ -179,6 +191,7 @@ struct OccasionOutputView: View {
                     viewModel.regenerateLooks(profile: activeProfile)
                 },
                 onDelete: {
+                    ReferenceImageStyleAnalyzer.shared.saveDescriptions([], forOccasionID: viewModel.occasion.id)
                     modelContext.delete(viewModel.occasion)
                     try? modelContext.save()
                     isShowingOccasionDetailSheet = false
@@ -422,7 +435,7 @@ struct OccasionOutputView: View {
                 .ignoresSafeArea()
                 .background(.ultraThinMaterial)
             
-            VStack(spacing: 20) {
+            VStack(spacing: 18) {
                 ZStack {
                     Circle()
                         .stroke(AppColors.espressoTitle.opacity(0.12), lineWidth: 4)
@@ -434,23 +447,66 @@ struct OccasionOutputView: View {
                 }
                 
                 VStack(spacing: 6) {
-                    Text(isProcessingPlayground ? "Styling With AI" : "Curating Your Looks")
+                    Text(isProcessingPlayground ? "Styling With AI" : viewModel.loadingStageTitle)
                         .font(AppTypography.sfProSemiboldExtended(size: 19))
                         .foregroundStyle(AppColors.espressoTitle)
+                        .multilineTextAlignment(.center)
                     
                     Text(
                         isProcessingPlayground
                             ? "Preparing visual outfit mapper and loading Image Playground..."
-                            : "Styling ensembles tailored to your silhouette and \(viewModel.occasion.title)..."
+                            : (viewModel.loadingStageSubtitle.isEmpty
+                                ? "Styling ensembles tailored to your silhouette and \(viewModel.occasion.title)..."
+                                : viewModel.loadingStageSubtitle)
                     )
                         .font(AppTypography.caption)
                         .foregroundStyle(AppColors.mutedCaption)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
+                        .padding(.horizontal, 16)
+                }
+
+                if !isProcessingPlayground && !viewModel.vlmDebugDescriptions.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(AppColors.primaryBlue)
+                            Text("VLM OUTPUT → MAIN LLM INPUT")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(AppColors.primaryBlue)
+                        }
+
+                        ScrollView(.vertical, showsIndicators: true) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(Array(viewModel.vlmDebugDescriptions.enumerated()), id: \.offset) { idx, desc in
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Ref \(idx + 1) → Look \(idx + 1)")
+                                            .font(.system(size: 10.5, weight: .semibold))
+                                            .foregroundStyle(AppColors.espressoTitle)
+                                        Text(desc)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(AppColors.bodyText)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 110)
+                    }
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(AppColors.primaryBlue.opacity(0.06))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(AppColors.primaryBlue.opacity(0.18), lineWidth: 1)
+                    )
                 }
             }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 32)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 28)
             .background(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(AppColors.glassmorphicFill)
@@ -460,7 +516,131 @@ struct OccasionOutputView: View {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.8), lineWidth: 1)
             )
-            .padding(.horizontal, 32)
+            .padding(.horizontal, 28)
+        }
+    }
+
+    // MARK: - VLM Debug Output Banner (Post-Submit Inspection)
+
+    @ViewBuilder
+    private var vlmDebugOverlay: some View {
+        if isVLMDebugExpanded {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.primaryBlue)
+
+                    Text("VLM OUTPUT DEBUG (\(viewModel.vlmDebugDescriptions.count) REF\(viewModel.vlmDebugDescriptions.count == 1 ? "" : "S"))")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(AppColors.primaryBlue)
+
+                    Spacer()
+
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                            isVLMDebugExpanded = false
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text("Hide")
+                            Image(systemName: "chevron.up")
+                        }
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(AppColors.primaryBlue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppColors.primaryBlue.opacity(0.10))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if viewModel.vlmDebugDescriptions.isEmpty {
+                    Text("No VLM text description returned for the attached reference photo(s).")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(AppColors.mutedCaption)
+                } else {
+                    ScrollView(.vertical, showsIndicators: true) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Array(viewModel.vlmDebugDescriptions.enumerated()), id: \.offset) { idx, desc in
+                                let isCurrentTarget = viewModel.selectedLookIndex == idx
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 6) {
+                                        Text("Ref \(idx + 1) → Look \(idx + 1)")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(isCurrentTarget ? AppColors.primaryBlue : AppColors.espressoTitle)
+
+                                        if isCurrentTarget {
+                                            Text("ACTIVE LOOK")
+                                                .font(.system(size: 9, weight: .bold))
+                                                .foregroundStyle(.white)
+                                                .padding(.horizontal, 5)
+                                                .padding(.vertical, 1.5)
+                                                .background(AppColors.primaryBlue)
+                                                .clipShape(Capsule())
+                                        }
+                                    }
+
+                                    Text(desc)
+                                        .font(.system(size: 11.5))
+                                        .foregroundStyle(AppColors.bodyText)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .textSelection(.enabled)
+                                }
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(isCurrentTarget ? AppColors.primaryBlue.opacity(0.08) : Color.black.opacity(0.025))
+                                )
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 118)
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(AppColors.cardBackground.opacity(0.95))
+                    .shadow(color: Color.black.opacity(0.08), radius: 12, y: 4)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(AppColors.primaryBlue.opacity(0.25), lineWidth: 1)
+            )
+        } else {
+            HStack {
+                Spacer()
+                Button {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                        isVLMDebugExpanded = true
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("VLM Debug (\(viewModel.vlmDebugDescriptions.count))")
+                            .font(.system(size: 11, weight: .semibold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundStyle(AppColors.primaryBlue)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(AppColors.cardBackground.opacity(0.95))
+                            .shadow(color: Color.black.opacity(0.08), radius: 6, y: 2)
+                    )
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(AppColors.primaryBlue.opacity(0.25), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
     

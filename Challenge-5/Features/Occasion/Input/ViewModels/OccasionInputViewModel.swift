@@ -46,18 +46,6 @@ public final class OccasionInputViewModel {
     /// The saved look behind each reference photo, in the same order as `referenceImages`.
     /// `nil` for photos from the camera or the photo library.
     public private(set) var referenceSavedLookIDs: [UUID?] = []
-
-    /// Descriptive styling text extracted per reference image by the on-device VLM (e.g. index 0 -> description for photo 1).
-    public private(set) var referenceImageDescriptions: [Int: String] = [:]
-
-    /// Extracted VLM styling keywords per reference image index for developer inspection & debug.
-    public private(set) var referenceImageKeywords: [Int: [String]] = [:]
-
-    /// Full multi-line VLM visual context injected into Qwen 2.5 3B prompt.
-    public private(set) var fullExtractedVLMContext: String? = nil
-
-    /// Indicates whether background VLM keyword extraction is actively running.
-    public private(set) var isAnalyzingReferencePhotos: Bool = false
     
     /// Presentation state of the three reference sources (Camera, Open from Photos, From Library).
     public var isShowingReferenceCamera: Bool = false
@@ -109,10 +97,6 @@ public final class OccasionInputViewModel {
         self.initialDresscode = dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialVisions = selectedVisions
         self.initialReferenceImages = referenceImages
-
-        if !referenceImages.isEmpty {
-            analyzeReferenceImages()
-        }
     }
     
     public init(from occasion: OccasionDetail) {
@@ -128,10 +112,6 @@ public final class OccasionInputViewModel {
         self.initialDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialVisions = Set(occasion.visions)
         self.initialReferenceImages = occasion.referenceImages
-
-        if !occasion.referenceImages.isEmpty {
-            analyzeReferenceImages()
-        }
     }
     
     init(from occasion: OccasionItem) {
@@ -147,10 +127,6 @@ public final class OccasionInputViewModel {
         self.initialDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialVisions = Set(occasion.visions)
         self.initialReferenceImages = occasion.referenceImagesData
-
-        if !occasion.referenceImagesData.isEmpty {
-            analyzeReferenceImages()
-        }
     }
     
     // MARK: - Computed Properties
@@ -292,7 +268,6 @@ public final class OccasionInputViewModel {
         if referenceSavedLookIDs.indices.contains(index) {
             referenceSavedLookIDs.remove(at: index)
         }
-        analyzeReferenceImages()
     }
     
     /// Adds references up to the limit, keeping `referenceImages` and `referenceSavedLookIDs` in sync.
@@ -301,61 +276,6 @@ public final class OccasionInputViewModel {
         guard !addedReferences.isEmpty else { return }
         referenceImages += addedReferences.map(\.image)
         referenceSavedLookIDs += addedReferences.map(\.savedLookID)
-        analyzeReferenceImages()
-    }
-
-    // MARK: - Reference Keyword Analysis (VLM Debug)
-
-    /// Asynchronously extracts VLM styling descriptions for all attached reference images 1-by-1.
-    public func analyzeReferenceImages() {
-        guard !referenceImages.isEmpty else {
-            referenceImageDescriptions = [:]
-            referenceImageKeywords = [:]
-            fullExtractedVLMContext = nil
-            isAnalyzingReferencePhotos = false
-            return
-        }
-
-        let images = referenceImages
-        isAnalyzingReferencePhotos = true
-
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-
-            // 1. Scan images 1-by-1 in a single VLM session (fast, single-load, cached)
-            let descriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(for: images)
-
-            var descDict: [Int: String] = [:]
-            var keywordDict: [Int: [String]] = [:]
-
-            for (index, desc) in descriptions.enumerated() {
-                descDict[index] = desc
-                keywordDict[index] = [desc]
-            }
-
-            // 2. Synthesize multi-image context string for the Qwen 2.5 LLM
-            let fullContext = descriptions.enumerated().map { idx, desc in
-                "• Reference Photo \(idx + 1): \(desc)"
-            }.joined(separator: "\n\n")
-
-            // Only update if images count hasn't changed while processing
-            if self.referenceImages.count == images.count {
-                self.referenceImageDescriptions = descDict
-                self.referenceImageKeywords = keywordDict
-                self.fullExtractedVLMContext = fullContext.isEmpty ? nil : fullContext
-            }
-            self.isAnalyzingReferencePhotos = false
-        }
-    }
-
-    /// Returns extracted visual styling description for a specific reference photo index.
-    public func description(for index: Int) -> String? {
-        return referenceImageDescriptions[index]
-    }
-
-    /// Returns extracted visual keywords for a specific reference photo index.
-    public func extractedKeywords(for index: Int) -> [String] {
-        return referenceImageKeywords[index] ?? []
     }
     
     /// Loads the photos picked in "Open from Photos" as reference JPEGs and adds them.
@@ -490,10 +410,6 @@ public final class OccasionInputViewModel {
         referenceImages = []
         referenceSavedLookIDs = []
         referencePhotoPickerItems = []
-        referenceImageDescriptions = [:]
-        referenceImageKeywords = [:]
-        fullExtractedVLMContext = nil
-        isAnalyzingReferencePhotos = false
         isShowingVisionPicker = false
         isShowingDiscardAlert = false
     }
@@ -509,6 +425,5 @@ public final class OccasionInputViewModel {
         referencePhotoPickerItems = []
         isShowingVisionPicker = false
         isShowingDiscardAlert = false
-        analyzeReferenceImages()
     }
 }

@@ -103,26 +103,19 @@ struct ReferenceImagesView: View {
                         .strokeBorder(AppColors.inputBorder, lineWidth: 1)
                 )
             } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(alignment: .top, spacing: AppDimensions.elementSpacing) {
-                            if isEditable && viewModel.canAddMoreReferences {
-                                addReferenceTile
-                            }
-                            ForEach(Array(viewModel.referenceImages.enumerated()), id: \.offset) { index, imageData in
-                                referenceThumbnail(imageData, at: index)
-                            }
-                            if isEditable && viewModel.isLoadingReferencePhotos {
-                                ProgressView()
-                                    .frame(width: ReferencePickerConstants.Row.tileWidth,
-                                           height: ReferencePickerConstants.Row.tileHeight)
-                            }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppDimensions.elementSpacing) {
+                        if isEditable && viewModel.canAddMoreReferences {
+                            addReferenceTile
                         }
-                    }
-
-                    // Developer Debug Banner showing active VLM extracted context for Qwen 2.5
-                    if !viewModel.referenceImages.isEmpty && (!viewModel.referenceImageKeywords.isEmpty || viewModel.isAnalyzingReferencePhotos) {
-                        debugContextBanner
+                        ForEach(Array(viewModel.referenceImages.enumerated()), id: \.offset) { index, imageData in
+                            referenceThumbnail(imageData, at: index)
+                        }
+                        if isEditable && viewModel.isLoadingReferencePhotos {
+                            ProgressView()
+                                .frame(width: ReferencePickerConstants.Row.tileWidth,
+                                       height: ReferencePickerConstants.Row.tileHeight)
+                        }
                     }
                 }
             }
@@ -154,123 +147,27 @@ struct ReferenceImagesView: View {
     }
 
     private func referenceThumbnail(_ imageData: Data, at index: Int) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ZStack(alignment: .topTrailing) {
-                thumbnailImage(imageData)
-                    .frame(width: ReferencePickerConstants.Row.tileWidth, height: ReferencePickerConstants.Row.tileHeight)
-                    .clipShape(.rect(cornerRadius: AppDimensions.chipCornerRadius))
-                if isEditable {
-                    Button {
-                        viewModel.removeReferenceImage(at: index)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(AppTypography.caption.weight(.bold))
-                            .foregroundStyle(AppColors.bodyText)
-                            .frame(width: ReferencePickerConstants.Row.removeButtonSize,
-                                   height: ReferencePickerConstants.Row.removeButtonSize)
-                            .background(AppColors.cardBackground)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(ReferencePickerConstants.Row.removeButtonInset)
-                    .accessibilityLabel("Remove reference photo \(index + 1)")
+        ZStack(alignment: .topTrailing) {
+            thumbnailImage(imageData)
+                .frame(width: ReferencePickerConstants.Row.tileWidth, height: ReferencePickerConstants.Row.tileHeight)
+                .clipShape(.rect(cornerRadius: AppDimensions.chipCornerRadius))
+            if isEditable {
+                Button {
+                    viewModel.removeReferenceImage(at: index)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(AppTypography.caption.weight(.bold))
+                        .foregroundStyle(AppColors.bodyText)
+                        .frame(width: ReferencePickerConstants.Row.removeButtonSize,
+                               height: ReferencePickerConstants.Row.removeButtonSize)
+                        .background(AppColors.cardBackground)
+                        .clipShape(Circle())
                 }
-            }
-
-            // Developer debug keywords at the bottom of the reference image
-            keywordsBottomView(for: index)
-        }
-        .frame(width: ReferencePickerConstants.Row.tileWidth)
-    }
-
-    @ViewBuilder
-    private func keywordsBottomView(for index: Int) -> some View {
-        if let desc = viewModel.description(for: index), !desc.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Ref \(index + 1) -> Look \(index + 1)")
-                    .font(.system(size: 9.5, weight: .bold))
-                    .foregroundStyle(AppColors.primaryBlue)
-                Text(desc)
-                    .font(.system(size: 9, weight: .regular))
-                    .foregroundStyle(AppColors.bodyText)
-                    .lineLimit(4)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: ReferencePickerConstants.Row.tileWidth, alignment: .leading)
-        } else if viewModel.isAnalyzingReferencePhotos {
-            HStack(spacing: 4) {
-                ProgressView()
-                    .scaleEffect(0.7)
-                Text("Scanning…")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(AppColors.mutedCaption)
-            }
-            .frame(width: ReferencePickerConstants.Row.tileWidth, alignment: .leading)
-        }
-    }
-
-    @ViewBuilder
-    private var debugContextBanner: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(AppColors.primaryBlue)
-                Text("VLM CONTEXT (SCAN 1-BY-1)")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(AppColors.primaryBlue)
-                Spacer()
-                Text("Used 1-by-1 for LLM")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(AppColors.primaryBlue.opacity(0.7))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(AppColors.primaryBlue.opacity(0.08))
-                    .clipShape(Capsule())
-            }
-
-            if viewModel.isAnalyzingReferencePhotos && viewModel.referenceImageDescriptions.isEmpty {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    Text("Scanning reference photos via VLM (1 by 1)…")
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(AppColors.mutedCaption)
-                }
-                .padding(.vertical, 4)
-            } else if !viewModel.referenceImageDescriptions.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(viewModel.referenceImageDescriptions.keys.sorted()), id: \.self) { idx in
-                        if let text = viewModel.referenceImageDescriptions[idx] {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("• Target for Look \(idx + 1) (from Photo \(idx + 1)):")
-                                    .font(.system(size: 10.5, weight: .bold))
-                                    .foregroundStyle(AppColors.primaryBlue)
-                                Text(text)
-                                    .font(.system(size: 11.5, weight: .regular))
-                                    .foregroundStyle(AppColors.espressoTitle)
-                                    .lineSpacing(2)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                }
-                .textSelection(.enabled)
-            } else if let fullContext = viewModel.fullExtractedVLMContext, !fullContext.isEmpty {
-                Text(fullContext)
-                    .font(.system(size: 11.5, weight: .regular))
-                    .foregroundStyle(AppColors.espressoTitle)
-                    .textSelection(.enabled)
+                .buttonStyle(.plain)
+                .padding(ReferencePickerConstants.Row.removeButtonInset)
+                .accessibilityLabel("Remove reference photo \(index + 1)")
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppColors.primaryBlue.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(AppColors.primaryBlue.opacity(0.2), lineWidth: 1)
-        )
     }
 
     @ViewBuilder

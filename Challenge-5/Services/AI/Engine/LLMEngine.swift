@@ -207,6 +207,25 @@ public actor LLMEngine {
         #endif
     }
     
+    /// Releases loaded LLM model and context weights from RAM/VRAM without tearing down the shared llama backend,
+    /// allowing `VLMEngine` to run multimodal reference analysis safely without simultaneous Metal VRAM contention.
+    public func releaseModelWeights() {
+        #if !targetEnvironment(simulator)
+        let hadAllocation = (context != nil || model != nil)
+        if let ctx = context {
+            llama_free(ctx)
+            context = nil
+        }
+        if let mdl = model {
+            llama_model_free(mdl)
+            model = nil
+        }
+        if hadAllocation {
+            print("🧹 [LLMEngine] Released text LLM weights from memory before VLM reference scan.")
+        }
+        #endif
+    }
+
     /// Unloads the model and context from RAM/VRAM to free memory.
     public func unloadModel() {
         #if !targetEnvironment(simulator)

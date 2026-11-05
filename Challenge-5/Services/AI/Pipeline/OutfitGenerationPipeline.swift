@@ -101,6 +101,14 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         for occasion: OccasionItem,
         profile: UserProfile
     ) async throws -> [OutfitLook] {
+        try await generateLooks(for: occasion, profile: profile, onStageChange: nil)
+    }
+
+    func generateLooks(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        onStageChange: (@MainActor @Sendable (_ title: String, _ subtitle: String, _ vlmDescriptions: [String]) -> Void)?
+    ) async throws -> [OutfitLook] {
         // Validate the GGUF model file is present before attempting inference.
         try LLMResource.validateModelAvailability()
 
@@ -112,20 +120,57 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        // 2. Analyze user reference photos via VLM (scan 1-by-1, cached)
+        // 2. Stage 1: Analyze user reference photos FIRST via on-device VLM (scan 1-by-1, then unload VLM)
         let allImageData = occasion.referenceImagesData.isEmpty
             ? (occasion.referenceImageData.map { [$0] } ?? [])
             : occasion.referenceImagesData
-        let referenceDescriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(for: allImageData)
-        let analyzedImageStyle = await ReferenceImageStyleAnalyzer.shared.analyzeStyle(from: allImageData)
-        if !referenceDescriptions.isEmpty {
-            print("👁️ [OutfitGenerationPipeline] \(referenceDescriptions.count) reference image(s) analyzed 1-by-1:")
-            for (i, desc) in referenceDescriptions.enumerated() {
-                print("   • Ref \(i + 1): \(desc)")
+
+        let referenceDescriptions: [String]
+        if !allImageData.isEmpty {
+            let totalRefs = allImageData.count
+            onStageChange?(
+                "Analyzing References",
+                "Scanning 1 of \(totalRefs) reference photo\(totalRefs == 1 ? "" : "s") with Qwen 2.5 VL...",
+                []
+            )
+
+            referenceDescriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(
+                for: allImageData
+            ) { completed, total, descriptionsSoFar in
+                if completed < total {
+                    onStageChange?(
+                        "Analyzing References",
+                        "Scanning \(completed + 1) of \(total) reference photos with Qwen 2.5 VL...",
+                        descriptionsSoFar
+                    )
+                } else {
+                    onStageChange?(
+                        "Analyzing References",
+                        "Scanned \(total) reference photo\(total == 1 ? "" : "s"). Preparing main LLM recommendation...",
+                        descriptionsSoFar
+                    )
+                }
             }
+
+            ReferenceImageStyleAnalyzer.shared.saveDescriptions(referenceDescriptions, forOccasionID: occasion.id)
+
+            print("\n====== [VLM DEBUG OUTPUT (\(occasion.title))] ======")
+            if referenceDescriptions.isEmpty {
+                print("   (No VLM text descriptions returned)")
+            } else {
+                for (i, desc) in referenceDescriptions.enumerated() {
+                    print("   Ref \(i + 1) -> Look \(i + 1): \(desc)")
+                }
+            }
+            print("====================================================\n")
+        } else {
+            referenceDescriptions = []
+            ReferenceImageStyleAnalyzer.shared.saveDescriptions([], forOccasionID: occasion.id)
         }
 
-        // 3. Sequential generation: one LLM call = one look.
+        let analyzedImageStyle = ReferenceImageStyleAnalyzer.formatCombinedStyle(from: referenceDescriptions)
+
+        // 3. Stage 2: Main LLM Sequential generation — one LLM call = one look, fed by VLM descriptions.
         //    After each look is parsed, its garment summary is appended to the next call's
         //    system prompt so the model aims for variety across looks.
         let totalLooks = 5
@@ -146,6 +191,13 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 ? referenceDescriptions[lookIndex]
                 : nil
             let targetRefIndex: Int? = targetRefDesc != nil ? (lookIndex + 1) : nil
+
+            let refStatusSuffix = targetRefIndex != nil ? " (using Reference \(targetRefIndex!))" : ""
+            onStageChange?(
+                "Curating Your Looks",
+                "Generating Look \(lookIndex + 1) of \(totalLooks)\(refStatusSuffix) tailored to \(occasion.title)...",
+                referenceDescriptions
+            )
 
             print("🔧 [OutfitGenerationPipeline] Building prompt for look \(lookIndex)/\(totalLooks - 1) (temp: \(temperature), target: \(targetRefIndex != nil ? "Ref \(targetRefIndex!)" : "overall aesthetic"))…")
 
@@ -212,14 +264,23 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        // 2. Analyze user reference photos via VLM (scan 1-by-1, cached)
+        // 2. Retrieve or analyze user reference photos via VLM (scan 1-by-1, cached)
         let allImageData = occasion.referenceImagesData.isEmpty
             ? (occasion.referenceImageData.map { [$0] } ?? [])
             : occasion.referenceImagesData
-        let referenceDescriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(for: allImageData)
-        let analyzedImageStyle = await ReferenceImageStyleAnalyzer.shared.analyzeStyle(from: allImageData)
+        let persistedDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
+        let referenceDescriptions: [String]
+        if !allImageData.isEmpty && persistedDescriptions.count == allImageData.count {
+            referenceDescriptions = persistedDescriptions
+        } else {
+            referenceDescriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(for: allImageData)
+            if !referenceDescriptions.isEmpty {
+                ReferenceImageStyleAnalyzer.shared.saveDescriptions(referenceDescriptions, forOccasionID: occasion.id)
+            }
+        }
+        let analyzedImageStyle = ReferenceImageStyleAnalyzer.formatCombinedStyle(from: referenceDescriptions)
         if !referenceDescriptions.isEmpty {
-            print("👁️ [OutfitGenerationPipeline] Single look reference images analyzed (\(referenceDescriptions.count) photos available).")
+            print("👁️ [OutfitGenerationPipeline] Single look reference images ready (\(referenceDescriptions.count) photos available).")
         }
 
         // 3. Extract summaries of all previous looks generated for this occasion (e.g. 5 previous looks or more)

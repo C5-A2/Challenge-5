@@ -34,6 +34,20 @@ final class OccasionOutputViewModel {
     
     var isLoading: Bool = false
     
+    /// Extracted VLM styling descriptions (1-by-1 per reference photo) displayed as debug output on `OccasionOutputView`.
+    var vlmDebugDescriptions: [String] = []
+    
+    /// Dynamic stage title shown inside `generationLoadingOverlay` ("Analyzing References" -> "Curating Your Looks").
+    var loadingStageTitle: String = "Curating Your Looks"
+    
+    /// Dynamic stage subtitle shown inside `generationLoadingOverlay`.
+    var loadingStageSubtitle: String = ""
+    
+    /// True when this occasion has at least one user-attached reference photo.
+    var hasReferencePhotos: Bool {
+        !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
+    }
+    
     /// True when an additional look is being generated in the background.
     var isGeneratingMore: Bool = false
     
@@ -153,12 +167,35 @@ final class OccasionOutputViewModel {
             self.isUsingMockPlaceholders = true
             self.isLoading = true
         }
+
+        if !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil {
+            self.vlmDebugDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
+        }
+        if self.isLoading {
+            self.configureInitialLoadingState(resetDescriptions: self.vlmDebugDescriptions.isEmpty)
+        }
     }
     
     private var isUsingMockPlaceholders = false
     private var hasStartedInitialGeneration = false
 
-    /// Triggered once when the view appears on screen via `.task` to run real LLM inference.
+    private func configureInitialLoadingState(resetDescriptions: Bool) {
+        let refCount = occasion.referenceImagesData.isEmpty
+            ? (occasion.referenceImageData != nil ? 1 : 0)
+            : occasion.referenceImagesData.count
+        if resetDescriptions {
+            vlmDebugDescriptions = []
+        }
+        if refCount > 0 {
+            loadingStageTitle = "Analyzing References"
+            loadingStageSubtitle = "Scanning 1 of \(refCount) reference photo\(refCount == 1 ? "" : "s") with Qwen 2.5 VL..."
+        } else {
+            loadingStageTitle = "Curating Your Looks"
+            loadingStageSubtitle = "Styling ensembles tailored to your silhouette and \(occasion.title)..."
+        }
+    }
+
+    /// Triggered once when the view appears on screen via `.task` to run real VLM + LLM inference.
     func generateLooksIfNeeded(profile: UserProfile? = nil) async {
         guard !hasStartedInitialGeneration else { return }
 
@@ -170,6 +207,9 @@ final class OccasionOutputViewModel {
                 }
             }
             self.looks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
+            if hasReferencePhotos && vlmDebugDescriptions.isEmpty {
+                self.vlmDebugDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
+            }
             self.isLoading = false
             return
         }
@@ -182,14 +222,21 @@ final class OccasionOutputViewModel {
 
         hasStartedInitialGeneration = true
         self.isLoading = true
+        configureInitialLoadingState(resetDescriptions: true)
         let activeProfile = profile ?? self.profile ?? UserProfile.mockSample
         do {
             let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(
                 for: occasion,
                 profile: activeProfile
-            )
+            ) { [weak self] stageTitle, stageSubtitle, descriptions in
+                self?.loadingStageTitle = stageTitle
+                self?.loadingStageSubtitle = stageSubtitle
+                self?.vlmDebugDescriptions = descriptions
+            }
             
+            let finalDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
             withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                self.vlmDebugDescriptions = finalDescriptions
                 self.looks = newLooks
                 self.occasion.generatedLooks = newLooks
                 self.isUsingMockPlaceholders = false
@@ -309,6 +356,7 @@ final class OccasionOutputViewModel {
             self.isUsingMockPlaceholders = true
             self.isLoading = true
             self.errorMessage = nil
+            self.configureInitialLoadingState(resetDescriptions: true)
         }
         
         Task {
@@ -317,8 +365,14 @@ final class OccasionOutputViewModel {
                 let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(
                     for: occasion,
                     profile: activeProfile
-                )
+                ) { [weak self] stageTitle, stageSubtitle, descriptions in
+                    self?.loadingStageTitle = stageTitle
+                    self?.loadingStageSubtitle = stageSubtitle
+                    self?.vlmDebugDescriptions = descriptions
+                }
+                let finalDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    self.vlmDebugDescriptions = finalDescriptions
                     self.looks = newLooks
                     self.occasion.generatedLooks = newLooks
                     self.selectedLookIndex = 0
