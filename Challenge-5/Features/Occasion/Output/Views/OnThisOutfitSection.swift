@@ -12,16 +12,20 @@ struct OnThisOutfitSection: View {
     
     var garments: [GarmentItem]
     var isLoading: Bool = false
+    /// Garments cropped from the look image (store crop), by garment ID. Shown instead of the placeholder.
+    var garmentCropImages: [UUID: CGImage] = [:]
     var onSelectGarment: ((GarmentItem) -> Void)? = nil
     
     
     init(
         garments: [GarmentItem] = [],
         isLoading: Bool = false,
+        garmentCropImages: [UUID: CGImage] = [:],
         onSelectGarment: ((GarmentItem) -> Void)? = nil
     ) {
         self.garments = garments
         self.isLoading = isLoading
+        self.garmentCropImages = garmentCropImages
         self.onSelectGarment = onSelectGarment
     }
     
@@ -30,6 +34,7 @@ struct OnThisOutfitSection: View {
         if !garments.isEmpty {
             return garments
         }
+        // Placeholders in the same order as real garments: inner top, outer, bottom.
         return [
             GarmentItem(
                 category: .top,
@@ -39,14 +44,14 @@ struct OnThisOutfitSection: View {
                 hexColor: "#1A1A1A"
             ),
             GarmentItem(
-                category: .bottom,
+                category: .outer,
                 name: "Polo",
                 material: "french terry Cotton",
                 colorName: "Black",
                 hexColor: "#1A1A1A"
             ),
             GarmentItem(
-                category: .outer,
+                category: .bottom,
                 name: "Polo",
                 material: "french terry Cotton",
                 colorName: "Black",
@@ -168,7 +173,14 @@ struct OnThisOutfitSection: View {
     
     private func garmentImage(for garment: GarmentItem) -> some View {
         Group {
-            if garment.category == .top, let img = UIImage(named: "mock_garment_polo") {
+            if let cropImage = garmentCropImages[garment.id] {
+                // The crop is on white like a product photo, shown whole.
+                Image(decorative: cropImage, scale: 1)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(AppColors.cardBackground)
+            } else if garment.category == .top, let img = UIImage(named: "mock_garment_polo") {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()

@@ -23,10 +23,17 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
 
     /// Garment regions in pixels, with a top-left origin.
     nonisolated private struct BodyRegions {
+        /// A top without an outer layer.
         let upperBody: CGRect
+        /// An outer piece, which can be longer than a top (coats).
+        let outerBody: CGRect
         let lowerBody: CGRect
         /// `nil` when the inner layer can't be located (no body pose found).
         let innerTop: CGRect?
+        /// Where the outer piece ends (pixels from the top), `nil` when it can't be found.
+        let outerHemY: CGFloat?
+        /// Shoulders-to-hips length, `nil` without a body pose.
+        let torsoLength: CGFloat?
     }
 
     // MARK: - Properties
@@ -44,7 +51,7 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
         let garmentRect: CGRect
         switch request.category {
         case .outer:
-            garmentRect = regions.upperBody
+            garmentRect = regions.outerBody
         case .top:
             if request.hasOuterLayer {
                 guard let innerTop = regions.innerTop else {
@@ -55,7 +62,7 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
                 garmentRect = regions.upperBody
             }
         case .bottom:
-            garmentRect = regions.lowerBody
+            garmentRect = bottomRect(in: regions, hasOuterLayer: request.hasOuterLayer)
         }
 
         let clippedRect = garmentRect.intersection(imageBounds).integral
@@ -119,19 +126,35 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
             return proportionalRegions(in: personBounds)
         }
 
-        // Upper body starts at the neck so the face stays out, and extends below the hips for long tops.
+        // Upper body starts at the neck so the face stays out.
+        // A top ends just below the hips; an outer piece ends at its hem (found by color),
+        // or further down when the hem isn't found, for long coats.
         let upperStartY = points([.neck]).first?.y
             ?? (shoulderY - torsoLength * StoreConstants.Crop.neckOffsetTorsoRatio)
-        let upperEndY = hipY + torsoLength * StoreConstants.Crop.upperBodyExtensionBelowHipTorsoRatio
+        let topEndY = hipY + torsoLength * StoreConstants.Crop.topExtensionBelowHipTorsoRatio
         let upperBody = CGRect(x: personBounds.minX, y: upperStartY,
-                               width: personBounds.width, height: upperEndY - upperStartY)
-
-        let lowerStartY = hipY - torsoLength * StoreConstants.Crop.lowerBodyStartAboveHipTorsoRatio
-        let lowestLegY = lowerLegs.map(\.y).max() ?? personBounds.maxY
-        let lowerEndY = min(lowestLegY + torsoLength * StoreConstants.Crop.lowerBodyExtensionBelowLegsTorsoRatio,
+                               width: personBounds.width, height: topEndY - upperStartY)
+        let hemY = outerHemY(in: image, shoulders: shoulders, lowerLegs: lowerLegs, shoulderY: shoulderY,
+                             hipY: hipY, torsoLength: torsoLength, personBounds: personBounds)
+        let fallbackOuterEndY = hipY + torsoLength * StoreConstants.Crop.outerExtensionBelowHipTorsoRatio
+        let outerEndY = min(hemY.map { $0 + torsoLength * StoreConstants.Crop.hemPaddingTorsoRatio } ?? fallbackOuterEndY,
                             personBounds.maxY)
-        let lowerBody = CGRect(x: personBounds.minX, y: lowerStartY,
-                               width: personBounds.width, height: lowerEndY - lowerStartY)
+        let outerBody = CGRect(x: personBounds.minX, y: upperStartY,
+                               width: personBounds.width, height: outerEndY - upperStartY)
+
+        // Bottoms: from just above the hips to just below the ankles (shoes out),
+        // as wide as the legs (hands out).
+        let lowerStartY = hipY - torsoLength * StoreConstants.Crop.lowerBodyStartAboveHipTorsoRatio
+        let ankles = points([.leftAnkle, .rightAnkle])
+        let lowestLegY = (ankles.isEmpty ? lowerLegs : ankles).map(\.y).max() ?? personBounds.maxY
+        let lowerEndY = min(lowestLegY + torsoLength * StoreConstants.Crop.lowerBodyExtensionBelowAnklesTorsoRatio,
+                            personBounds.maxY)
+        let legXs = (hips + lowerLegs).map(\.x)
+        let legPadding = torsoLength * StoreConstants.Crop.lowerBodyHorizontalPaddingTorsoRatio
+        let lowerMinX = max((legXs.min() ?? personBounds.minX) - legPadding, personBounds.minX)
+        let lowerMaxX = min((legXs.max() ?? personBounds.maxX) + legPadding, personBounds.maxX)
+        let lowerBody = CGRect(x: lowerMinX, y: lowerStartY,
+                               width: lowerMaxX - lowerMinX, height: lowerEndY - lowerStartY)
 
         // Inner top: the strip between the shoulders, from the neck to the hips.
         let shoulderCenterX = average(shoulders.map(\.x))
@@ -145,7 +168,8 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
         let innerTop = CGRect(x: shoulderCenterX - innerTopWidth / 2, y: upperStartY,
                               width: innerTopWidth, height: hipY - upperStartY)
 
-        return BodyRegions(upperBody: upperBody, lowerBody: lowerBody, innerTop: innerTop)
+        return BodyRegions(upperBody: upperBody, outerBody: outerBody, lowerBody: lowerBody,
+                           innerTop: innerTop, outerHemY: hemY, torsoLength: torsoLength)
     }
 
     /// Regions from the person's proportions, used when no body pose is found (C5-59).
@@ -163,7 +187,77 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
             width: personBounds.width,
             height: personBounds.height * StoreConstants.Crop.fallbackLowerBodyHeightRatio
         )
-        return BodyRegions(upperBody: upperBody, lowerBody: lowerBody, innerTop: nil)
+        return BodyRegions(upperBody: upperBody, outerBody: upperBody, lowerBody: lowerBody,
+                           innerTop: nil, outerHemY: nil, torsoLength: nil)
+    }
+
+    // MARK: - Outer Hem
+
+    /// Where the outer piece ends. The outer's color comes from its sleeves and the bottoms' color
+    /// from the lower legs; going down from the hips, the hem is the first rows where fewer than a
+    /// quarter of the person's pixels look like the outer. `nil` when it can't be told apart.
+    private func outerHemY(in image: CGImage, shoulders: [CGPoint], lowerLegs: [CGPoint], shoulderY: CGFloat,
+                           hipY: CGFloat, torsoLength: CGFloat, personBounds: CGRect) -> CGFloat? {
+        guard shoulders.count > 1,
+              let leftShoulderX = shoulders.map(\.x).min(),
+              let rightShoulderX = shoulders.map(\.x).max(),
+              let sampler = LookPixelSampler(image: image) else { return nil }
+
+        let halfWidth = max(1, torsoLength * StoreConstants.Crop.hemSampleHalfWidthTorsoRatio)
+        let sleeveOffset = (rightShoulderX - leftShoulderX) * StoreConstants.Crop.hemSleeveOffsetShoulderRatio
+        let sleeveTopY = shoulderY + torsoLength * StoreConstants.Crop.hemSleeveStartTorsoRatio
+        let sleeveHeight = torsoLength * (StoreConstants.Crop.hemSleeveEndTorsoRatio - StoreConstants.Crop.hemSleeveStartTorsoRatio)
+        let sleeveRects = [leftShoulderX - sleeveOffset, rightShoulderX + sleeveOffset].map {
+            CGRect(x: $0 - halfWidth, y: sleeveTopY, width: halfWidth * 2, height: sleeveHeight)
+        }
+        let legBottomY = lowerLegs.map(\.y).max() ?? personBounds.maxY
+        let legTopY = lowerLegs.map(\.y).min() ?? hipY
+        let legCenterX = lowerLegs.isEmpty ? personBounds.midX : lowerLegs.map(\.x).reduce(0, +) / CGFloat(lowerLegs.count)
+        let legRect = CGRect(x: legCenterX - halfWidth, y: legTopY, width: halfWidth * 2, height: legBottomY - legTopY)
+
+        guard let outerColor = sampler.averageForegroundColor(in: sleeveRects),
+              let bottomColor = sampler.averageForegroundColor(in: [legRect]),
+              outerColor.distance(to: bottomColor) >= StoreConstants.Crop.hemMinimumColorDistance else { return nil }
+
+        let requiredRows = max(StoreConstants.Crop.hemMinimumConsecutiveRows,
+                               Int(torsoLength * StoreConstants.Crop.hemConsecutiveRowsTorsoRatio))
+        let searchEndY = Int(min(hipY + torsoLength * StoreConstants.Crop.hemSearchDepthTorsoRatio, personBounds.maxY))
+        let columns = Int(personBounds.minX)..<Int(personBounds.maxX)
+        var passingRows = 0
+        for rowY in Int(hipY)..<max(Int(hipY), searchEndY) {
+            var personPixelCount = 0
+            var outerPixelCount = 0
+            for column in columns {
+                guard let pixel = sampler.color(atX: column, y: rowY), !pixel.isBackground else { continue }
+                personPixelCount += 1
+                if pixel.distance(to: outerColor) < pixel.distance(to: bottomColor) {
+                    outerPixelCount += 1
+                }
+            }
+            let outerShare = personPixelCount == 0 ? 0 : Double(outerPixelCount) / Double(personPixelCount)
+            if outerShare < StoreConstants.Crop.hemMaximumOuterPixelShare {
+                passingRows += 1
+                if passingRows >= requiredRows {
+                    return CGFloat(rowY - passingRows + 1)
+                }
+            } else {
+                passingRows = 0
+            }
+        }
+        return nil
+    }
+
+    /// Bottoms under a long outer start at its hem, so the crop shows the pants instead of the coat.
+    /// Keeps the normal region when too little leg would be left (the outer covers the pants).
+    private func bottomRect(in regions: BodyRegions, hasOuterLayer: Bool) -> CGRect {
+        let lowerBody = regions.lowerBody
+        guard hasOuterLayer,
+              let hemY = regions.outerHemY,
+              let torsoLength = regions.torsoLength,
+              hemY > lowerBody.minY else { return lowerBody }
+        let visibleHeight = lowerBody.maxY - hemY
+        guard visibleHeight >= torsoLength * StoreConstants.Crop.minimumVisibleBottomTorsoRatio else { return lowerBody }
+        return CGRect(x: lowerBody.minX, y: hemY, width: lowerBody.width, height: visibleHeight)
     }
 
     private func average(_ values: [CGFloat]) -> CGFloat {

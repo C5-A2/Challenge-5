@@ -369,14 +369,12 @@ Challenge-5/
 │       ├── StoreConstants.swift                   # Named store values (crop ratios, encoding, search)
 │       ├── Views/
 │       │   ├── WhereToBuySheet.swift              # Google Lens results for the selected garment
-│       │   ├── OutfitGarmentStrip.swift           # "On this outfit" cropped garment thumbnails
 │       │   └── LensWebView.swift                  # WKWebView that posts the crop to Google Lens (iOS)
 │       ├── ViewModels/
-│       │   ├── StoreViewModel.swift               # Crop → consent → Google Lens flow
-│       │   └── OutfitGarmentStripViewModel.swift  # Crops all garments of a look for thumbnails
+│       │   └── StoreViewModel.swift               # Crop → consent → Google Lens flow
 │       └── PreviewContent/
 │           ├── StoreSampleData.swift              # Dummy look for testing (replace image later)
-│           └── StoreSandboxView.swift             # Test screen: look + "On this outfit" → WhereToBuySheet
+│           └── StoreSandboxView.swift             # Test screen: look + OnThisOutfitSection → WhereToBuySheet
 │
 ├── Models/                                        # CANONICAL SHARED DATA CONTRACTS (9 models)
 │   ├── UserProfile.swift                          # SwiftData @Model — root user profile
@@ -403,12 +401,14 @@ Challenge-5/
 │   │   └── LightingAnalyzer.swift                 # Real-time luminance / EV analysis
 │   ├── Store/                                     # Store & Visual Search Services (Natalie)
 │   │   ├── VisionGarmentCropper.swift             # Crops outer / top / bottom from the look image
-│   │   ├── GarmentCropProvider.swift              # Shared crop source (cache + cropper)
+│   │   ├── GarmentCropProvider.swift              # Shared crop source (cache + cropper) for Output cards + sheet
 │   │   ├── GarmentCropCache.swift                 # In-memory crops by GarmentItem.id
 │   │   ├── LensUploadRequestBuilder.swift         # Google Lens upload request (encoded_image)
+│   │   ├── LensResultURLLocalizer.swift           # Keeps result pages on hl=id / gl=id (local shops)
+│   │   ├── LookPixelSampler.swift                 # Pixel colors of a look image (finds the outer's hem)
 │   │   ├── GarmentImageEncoder.swift              # JPEG + multipart encoding
 │   │   ├── GarmentPhotoSaver.swift                # "Save to Photos" for a garment crop (iOS)
-│   │   ├── LookImageDecoder.swift                 # lookImageData → CGImage
+│   │   ├── LookImageDecoder.swift                 # lookImageData → CGImage (transparent → white)
 │   │   ├── GarmentTitleBuilder.swift              # Garment title from color + name + material
 │   │   ├── StoreError.swift                       # Store domain errors
 │   │   └── StoreServiceMocks.swift                # Mock cropper for previews
@@ -1707,6 +1707,11 @@ appState.isShowingWhereToBuySheet = true
 // Natalie's WhereToBuySheet reads from:
 // appState.selectedGarmentForPurchase
 ```
+
+> **Current implementation (no `AppState` yet):** `OccasionOutputView` passes the tapped garment from
+> `OnThisOutfitSection` to `OccasionOutputViewModel.selectGarmentForPurchase(_:)`, which sets
+> `garmentForPurchase`, and the view presents `WhereToBuySheet(garment:)` as a sheet. The sheet crops
+> the garment from `garment.outfitLook.lookImageData` and opens Google Lens.
 
 ### 8.3 Home → Ricky: Profile setup prompt triggers profiling flow
 

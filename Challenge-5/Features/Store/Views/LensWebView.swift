@@ -51,6 +51,8 @@ struct LensWebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
 
         @Binding private var isLoading: Bool
+        /// How many times in a row a page was reloaded with `hl` / `gl`. Reset when a page finishes.
+        private var localizationRetryCount = 0
 
         init(isLoading: Binding<Bool>) {
             _isLoading = isLoading
@@ -62,6 +64,7 @@ struct LensWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isLoading = false
+            localizationRetryCount = 0
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -70,6 +73,30 @@ struct LensWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             isLoading = false
+        }
+
+        /// Keeps Google result pages localized for Indonesia: a Google page opened
+        /// without `hl=id` / `gl=id` is reloaded with them. Only GET pages in the main frame,
+        /// so the upload itself (POST) is never changed.
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void
+        ) {
+            guard navigationAction.targetFrame?.isMainFrame == true,
+                  navigationAction.request.httpMethod == "GET",
+                  let url = navigationAction.request.url,
+                  localizationRetryCount < StoreConstants.Search.maximumLocalizationRetries,
+                  let localizedURL = LensResultURLLocalizer.makeLocalizedURL(from: url) else {
+                decisionHandler(.allow)
+                return
+            }
+            localizationRetryCount += 1
+            decisionHandler(.cancel)
+            var localizedRequest = navigationAction.request
+            localizedRequest.url = localizedURL
+            localizedRequest.setValue(StoreConstants.Search.lensAcceptLanguage, forHTTPHeaderField: "Accept-Language")
+            webView.load(localizedRequest)
         }
 
         /// Loads links that target a new window in the same web view.
