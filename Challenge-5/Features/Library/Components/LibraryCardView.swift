@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// Individual outfit look card rendered inside the asymmetric staggered grid.
 ///
@@ -19,9 +22,11 @@ public struct LibraryCardView: View {
     public var onSelect: () -> Void
     public var onToggleBookmark: () -> Void
     
-    // MARK: - Internal Animation State
+    // MARK: - Internal Animation & Menu State
     
     @State private var isPressed: Bool = false
+    @State private var savePhotoAlertMessage: String? = nil
+    @State private var isShowingSaveAlert: Bool = false
     
     // MARK: - Initializer
     
@@ -40,35 +45,22 @@ public struct LibraryCardView: View {
     public var body: some View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 8) {
-                // Top: Blue Card Container with Bookmark Button
-                ZStack(alignment: .topTrailing) {
-                    AsyncLookThumbnailView(
-                        imageData: look.lookImageData,
-                        assetImageName: look.assetImageName,
-                        contentMode: .fill
-                    )
-                    .frame(maxWidth: .infinity)
-                    .frame(height: cardHeight)
-                    .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius, style: .continuous)
-                            .strokeBorder(AppColors.subtleBorder, lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
-                    
-                    // Top-trailing Bookmark Toggle Button
-                    BookmarkToggleButton(
-                        isBookmarked: Binding(
-                            get: { look.isBookmarked },
-                            set: { _ in onToggleBookmark() }
-                        ),
-                        style: .glassmorphicOverlay,
-                        size: 32,
-                        iconSize: 14,
-                        activeColor: AppColors.espressoTitle
-                    )
-                    .padding(10)
-                }
+                // Top: Card Container
+                AsyncLookThumbnailView(
+                    imageData: look.lookImageData,
+                    assetImageName: look.assetImageName,
+                    contentMode: .fit
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: cardHeight)
+                .padding(.vertical, 2)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius, style: .continuous)
+                        .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.04), radius: 6, y: 3)
                 
                 // Bottom: Keterangan garment persis di bawah card biru
                 garmentDescriptionView
@@ -77,6 +69,15 @@ public struct LibraryCardView: View {
             .animation(.easeInOut(duration: 0.15), value: isPressed)
         }
         .buttonStyle(CardPressButtonStyle(isPressed: $isPressed))
+        .alert(
+            "Photos",
+            isPresented: $isShowingSaveAlert,
+            presenting: savePhotoAlertMessage
+        ) { _ in
+            Button("OK", role: .cancel) { }
+        } message: { message in
+            Text(message)
+        }
     }
     
     // MARK: - Garment Description View (Matches Sketch media_1793008898076_aaaa761a)
@@ -98,9 +99,28 @@ public struct LibraryCardView: View {
                 
                 Spacer()
                 
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColors.mutedCaption)
+                Menu {
+                    Button {
+                        saveLookToPhotos()
+                    } label: {
+                        Text("Save to Photos")
+                    }
+                    
+                    Button(role: .destructive) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            onToggleBookmark()
+                        }
+                    } label: {
+                        Text("Unsaved from Library")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppColors.mutedCaption)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
             
             // Row 2: Garment Material ("french terry Cotton")
@@ -130,9 +150,50 @@ public struct LibraryCardView: View {
     // MARK: - Computed Dimensions
     
     private var cardHeight: CGFloat {
-        // Base width standard: ~165pt on typical iPhone. Multiply by ratio for asymmetric staggered feel
-        let baseHeight: CGFloat = 200
-        return baseHeight * look.cardHeightRatio
+        // Uniform height for standard 2-column grid layout
+        return 260
+    }
+    
+    // MARK: - Save to Photos Action
+    
+    private func saveLookToPhotos() {
+        #if os(iOS)
+        var targetImage: UIImage? = nil
+        if let data = look.lookImageData, let uiImage = UIImage(data: data) {
+            targetImage = uiImage
+        } else if let assetName = look.assetImageName, let uiImage = UIImage(named: assetName) {
+            targetImage = uiImage
+        }
+        
+        guard let imageToSave = targetImage else {
+            savePhotoAlertMessage = "No image available to save."
+            isShowingSaveAlert = true
+            return
+        }
+        
+        Task {
+            do {
+                if let cgImage = imageToSave.cgImage {
+                    try await GarmentPhotoSaver.save(cgImage)
+                    await MainActor.run {
+                        savePhotoAlertMessage = "Saved to Photos."
+                        isShowingSaveAlert = true
+                    }
+                } else {
+                    UIImageWriteToSavedPhotosAlbum(imageToSave, nil, nil, nil)
+                    await MainActor.run {
+                        savePhotoAlertMessage = "Saved to Photos."
+                        isShowingSaveAlert = true
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    savePhotoAlertMessage = error.localizedDescription
+                    isShowingSaveAlert = true
+                }
+            }
+        }
+        #endif
     }
 }
 

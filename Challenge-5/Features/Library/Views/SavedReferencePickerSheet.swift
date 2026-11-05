@@ -9,15 +9,6 @@ import SwiftUI
 
 public struct SavedReferencePickerSheet: View {
     
-    // MARK: - Segment Enum
-    
-    public enum PickerSegment: String, CaseIterable, Identifiable {
-        case photos = "Photos"
-        case collection = "Collection"
-        
-        public var id: String { rawValue }
-    }
-    
     // MARK: - Properties
     
     public let savedLooks: [SavedLookItem]
@@ -27,7 +18,6 @@ public struct SavedReferencePickerSheet: View {
     
     // MARK: - State
     
-    @State private var selectedSegment: PickerSegment = .collection
     @State private var selectedLookIds: Set<UUID> = []
     
     /// Collection grid cell sizes (square cells, like Photos).
@@ -65,21 +55,15 @@ public struct SavedReferencePickerSheet: View {
     
     public var body: some View {
         VStack(spacing: 0) {
-
             topHeaderBar
                 .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-            Group {
-                if selectedSegment == .collection {
-                    if savedLooks.isEmpty {
-                        emptyCollectionPlaceholder
-                    } else {
-                        collectionGridView
-                    }
-                } else {
-                    photosTabPlaceholder
-                }
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+            
+            if savedLooks.isEmpty {
+                emptyCollectionPlaceholder
+            } else {
+                collectionGridView
             }
         }
         .background(Color.white.ignoresSafeArea())
@@ -89,63 +73,26 @@ public struct SavedReferencePickerSheet: View {
     
     private var topHeaderBar: some View {
         HStack(alignment: .center) {
-            
             CircularIconButton(systemName: "xmark") {
                 onDismiss()
             }
             
             Spacer()
             
-            segmentedControlPill
-            
-            Spacer()
-            
             if !selectedLookIds.isEmpty {
-                Button("Done") {
+                Button {
                     confirmSelection()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 32, weight: .semibold))
+                        .foregroundStyle(AppColors.espressoTitle)
                 }
-                .font(AppTypography.buttonLabel)
-                .foregroundStyle(AppColors.espressoTitle)
-                .frame(minWidth: AppDimensions.circularIconSize)
+                .buttonStyle(.plain)
             } else {
                 Color.clear
                     .frame(width: AppDimensions.circularIconSize, height: AppDimensions.circularIconSize)
             }
         }
-    }
-    
-    // MARK: - Segmented Control Pill
-    
-    private var segmentedControlPill: some View {
-        HStack(spacing: 4) {
-            ForEach(PickerSegment.allCases) { segment in
-                let isSelected = selectedSegment == segment
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                        selectedSegment = segment
-                    }
-                } label: {
-                    Text(segment.rawValue)
-                        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                        .foregroundStyle(isSelected ? AppColors.espressoTitle : AppColors.mutedCaption)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 7)
-                        .background {
-                            if isSelected {
-                                Capsule()
-                                    .fill(AppColors.cardBackground)
-                                    .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
-                            }
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(3)
-        .background(
-            Capsule()
-                .fill(AppColors.tabSelectionHighlight)
-        )
     }
     
     // MARK: - Collection Grid View
@@ -159,33 +106,37 @@ public struct SavedReferencePickerSheet: View {
                     Button {
                         toggleSelection(for: look.id)
                     } label: {
-                        // Same-size square cells (like Photos): the square sets the size,
-                        // the image fills it and is cropped.
                         Color.clear
                             .aspectRatio(GridCellLayout.cellAspectRatio, contentMode: .fit)
                             .overlay {
                                 AsyncLookThumbnailView(
                                     imageData: look.lookImageData,
                                     assetImageName: look.assetImageName,
-                                    contentMode: .fill,
+                                    contentMode: .fit,
                                     showPlaceholderIcon: false
                                 )
+                                .padding(1)
+                            }
+                            .background(Color.white)
+                            .overlay {
+                                Rectangle()
+                                    .strokeBorder(Color(hex: "#D1D5DB"), lineWidth: 1)
                             }
                             .clipped()
                             .contentShape(Rectangle())
                             .overlay(alignment: .topTrailing) {
                                 if isSelected {
                                     Rectangle()
-                                        .strokeBorder(AppColors.primaryBlue, lineWidth: GridCellLayout.selectionBorderWidth)
+                                        .strokeBorder(AppColors.espressoTitle, lineWidth: GridCellLayout.selectionBorderWidth)
                                 
                                     ZStack {
                                         Circle()
-                                            .fill(AppColors.primaryBlue)
+                                            .fill(AppColors.espressoTitle)
                                             .frame(width: GridCellLayout.checkmarkBadgeSize, height: GridCellLayout.checkmarkBadgeSize)
                                     
                                         Image(systemName: "checkmark")
                                             .font(.system(size: GridCellLayout.checkmarkIconSize, weight: .bold))
-                                            .foregroundStyle(AppColors.cardBackground)
+                                            .foregroundStyle(Color.white)
                                     }
                                     .padding(GridCellLayout.checkmarkBadgePadding)
                                 }
@@ -194,6 +145,7 @@ public struct SavedReferencePickerSheet: View {
                     .buttonStyle(.plain)
                 }
             }
+            .padding(.horizontal, 2)
         }
         .scrollIndicators(.hidden)
     }
@@ -212,26 +164,6 @@ public struct SavedReferencePickerSheet: View {
                 .foregroundStyle(AppColors.espressoTitle)
             
             Text("Bookmark outfit recommendations from your styling stage to use them as reference.")
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.mutedCaption)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            Spacer()
-        }
-    }
-    
-    private var photosTabPlaceholder: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 44, weight: .light))
-                .foregroundStyle(AppColors.mutedCaption)
-            
-            Text("Device Photos")
-                .font(AppTypography.cardHeadline)
-                .foregroundStyle(AppColors.espressoTitle)
-            
-            Text("Choose 'Collection' to select from your saved AI outfit inspirations.")
                 .font(AppTypography.caption)
                 .foregroundStyle(AppColors.mutedCaption)
                 .multilineTextAlignment(.center)
