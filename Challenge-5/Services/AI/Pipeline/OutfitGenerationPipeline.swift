@@ -161,6 +161,48 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         return generatedLooks
     }
 
+    /// Generates a single additional outfit look, taking into account all previously generated looks
+    /// so the new look remains distinct and tailored.
+    func generateSingleLook(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        existingLooks: [OutfitLook]
+    ) async throws -> OutfitLook {
+        try LLMResource.validateModelAvailability()
+
+        let allImageData = occasion.referenceImagesData.isEmpty
+            ? (occasion.referenceImageData.map { [$0] } ?? [])
+            : occasion.referenceImagesData
+        let analyzedImageStyle = await ReferenceImageStyleAnalyzer.shared.analyzeStyle(from: allImageData)
+
+        let newLookIndex = existingLooks.count
+        let previousSummaries = existingLooks.map { GeneratedLookSummary(from: $0) }
+        let temperature: Float = 0.65
+
+        let prompt = promptBuilder.buildFormattedPrompt(
+            occasion: occasion,
+            profile: profile,
+            lookIndex: newLookIndex,
+            previousLooks: previousSummaries,
+            analyzedImageStyle: analyzedImageStyle
+        )
+
+        let rawOutput = try await LLMEngine.shared.generate(
+            prompt: prompt,
+            maxTokens: 4096,
+            temperature: temperature
+        )
+
+        let rawClean = rawOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parsedLooks = try parseLooks(from: rawClean, colorSeason: profile.colorSeason)
+        guard let parsedLook = parsedLooks.first else {
+            throw LLMError.invalidOutput("LLM returned 0 looks for additional look.")
+        }
+
+        parsedLook.lookIndex = newLookIndex
+        return parsedLook
+    }
+
     /// Synchronous generation for seamless instant UI transitions upon form submit.
     ///
     /// > Note: Real LLM inference runs asynchronously via `generateLooks(for:profile:)` in `OccasionOutputViewModel`.

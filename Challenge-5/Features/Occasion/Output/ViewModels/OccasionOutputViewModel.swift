@@ -116,6 +116,12 @@ final class OccasionOutputViewModel {
             self.isLoading = false
         } else if !occasion.generatedLooks.isEmpty {
             // Previously generated and stored looks: restore them.
+            // Clean any dummy mock JPEG placeholder data previously saved by prepareLookForCropping
+            for look in occasion.generatedLooks {
+                if let data = look.lookImageData, OccasionOutputViewModel.isPlaceholderData(data, lookIndex: look.lookIndex) {
+                    look.lookImageData = nil
+                }
+            }
             self.looks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
             self.isUsingMockPlaceholders = false
             self.isLoading = false
@@ -136,6 +142,11 @@ final class OccasionOutputViewModel {
 
         // If previously generated looks are already persisted, restore them.
         if !occasion.generatedLooks.isEmpty {
+            for look in occasion.generatedLooks {
+                if let data = look.lookImageData, OccasionOutputViewModel.isPlaceholderData(data, lookIndex: look.lookIndex) {
+                    look.lookImageData = nil
+                }
+            }
             self.looks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
             self.isLoading = false
             return
@@ -155,6 +166,7 @@ final class OccasionOutputViewModel {
                 for: occasion,
                 profile: activeProfile
             )
+            
             withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                 self.looks = newLooks
                 self.occasion.generatedLooks = newLooks
@@ -243,15 +255,12 @@ final class OccasionOutputViewModel {
         garmentCropImages.merge(crops.mapValues(\.image)) { _, newImage in newImage }
     }
     
-    /// The store crops a garment from its look image, so it needs the garment linked to the look
-    /// and a look image. Generated looks have no image yet (image generation is deferred), so the
-    /// avatar image shown for that look is used as a placeholder.
+    /// The store crops a garment from its look image, so it needs the garment linked to the look.
+    /// Does not overwrite `look.lookImageData` with mock data so the avatar stage keeps the Image Playground placeholder.
     private func prepareLookForCropping(_ look: OutfitLook) {
         for garment in look.garments where garment.outfitLook == nil {
             garment.outfitLook = look
         }
-        guard look.lookImageData == nil else { return }
-        look.lookImageData = OccasionOutputViewModel.makePlaceholderLookImageData(for: look.lookIndex)
     }
     
     func toggleDetailsDrawer() {
@@ -278,6 +287,46 @@ final class OccasionOutputViewModel {
             } catch {
                 let errorMsg = error.localizedDescription
                 print("\n❌ [OccasionOutputViewModel] LLM CANNOT BE USED (\(LLMResource.activeModelFilename)): \(errorMsg)\n")
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    self.errorMessage = errorMsg
+                    self.isShowingErrorAlert = true
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+
+    /// Generates one additional outfit look and appends it to the right of existing looks.
+    func generateAdditionalLook(profile: UserProfile? = nil) {
+        guard !isLoading else { return }
+        isLoading = true
+        errorMessage = nil
+
+        Task {
+            let activeProfile = profile ?? self.profile ?? UserProfile.mockSample
+            do {
+                let newLook = try await OutfitGenerationPipeline.shared.generateSingleLook(
+                    for: occasion,
+                    profile: activeProfile,
+                    existingLooks: self.looks
+                )
+
+                if let modelContext = occasion.modelContext {
+                    modelContext.insert(newLook)
+                    for garment in newLook.garments {
+                        modelContext.insert(garment)
+                    }
+                }
+
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    self.looks.append(newLook)
+                    self.occasion.generatedLooks = self.looks
+                    self.selectedLookIndex = self.looks.count - 1
+                    self.isLoading = false
+                }
+            } catch {
+                let errorMsg = error.localizedDescription
+                print("\n❌ [OccasionOutputViewModel] Failed to generate additional look: \(errorMsg)\n")
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                     self.errorMessage = errorMsg
                     self.isShowingErrorAlert = true
@@ -422,6 +471,12 @@ extension OccasionOutputViewModel {
         UIImage(named: "mock_result_\(lookIndex + 1)")
             .map(makeImageOnWhite)?
             .jpegData(compressionQuality: mockLookImageCompressionQuality)
+    }
+    
+    /// Returns true if this data matches the dummy mock JPEG placeholder.
+    static func isPlaceholderData(_ data: Data, lookIndex: Int) -> Bool {
+        guard let placeholder = makePlaceholderLookImageData(for: lookIndex) else { return false }
+        return data == placeholder
     }
     
     /// The mock PNGs have a transparent background, which turns black in a JPEG.
