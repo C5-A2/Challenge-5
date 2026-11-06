@@ -147,7 +147,13 @@ final class OccasionOutputViewModel {
 
         if !looks.isEmpty {
             // Caller-supplied looks (e.g. injected for tests/previews): use them directly.
+            for look in looks {
+                if let data = look.lookImageData, OccasionOutputViewModel.isPlaceholderData(data, lookIndex: look.lookIndex) {
+                    look.lookImageData = nil
+                }
+            }
             self.looks = looks
+            self.isCallerSuppliedLooks = true
             self.isUsingMockPlaceholders = false
             self.isLoading = false
         } else if !occasion.generatedLooks.isEmpty {
@@ -178,6 +184,7 @@ final class OccasionOutputViewModel {
     
     private var isUsingMockPlaceholders = false
     private var hasStartedInitialGeneration = false
+    private(set) var isCallerSuppliedLooks = false
 
     private func configureInitialLoadingState(resetDescriptions: Bool) {
         let refCount = occasion.referenceImagesData.isEmpty
@@ -198,6 +205,12 @@ final class OccasionOutputViewModel {
     /// Triggered once when the view appears on screen via `.task` to run real VLM + LLM inference.
     func generateLooksIfNeeded(profile: UserProfile? = nil) async {
         guard !hasStartedInitialGeneration else { return }
+
+        // If caller explicitly supplied custom looks (e.g. single look from Library), keep them untouched.
+        if isCallerSuppliedLooks {
+            self.isLoading = false
+            return
+        }
 
         // If previously generated looks are already persisted, restore them.
         if !occasion.generatedLooks.isEmpty {
@@ -310,7 +323,7 @@ final class OccasionOutputViewModel {
     /// Adds looks that aren't stored yet (for example mock looks) to the occasion,
     /// so a saved look keeps its occasion and stays after this screen closes.
     private func attachLooksToOccasion() {
-        guard occasion.modelContext != nil else { return }
+        guard !isCallerSuppliedLooks, occasion.modelContext != nil else { return }
         let storedLookIDs = Set(occasion.generatedLooks.map(\.id))
         for look in looks where !storedLookIDs.contains(look.id) {
             occasion.generatedLooks.append(look)

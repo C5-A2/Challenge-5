@@ -16,11 +16,15 @@ public struct LibraryView: View {
     
     // MARK: - Environment & State
     
+    private struct OutputPresentationItem: Identifiable {
+        let id = UUID()
+        let occasion: OccasionItem
+        let look: OutfitLook
+    }
+    
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: LibraryViewModel
-    @State private var selectedOccasionForOutput: OccasionItem? = nil
-    /// Which look the Output opens on (the tapped saved look).
-    @State private var selectedLookIndexForOutput: Int = 0
+    @State private var outputPresentationItem: OutputPresentationItem? = nil
     @Binding public var selectedTab: CapsuleTabItem
     
     // Action callbacks
@@ -88,14 +92,15 @@ public struct LibraryView: View {
             // Attempt SwiftData context sync if models exist
             viewModel.fetchSavedLooksFromContext(modelContext)
         }
-        .fullScreenCover(item: $selectedOccasionForOutput) { occasion in
+        .fullScreenCover(item: $outputPresentationItem) { item in
             OccasionOutputView(
                 viewModel: OccasionOutputViewModel(
-                    occasion: occasion,
-                    selectedLookIndex: selectedLookIndexForOutput
+                    occasion: item.occasion,
+                    looks: [item.look],
+                    selectedLookIndex: 0
                 ),
                 onDismiss: {
-                    selectedOccasionForOutput = nil
+                    outputPresentationItem = nil
                     // A look may have been unsaved in the Output, so reload the Library.
                     viewModel.fetchSavedLooksFromContext(modelContext)
                 }
@@ -135,18 +140,45 @@ public struct LibraryView: View {
                     if let onSelectLook {
                         onSelectLook(look)
                     } else {
-                        // Navigate to OccasionOutputView
-                        if let destination = viewModel.outputDestination(for: look) {
-                            selectedLookIndexForOutput = destination.lookIndex
-                            selectedOccasionForOutput = destination.occasion
+                        // Open only the tapped saved look in OccasionOutputView (1 avatar, no other looks)
+                        if let storedLook = viewModel.outfitLook(for: look) {
+                            let parentOccasion = storedLook.occasion ?? OccasionItem(
+                                title: look.occasionTitle.isEmpty ? "My Occasion" : look.occasionTitle,
+                                date: look.date,
+                                dresscode: look.dresscode.isEmpty ? "Casual / Smart Casual" : look.dresscode
+                            )
+                            outputPresentationItem = OutputPresentationItem(
+                                occasion: parentOccasion,
+                                look: storedLook
+                            )
                             return
                         }
-                        // Sample looks have no stored occasion: open a temporary one.
-                        selectedLookIndexForOutput = 0
-                        selectedOccasionForOutput = OccasionItem(
+                        
+                        // Fallback for mock/sample looks without SwiftData entity
+                        let tempLook = OutfitLook(
+                            lookIndex: look.lookIndex,
+                            fitRationale: look.fitRationale,
+                            isBookmarked: look.isBookmarked,
+                            lookImageData: look.lookImageData
+                        )
+                        tempLook.garments = look.garments.map { garment in
+                            GarmentItem(
+                                category: GarmentCategory(rawValue: garment.category) ?? .top,
+                                name: garment.name,
+                                material: garment.material,
+                                colorName: garment.colorName,
+                                hexColor: garment.hexColor,
+                                rationale: garment.rationale
+                            )
+                        }
+                        let tempOccasion = OccasionItem(
                             title: look.occasionTitle.isEmpty ? "My Occasion" : look.occasionTitle,
                             date: look.date,
                             dresscode: look.dresscode.isEmpty ? "Casual / Smart Casual" : look.dresscode
+                        )
+                        outputPresentationItem = OutputPresentationItem(
+                            occasion: tempOccasion,
+                            look: tempLook
                         )
                     }
                 },

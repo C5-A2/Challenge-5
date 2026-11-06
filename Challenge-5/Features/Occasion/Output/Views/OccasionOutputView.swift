@@ -235,24 +235,26 @@ struct OccasionOutputView: View {
                 }
                 
                 Spacer()
-                HStack(spacing: 8) {
-                    CircularIconButton(
-                        systemName: "plus.app",
-                        isEnabled: !viewModel.isGeneratingMore && !viewModel.isLoading
-                    ) {
-                        let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
-                        viewModel.generateMoreLooks(profile: activeProfile)
-                    }
-                    .accessibilityLabel("Generate More Looks")
 
-                    CircularIconButton(
-                        systemName: "info.bubble",
-                        isEnabled: !viewModel.isLoading
-                    ) {
-                        isShowingOccasionDetailSheet = true
-                    }
-                    .accessibilityLabel("Occasion Details")
-                }
+                HStack(spacing: 8) {
+    if !viewModel.isCallerSuppliedLooks {
+        CircularIconButton(
+            systemName: "plus.app",
+            isEnabled: !viewModel.isGeneratingMore && !viewModel.isLoading
+        ) {
+            let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+            viewModel.generateMoreLooks(profile: activeProfile)
+        }
+        .accessibilityLabel("Generate More Looks")
+    }
+    CircularIconButton(
+        systemName: "info.bubble",
+        isEnabled: !viewModel.isLoading
+    ) {
+        isShowingOccasionDetailSheet = true
+    }
+    .accessibilityLabel("Occasion Details")
+}
             }
             
             VStack(spacing: 3) {
