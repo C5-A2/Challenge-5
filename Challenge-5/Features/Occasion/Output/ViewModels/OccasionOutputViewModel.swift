@@ -34,6 +34,23 @@ final class OccasionOutputViewModel {
     
     var isLoading: Bool = false
     
+    /// Extracted VLM styling descriptions (1-by-1 per reference photo) displayed as debug output on `OccasionOutputView`.
+    var vlmDebugDescriptions: [String] = []
+    
+    /// Dynamic stage title shown inside `generationLoadingOverlay` ("Analyzing References" -> "Curating Your Looks").
+    var loadingStageTitle: String = "Curating Your Looks"
+    
+    /// Dynamic stage subtitle shown inside `generationLoadingOverlay`.
+    var loadingStageSubtitle: String = ""
+    
+    /// True when this occasion has at least one user-attached reference photo.
+    var hasReferencePhotos: Bool {
+        !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
+    }
+    
+    /// True when an additional look is being generated in the background.
+    var isGeneratingMore: Bool = false
+    
     var isShowingChatModal: Bool = false
     
     var isShowingMoreMenu: Bool = false
@@ -63,6 +80,25 @@ final class OccasionOutputViewModel {
     
     var isShowingErrorAlert: Bool = false
     
+    /// Total number of carousel items, including the loading card if generating more.
+    var totalCarouselCount: Int {
+        looks.count + (isGeneratingMore ? 1 : 0)
+    }
+
+    /// Index of the loading card when generating more looks.
+    var loadingLookIndex: Int? {
+        isGeneratingMore ? looks.count : nil
+    }
+
+    /// Returns true if the look at the given carousel index is currently loading.
+    func isLookLoading(at index: Int) -> Bool {
+        isGeneratingMore && index == looks.count
+    }
+
+    /// Returns true if the currently selected card is the loading placeholder.
+    var isCurrentLookLoading: Bool {
+        isLookLoading(at: selectedLookIndex)
+    }
     
     var currentLook: OutfitLook? {
         guard looks.indices.contains(selectedLookIndex) else { return nil }
@@ -137,13 +173,36 @@ final class OccasionOutputViewModel {
             self.isUsingMockPlaceholders = true
             self.isLoading = true
         }
+
+        if !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil {
+            self.vlmDebugDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
+        }
+        if self.isLoading {
+            self.configureInitialLoadingState(resetDescriptions: self.vlmDebugDescriptions.isEmpty)
+        }
     }
     
     private var isUsingMockPlaceholders = false
     private var hasStartedInitialGeneration = false
     private(set) var isCallerSuppliedLooks = false
 
-    /// Triggered once when the view appears on screen via `.task` to run real LLM inference.
+    private func configureInitialLoadingState(resetDescriptions: Bool) {
+        let refCount = occasion.referenceImagesData.isEmpty
+            ? (occasion.referenceImageData != nil ? 1 : 0)
+            : occasion.referenceImagesData.count
+        if resetDescriptions {
+            vlmDebugDescriptions = []
+        }
+        if refCount > 0 {
+            loadingStageTitle = "Analyzing References"
+            loadingStageSubtitle = "Scanning 1 of \(refCount) reference photo\(refCount == 1 ? "" : "s") with Qwen 2.5 VL..."
+        } else {
+            loadingStageTitle = "Curating Your Looks"
+            loadingStageSubtitle = "Styling ensembles tailored to your silhouette and \(occasion.title)..."
+        }
+    }
+
+    /// Triggered once when the view appears on screen via `.task` to run real VLM + LLM inference.
     func generateLooksIfNeeded(profile: UserProfile? = nil) async {
         guard !hasStartedInitialGeneration else { return }
 
@@ -161,6 +220,9 @@ final class OccasionOutputViewModel {
                 }
             }
             self.looks = occasion.generatedLooks.sorted { $0.lookIndex < $1.lookIndex }
+            if hasReferencePhotos && vlmDebugDescriptions.isEmpty {
+                self.vlmDebugDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
+            }
             self.isLoading = false
             return
         }
@@ -173,20 +235,37 @@ final class OccasionOutputViewModel {
 
         hasStartedInitialGeneration = true
         self.isLoading = true
+        configureInitialLoadingState(resetDescriptions: true)
         let activeProfile = profile ?? self.profile ?? UserProfile.mockSample
         do {
             let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(
                 for: occasion,
                 profile: activeProfile
-            )
+            ) { [weak self] stageTitle, stageSubtitle, descriptions in
+                self?.loadingStageTitle = stageTitle
+                self?.loadingStageSubtitle = stageSubtitle
+                self?.vlmDebugDescriptions = descriptions
+            }
             
+            if let modelContext = self.occasion.modelContext {
+                for look in newLooks {
+                    modelContext.insert(look)
+                    for garment in look.garments {
+                        modelContext.insert(garment)
+                    }
+                    look.occasion = self.occasion
+                }
+            }
+            let finalDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
             withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                self.vlmDebugDescriptions = finalDescriptions
                 self.looks = newLooks
                 self.occasion.generatedLooks = newLooks
                 self.isUsingMockPlaceholders = false
                 self.selectedLookIndex = 0
                 self.isLoading = false
             }
+            try? self.occasion.modelContext?.save()
         } catch {
             let errorMsg = error.localizedDescription
             print("\n❌ [OccasionOutputViewModel] LLM inference failed (\(LLMResource.activeModelFilename)): \(errorMsg)\n")
@@ -199,7 +278,7 @@ final class OccasionOutputViewModel {
     
     
     func selectLook(at index: Int) {
-        guard looks.indices.contains(index) else { return }
+        guard index >= 0 && index < totalCarouselCount else { return }
         withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
             selectedLookIndex = index
         }
@@ -211,7 +290,7 @@ final class OccasionOutputViewModel {
     }
     
     func goToNextLook() {
-        guard selectedLookIndex < looks.count - 1 else { return }
+        guard selectedLookIndex < totalCarouselCount - 1 else { return }
         selectLook(at: selectedLookIndex + 1)
     }
     
@@ -284,19 +363,59 @@ final class OccasionOutputViewModel {
     
     func regenerateLooks(profile: UserProfile? = nil) {
         guard !isLoading else { return }
-        isLoading = true
-        errorMessage = nil
+        let preservedOccasionID = occasion.id
+        
+        // Remove old non-bookmarked looks from context if persisted
+        if let context = occasion.modelContext {
+            for oldLook in occasion.generatedLooks where !oldLook.isBookmarked {
+                context.delete(oldLook)
+            }
+        }
+        occasion.generatedLooks.removeAll()
+        garmentCropImages.removeAll()
+        isGeneratingMore = false
+        
+        // Reset to generating state like a brand new occasion while preserving occasion.id
+        withAnimation(.easeInOut(duration: 0.2)) {
+            self.selectedLookIndex = 0
+            self.looks = OccasionOutputViewModel.makeMockLooks()
+            self.isUsingMockPlaceholders = true
+            self.isLoading = true
+            self.errorMessage = nil
+            self.configureInitialLoadingState(resetDescriptions: true)
+        }
         
         Task {
-            let activeProfile = profile ?? UserProfile.mockSample
+            let activeProfile = profile ?? self.profile ?? UserProfile.mockSample
             do {
-                let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(for: occasion, profile: activeProfile)
+                let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(
+                    for: occasion,
+                    profile: activeProfile
+                ) { [weak self] stageTitle, stageSubtitle, descriptions in
+                    self?.loadingStageTitle = stageTitle
+                    self?.loadingStageSubtitle = stageSubtitle
+                    self?.vlmDebugDescriptions = descriptions
+                }
+                if let modelContext = self.occasion.modelContext {
+                    for look in newLooks {
+                        modelContext.insert(look)
+                        for garment in look.garments {
+                            modelContext.insert(garment)
+                        }
+                        look.occasion = self.occasion
+                    }
+                }
+                let finalDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    self.vlmDebugDescriptions = finalDescriptions
                     self.looks = newLooks
                     self.occasion.generatedLooks = newLooks
                     self.selectedLookIndex = 0
+                    self.isUsingMockPlaceholders = false
                     self.isLoading = false
                 }
+                try? self.occasion.modelContext?.save()
+                print("🔄 [OccasionOutputViewModel] Regenerated \(newLooks.count) looks for same occasion id=\(preservedOccasionID.uuidString) (\(self.occasion.title))")
             } catch {
                 let errorMsg = error.localizedDescription
                 print("\n❌ [OccasionOutputViewModel] LLM CANNOT BE USED (\(LLMResource.activeModelFilename)): \(errorMsg)\n")
@@ -309,22 +428,30 @@ final class OccasionOutputViewModel {
         }
     }
 
-    /// Generates one additional outfit look and appends it to the right of existing looks.
-    func generateAdditionalLook(profile: UserProfile? = nil) {
-        guard !isLoading else { return }
-        isLoading = true
-        errorMessage = nil
-
+    /// Generates one additional look in the background, showing a loading ring in the carousel
+    /// while keeping the rest of the screen fully interactive.
+    func generateMoreLooks(profile: UserProfile? = nil) {
+        guard !isLoading && !isGeneratingMore else { return }
+        
+        isGeneratingMore = true
+        let newIndex = looks.count
+        
+        // Transition carousel directly to the new loading index
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+            selectedLookIndex = newIndex
+        }
+        
         Task {
             let activeProfile = profile ?? self.profile ?? UserProfile.mockSample
             do {
                 let newLook = try await OutfitGenerationPipeline.shared.generateSingleLook(
                     for: occasion,
                     profile: activeProfile,
+                    lookIndex: newIndex,
                     existingLooks: self.looks
                 )
-
-                if let modelContext = occasion.modelContext {
+                
+                if let modelContext = self.occasion.modelContext {
                     modelContext.insert(newLook)
                     for garment in newLook.garments {
                         modelContext.insert(garment)
@@ -332,21 +459,31 @@ final class OccasionOutputViewModel {
                 }
 
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    newLook.occasion = self.occasion
+                    if self.occasion.modelContext != nil {
+                        self.occasion.generatedLooks.append(newLook)
+                    }
                     self.looks.append(newLook)
-                    self.occasion.generatedLooks = self.looks
-                    self.selectedLookIndex = self.looks.count - 1
-                    self.isLoading = false
+                    self.isGeneratingMore = false
                 }
             } catch {
                 let errorMsg = error.localizedDescription
-                print("\n❌ [OccasionOutputViewModel] Failed to generate additional look: \(errorMsg)\n")
+                print("\n❌ [OccasionOutputViewModel] Failed to generate more looks: \(errorMsg)\n")
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+                    self.isGeneratingMore = false
+                    if self.selectedLookIndex >= self.looks.count {
+                        self.selectedLookIndex = max(0, self.looks.count - 1)
+                    }
                     self.errorMessage = errorMsg
                     self.isShowingErrorAlert = true
-                    self.isLoading = false
                 }
             }
         }
+    }
+
+    /// Generates one additional outfit look and appends it to the right of existing looks.
+    func generateAdditionalLook(profile: UserProfile? = nil) {
+        generateMoreLooks(profile: profile)
     }
 }
 

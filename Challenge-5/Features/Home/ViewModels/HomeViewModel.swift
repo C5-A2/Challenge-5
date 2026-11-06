@@ -72,6 +72,14 @@ final class HomeViewModel {
         // Always update, so removing every reference photo is saved too.
         occasion.referenceImagesData = detail.referenceImages
         occasion.referenceImageData = detail.referenceImages.first
+        if detail.referenceImages.isEmpty {
+            ReferenceImageStyleAnalyzer.shared.saveDescriptions([], forOccasionID: occasion.id)
+        }
+        // Clear previously generated non-bookmarked looks so the updated occasion regenerates with the same occasion.id
+        for oldLook in occasion.generatedLooks where !oldLook.isBookmarked {
+            context.delete(oldLook)
+        }
+        occasion.generatedLooks.removeAll()
         do {
             try context.save()
         } catch {
@@ -80,6 +88,7 @@ final class HomeViewModel {
     }
     
     func deleteOccasion(_ occasion: OccasionItem, in context: ModelContext) {
+        ReferenceImageStyleAnalyzer.shared.saveDescriptions([], forOccasionID: occasion.id)
         context.delete(occasion)
         do {
             try context.save()

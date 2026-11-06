@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// Hub screen displaying user profile summary across 4 staggered folder cards:
 /// Color Season, Body Type, Measurements, and Character (Style Vision).
@@ -35,6 +36,7 @@ struct ProfileHubView: View {
         case skinScan
         case bodyScan
         case metrics
+        case debugForm
 
         var id: Int { hashValue }
     }
@@ -78,6 +80,8 @@ struct ProfileHubView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         titleSection
 
+                        debugAutoFillSection
+
                         staggeredFolderGrid
                             .padding(.top, 12)
                             .padding(.bottom, 40)
@@ -94,6 +98,8 @@ struct ProfileHubView: View {
                 bodyScanFlowSheet
             case .metrics:
                 metricsFlowPlaceholder
+            case .debugForm:
+                TemporaryProfileFormSheet()
             }
         }
     }
@@ -124,6 +130,76 @@ struct ProfileHubView: View {
             .font(AppTypography.screenHeader)
             .foregroundStyle(AppColors.espressoTitle)
             .padding(.top, 4)
+    }
+
+    // MARK: - Debug Manual Profile Form Section
+
+    private var debugAutoFillSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                activeSheet = .debugForm
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 15, weight: .semibold))
+
+                    Text("Set Profile Manually (Debug)")
+                        .font(.system(size: 14.5, weight: .semibold))
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 13)
+                .background(AppColors.primaryBlack)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+            }
+            .buttonStyle(.plain)
+
+            if let profile = currentProfile,
+               (profile.colorSeason != nil || profile.bodyType != nil || profile.frontBodyPhotoData != nil) {
+                HStack(spacing: 12) {
+                    if let frontData = profile.frontBodyPhotoData,
+                       let uiImage = UIImage(data: frontData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 40, height: 52)
+                            .background(AppColors.canvasBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(AppColors.subtleBorder, lineWidth: 1)
+                            )
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Active Profile Summary")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(AppColors.espressoTitle)
+
+                        Text("\(profile.colorSeason?.rawValue ?? "Not Set") • \(profile.bodyType?.displayName ?? "Not Set") • Front Scan \(profile.frontBodyPhotoData != nil ? "Set" : "Not Set")")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(AppColors.mutedCaption)
+                            .lineLimit(2)
+                    }
+
+                    Spacer()
+                }
+                .padding(10)
+                .background(AppColors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(AppColors.subtleBorder, lineWidth: 1)
+                )
+            }
+        }
     }
 
     // MARK: - Staggered Folder Grid

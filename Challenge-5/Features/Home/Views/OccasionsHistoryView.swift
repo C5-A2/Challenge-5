@@ -71,8 +71,16 @@ struct OccasionsHistoryView: View {
             .sheet(item: $selectedOccasionForEdit) { occasion in
                 OccasionFormSheet(
                     viewModel: OccasionInputViewModel(from: occasion),
+                    initialMode: .view,
                     onSave: { updatedDetail in
                         updateOccasion(occasion, with: updatedDetail)
+                    },
+                    onDelete: {
+                        deleteOccasion(occasion)
+                        selectedOccasionForEdit = nil
+                    },
+                    onDismiss: {
+                        selectedOccasionForEdit = nil
                     }
                 )
             }

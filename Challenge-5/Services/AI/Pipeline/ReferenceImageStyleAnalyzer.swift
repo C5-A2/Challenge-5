@@ -6,154 +6,242 @@
 //
 
 import Foundation
-import UIKit
-import Vision
-import CoreImage
 
-/// Analyzes user reference photos using Apple's on-device `Vision.framework` and `CoreImage`.
+/// Structured stylistic and visual profile extracted from reference images by the Vision-Language Model.
+public struct ReferenceImageStyleProfile: Sendable, Codable, Equatable {
+    /// Natural language description of the outfit styling.
+    public var textDescription: String
+
+    public var genreVibe: String
+    public var persona: String
+    public var fit: String
+    public var cuts: [String]
+    public var materials: [String]
+    public var patterns: [String]
+    public var colors: String
+
+    // MARK: - Backward Compatibility Properties
+    public var aestheticVibes: [String] {
+        [genreVibe, persona].filter { !$0.isEmpty }
+    }
+    public var silhouettes: [String] {
+        cuts.isEmpty ? (fit.isEmpty ? [] : [fit]) : cuts
+    }
+    public var texturesAndFabrics: [String] {
+        materials + patterns
+    }
+    public var stylingCues: [String] {
+        [fit].filter { !$0.isEmpty }
+    }
+    public var colorHarmony: String? {
+        colors.isEmpty ? nil : colors
+    }
+
+    public init(
+        textDescription: String = "",
+        genreVibe: String = "",
+        persona: String = "",
+        fit: String = "",
+        cuts: [String] = [],
+        materials: [String] = [],
+        patterns: [String] = [],
+        colors: String = ""
+    ) {
+        self.textDescription = textDescription
+        self.genreVibe = genreVibe
+        self.persona = persona
+        self.fit = fit
+        self.cuts = cuts
+        self.materials = materials
+        self.patterns = patterns
+        self.colors = colors
+    }
+
+    /// Formats the profile into a high-density structured context block for the Qwen 2.5 3B prompt.
+    public var formattedPromptContext: String {
+        if !textDescription.isEmpty {
+            return textDescription
+        }
+        var lines: [String] = []
+        if !genreVibe.isEmpty { lines.append("• Aesthetic: \(genreVibe)") }
+        if !cuts.isEmpty { lines.append("• Cuts: \(cuts.joined(separator: ", "))") }
+        if !materials.isEmpty { lines.append("• Materials: \(materials.joined(separator: ", "))") }
+        if !patterns.isEmpty { lines.append("• Pattern: \(patterns.joined(separator: ", "))") }
+        if !colors.isEmpty { lines.append("• Color Mood: \(colors)") }
+        return lines.joined(separator: "\n")
+    }
+}
+
+/// Analyzes user reference photos to extract detailed fashion styling descriptions
+/// using the on-device Qwen 2.5 VL 3B Vision-Language Model exclusively.
 ///
-/// Implements **Approach 1**: Extracts fashion style, garment types, textures, and aesthetic cues
-/// directly on the Apple Neural Engine in ~15ms, with 0 MB model download and zero GPU overhead.
+/// Features:
+/// - Post-submit 1-by-1 image scanning: Runs in the loading state right after form submission before main LLM generation.
+/// - Safe VRAM handoff: Releases any resident text LLM weights before loading VLM, and unloads VLM (~2.6 GB) immediately after scanning.
+/// - Debug persistence: Stores extracted VLM descriptions per occasion so `OccasionOutputView` can display them for developer inspection.
 public final class ReferenceImageStyleAnalyzer: Sendable {
 
     public static let shared = ReferenceImageStyleAnalyzer()
 
+    private let cacheLock = NSLock()
+    private var imageCache: [Int: String] = [:]
+
     private init() {}
 
-    // MARK: - Analysis API
+    // MARK: - Debug Persistence Helpers
 
-    /// Analyzes raw image data list and returns a concise stylistic descriptor for the LLM prompt.
-    /// Returns `nil` if no images are provided or no fashion features could be detected.
-    public func analyzeStyle(from imagesData: [Data]) async -> String? {
-        guard !imagesData.isEmpty else { return nil }
-
-        // Analyze up to 3 reference images concurrently
-        let targetImages = Array(imagesData.prefix(3))
-        var detectedKeywords: Set<String> = []
-        var detectedColors: Set<String> = []
-
-        for data in targetImages {
-            guard let image = UIImage(data: data), let cgImage = image.cgImage else { continue }
-            
-            // 1. Vision Classification (garment types, aesthetics, materials)
-            let classifications = await classifyImage(cgImage)
-            for item in classifications {
-                detectedKeywords.insert(item)
-            }
-
-            // 2. Color Tone Extraction
-            if let tone = extractDominantTone(from: cgImage) {
-                detectedColors.insert(tone)
-            }
-        }
-
-        guard !detectedKeywords.isEmpty || !detectedColors.isEmpty else {
-            return nil
-        }
-
-        var components: [String] = []
-        if !detectedColors.isEmpty {
-            components.append("palette tone: \(detectedColors.joined(separator: ", "))")
-        }
-        if !detectedKeywords.isEmpty {
-            components.append("cues: \(detectedKeywords.prefix(5).joined(separator: ", "))")
-        }
-
-        return components.joined(separator: "; ")
+    private static func debugStorageKey(for occasionID: UUID) -> String {
+        "vlm_debug_descriptions_\(occasionID.uuidString)"
     }
 
-    // MARK: - Vision Image Classification
-
-    private func classifyImage(_ cgImage: CGImage) async -> [String] {
-        return await withCheckedContinuation { continuation in
-            let request = VNClassifyImageRequest { request, error in
-                guard error == nil, let results = request.results as? [VNClassificationObservation] else {
-                    continuation.resume(returning: [])
-                    return
-                }
-
-                // Filter for fashion, clothing, textures, and style taxonomy
-                let fashionTaxonomy: [String: String] = [
-                    "suit": "tailored suit",
-                    "blazer": "structured blazer",
-                    "coat": "longline coat",
-                    "trench coat": "trench coat",
-                    "jacket": "jacket layer",
-                    "cardigan": "knit cardigan",
-                    "sweater": "soft knitwear",
-                    "dress": "fluid dress",
-                    "skirt": "tailored skirt",
-                    "trousers": "straight trousers",
-                    "jeans": "casual denim",
-                    "leather": "leather texture",
-                    "denim": "denim texture",
-                    "silk": "silk finish",
-                    "wool": "warm wool",
-                    "linen": "textured linen",
-                    "formal": "formal elegance",
-                    "casual": "relaxed casual",
-                    "minimalist": "clean minimalism",
-                    "streetwear": "contemporary street",
-                    "vintage": "classic vintage",
-                    "monochrome": "monochromatic styling"
-                ]
-
-                var matches: [String] = []
-                for observation in results where observation.confidence > 0.08 {
-                    let identifier = observation.identifier.lowercased()
-                    for (keyword, label) in fashionTaxonomy {
-                        if identifier.contains(keyword) && !matches.contains(label) {
-                            matches.append(label)
-                        }
-                    }
-                }
-
-                continuation.resume(returning: Array(matches.prefix(4)))
-            }
-
-            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-            do {
-                try handler.perform([request])
-            } catch {
-                continuation.resume(returning: [])
-            }
-        }
+    private static func recapStorageKey(for occasionID: UUID) -> String {
+        "vlm_recap_\(occasionID.uuidString)"
     }
 
-    // MARK: - Dominant Tone Extraction
+    /// Persists the single-paragraph recap of all reference descriptions for an occasion.
+    public func saveRecap(_ recap: String, forOccasionID occasionID: UUID) {
+        UserDefaults.standard.set(recap, forKey: Self.recapStorageKey(for: occasionID))
+    }
 
-    private func extractDominantTone(from cgImage: CGImage) -> String? {
-        let ciImage = CIImage(cgImage: cgImage)
-        let extent = ciImage.extent
-        guard let filter = CIFilter(name: "CIAreaAverage", parameters: [
-            kCIInputImageKey: ciImage,
-            kCIInputExtentKey: CIVector(cgRect: extent)
-        ]) else { return nil }
+    /// Retrieves the cached single-paragraph recap for an occasion, if any.
+    public func savedRecap(forOccasionID occasionID: UUID) -> String? {
+        let value = UserDefaults.standard.string(forKey: Self.recapStorageKey(for: occasionID))
+        return (value?.isEmpty == false) ? value : nil
+    }
 
-        guard let outputImage = filter.outputImage else { return nil }
-
-        var bitmap = [UInt8](repeating: 0, count: 4)
-        let context = CIContext(options: [.workingColorSpace: kCFNull as Any])
-        context.render(outputImage, toBitmap: &bitmap, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBA8, colorSpace: nil)
-
-        let r = Float(bitmap[0]) / 255.0
-        let g = Float(bitmap[1]) / 255.0
-        let b = Float(bitmap[2]) / 255.0
-
-        let brightness = (r * 0.299 + g * 0.587 + b * 0.114)
-        if brightness > 0.75 {
-            return "light & airy"
-        } else if brightness < 0.25 {
-            return "deep & moody"
-        } else if abs(r - g) < 0.08 && abs(g - b) < 0.08 {
-            return "muted neutrals"
-        } else if r > g && r > b {
-            return "warm earthy tones"
-        } else if b > r && b > g {
-            return "cool undertones"
+    /// Persists extracted 1-by-1 VLM descriptions for an occasion so `OccasionOutputView` can display them.
+    public func saveDescriptions(_ descriptions: [String], forOccasionID occasionID: UUID) {
+        let key = Self.debugStorageKey(for: occasionID)
+        // New/changed descriptions invalidate any previously recapped paragraph.
+        UserDefaults.standard.removeObject(forKey: Self.recapStorageKey(for: occasionID))
+        if descriptions.isEmpty {
+            UserDefaults.standard.removeObject(forKey: key)
         } else {
-            return "natural balanced tones"
+            UserDefaults.standard.set(descriptions, forKey: key)
         }
+    }
+
+    /// Retrieves previously extracted VLM descriptions for an occasion, if any.
+    public func savedDescriptions(forOccasionID occasionID: UUID) -> [String] {
+        let key = Self.debugStorageKey(for: occasionID)
+        return UserDefaults.standard.stringArray(forKey: key) ?? []
+    }
+
+    // MARK: - Primary 1-by-1 Analysis API
+
+    /// Analyzes an array of reference images 1-by-1 in a single VLM session without reloading weights between images.
+    ///
+    /// - Parameters:
+    ///   - imagesData: Raw JPEG/PNG data buffers of user reference photos (up to 3).
+    ///   - onProgress: Optional `@MainActor` progress callback invoked with `(completedCount, totalCount, descriptionsSoFar)`.
+    /// - Returns: An array of natural text styling descriptions, one corresponding to each input image.
+    public func analyzeIndividualImages(
+        for imagesData: [Data],
+        onProgress: (@MainActor @Sendable (Int, Int, [String]) -> Void)? = nil
+    ) async -> [String] {
+        guard !imagesData.isEmpty else { return [] }
+
+        // Check cache for already analyzed images
+        var results: [String] = []
+        var uncachedIndices: [Int] = []
+        var uncachedData: [Data] = []
+
+        cacheLock.lock()
+        for (index, data) in imagesData.enumerated() {
+            var hasher = Hasher()
+            hasher.combine(data)
+            let hash = hasher.finalize()
+            if let cached = imageCache[hash] {
+                results.append(cached)
+            } else {
+                results.append("") // Placeholder to be filled
+                uncachedIndices.append(index)
+                uncachedData.append(data)
+            }
+        }
+        cacheLock.unlock()
+
+        if uncachedIndices.isEmpty {
+            print("👁️ [ReferenceImageStyleAnalyzer] All \(imagesData.count) reference images retrieved from cache.")
+            let finalResults = results.filter { !$0.isEmpty }
+            await onProgress?(finalResults.count, imagesData.count, finalResults)
+            return finalResults
+        }
+
+        // Notify progress for any already-cached photos first
+        let initialCached = results.filter { !$0.isEmpty }
+        if !initialCached.isEmpty {
+            await onProgress?(initialCached.count, imagesData.count, initialCached)
+        }
+
+        print("👁️ [ReferenceImageStyleAnalyzer] Scanning \(uncachedIndices.count)/\(imagesData.count) reference images on-device via VLM (1-by-1)...")
+
+        // Ensure text LLM weights are released before loading VLM into Metal GPU memory
+        await LLMEngine.shared.releaseModelWeights()
+
+        // Pre-load VLM once for the entire batch
+        do {
+            try await VLMEngine.shared.loadIfNeeded()
+        } catch {
+            print("⚠️ [ReferenceImageStyleAnalyzer] Failed to pre-load VLM: \(error.localizedDescription)")
+            return results.filter { !$0.isEmpty }
+        }
+
+        for (uIdx, data) in uncachedData.enumerated() {
+            let originalIndex = uncachedIndices[uIdx]
+            do {
+                let description = try await VLMEngine.shared.analyzeImage(data: data)
+                print("✅ [ReferenceImageStyleAnalyzer] Reference Photo \(originalIndex + 1) VLM description: \(description)")
+                results[originalIndex] = description
+
+                // Store in cache
+                var hasher = Hasher()
+                hasher.combine(data)
+                let hash = hasher.finalize()
+                cacheLock.lock()
+                imageCache[hash] = description
+                cacheLock.unlock()
+
+                let snapshot = results.filter { !$0.isEmpty }
+                await onProgress?(snapshot.count, imagesData.count, snapshot)
+            } catch {
+                print("⚠️ [ReferenceImageStyleAnalyzer] Reference Photo \(originalIndex + 1) VLM failed: \(error.localizedDescription)")
+            }
+        }
+
+        // Unload VLM weights once at the end of the entire batch to free ~2.6 GB VRAM before main LLM runs
+        await VLMEngine.shared.unload()
+        return results.filter { !$0.isEmpty }
+    }
+
+    /// Analyzes reference photos and returns a formatted string descriptor combining all individual images.
+    public func analyzeStyle(from imagesData: [Data]) async -> String? {
+        let descriptions = await analyzeIndividualImages(for: imagesData)
+        guard !descriptions.isEmpty else { return nil }
+        return descriptions.enumerated().map { index, desc in
+            "Reference Photo \(index + 1): \(desc)"
+        }.joined(separator: "\n\n")
+    }
+
+    /// Formats an already-extracted array of individual descriptions into a combined context string.
+    public static func formatCombinedStyle(from descriptions: [String]) -> String? {
+        guard !descriptions.isEmpty else { return nil }
+        return descriptions.enumerated().map { index, desc in
+            "Reference Photo \(index + 1): \(desc)"
+        }.joined(separator: "\n\n")
+    }
+
+    /// Backward compatibility method returning structured profiles.
+    public func analyzeIndividualProfiles(for imagesData: [Data]) async -> [ReferenceImageStyleProfile?] {
+        let descriptions = await analyzeIndividualImages(for: imagesData)
+        return descriptions.map { desc in
+            ReferenceImageStyleProfile(textDescription: desc)
+        }
+    }
+
+    /// Backward compatibility method returning a single merged profile.
+    public func analyzeStyleProfile(from imagesData: [Data]) async -> ReferenceImageStyleProfile? {
+        guard let combined = await analyzeStyle(from: imagesData) else { return nil }
+        return ReferenceImageStyleProfile(textDescription: combined)
     }
 }
-
