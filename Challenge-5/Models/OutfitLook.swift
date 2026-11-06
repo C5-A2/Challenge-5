@@ -35,6 +35,12 @@ final class OutfitLook {
     /// The occasion this look was generated for. Lets the Library show the occasion title.
     var occasion: OccasionItem?
 
+    /// Cached metadata from the parent occasion so that if the occasion is deleted,
+    /// the saved look in Library still retains its occasion title, dresscode, and date.
+    var cachedOccasionTitle: String?
+    var cachedOccasionDresscode: String?
+    var cachedOccasionDate: Date?
+
     // MARK: - Initializer
 
     init(

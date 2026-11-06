@@ -407,10 +407,17 @@ final class OccasionOutputViewModel {
         guard !isLoading else { return }
         let preservedOccasionID = occasion.id
         
-        // Remove old non-bookmarked looks from context if persisted
+        // Remove old non-bookmarked looks from context if persisted, preserving bookmarked looks
         if let context = occasion.modelContext {
-            for oldLook in occasion.generatedLooks where !oldLook.isBookmarked {
-                context.delete(oldLook)
+            for oldLook in occasion.generatedLooks {
+                if oldLook.isBookmarked {
+                    oldLook.cachedOccasionTitle = occasion.title
+                    oldLook.cachedOccasionDresscode = occasion.dresscode
+                    oldLook.cachedOccasionDate = occasion.date
+                    oldLook.occasion = nil
+                } else {
+                    context.delete(oldLook)
+                }
             }
         }
         occasion.generatedLooks.removeAll()
