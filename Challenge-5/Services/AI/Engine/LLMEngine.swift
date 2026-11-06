@@ -63,6 +63,9 @@ public actor LLMEngine {
     private var context: OpaquePointer?
     #endif
     private var isBackendInitialized = false
+    /// Loading the text model is retried this many times in total (memory may still be held by the VLM).
+    private static let maximumModelLoadAttempts = 3
+    private static let modelLoadRetryDelay: TimeInterval = 1.0
     private var isGenerating = false
     
     // Active model filename (prefers Qwen 2.5 3B, falls back to Llama 3.2 1B)
@@ -85,8 +88,9 @@ public actor LLMEngine {
             targets = LLMResource.supportedModelFilenames.map { "\($0).gguf" }
         }
 
+        // Skip Git LFS pointers (model not downloaded), so the next model in the list is used.
         for target in targets {
-            if let path = checkCandidatePaths(filename: target) {
+            if let path = checkCandidatePaths(filename: target), LLMResource.isUsableModelFile(atPath: path) {
                 return path
             }
         }
@@ -183,7 +187,17 @@ public actor LLMEngine {
         var modelParams = llama_model_default_params()
         modelParams.n_gpu_layers = 99 // Metal GPU acceleration on physical iPhone
         
-        guard let loadedModel = llama_model_load_from_file(path, modelParams) else {
+        // Right after the VLM reference scan, iOS may not have handed the VLM's ~2.7 GB back yet,
+        // so the first load can fail. Wait briefly and try again before giving up.
+        var loadedModel = llama_model_load_from_file(path, modelParams)
+        var attempt = 1
+        while loadedModel == nil && attempt < Self.maximumModelLoadAttempts {
+            print("⚠️ [LLMEngine] Model load attempt \(attempt) failed. Retrying in \(Self.modelLoadRetryDelay)s…")
+            Thread.sleep(forTimeInterval: Self.modelLoadRetryDelay)
+            attempt += 1
+            loadedModel = llama_model_load_from_file(path, modelParams)
+        }
+        guard let loadedModel else {
             throw LLMEngineError.modelInitFailed
         }
         self.model = loadedModel
@@ -248,10 +262,12 @@ public actor LLMEngine {
     // MARK: - Inference Execution
     
     /// Generates raw text response for a given prompt using LLM instruct template.
+    /// - Parameter topP: Nucleus sampling share; creative looks use a slightly higher value.
     public func generate(
         prompt: String,
         maxTokens: Int = 512,
-        temperature: Float = 0.2
+        temperature: Float = 0.2,
+        topP: Float = 0.9
     ) async throws -> String {
         #if targetEnvironment(simulator)
         // Instant simulated response for Xcode Previews and Simulator without crashing
@@ -434,7 +450,7 @@ public actor LLMEngine {
             llama_sampler_chain_add(sampler, llama_sampler_init_greedy())
         } else {
             llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40))
-            llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9, 1))
+            llama_sampler_chain_add(sampler, llama_sampler_init_top_p(topP, 1))
             llama_sampler_chain_add(sampler, llama_sampler_init_temp(temperature))
             llama_sampler_chain_add(sampler, llama_sampler_init_dist(0xFFFFFFFF)) // LLAMA_DEFAULT_SEED
         }

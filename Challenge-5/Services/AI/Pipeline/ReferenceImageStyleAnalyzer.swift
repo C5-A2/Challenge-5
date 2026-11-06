@@ -245,3 +245,55 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
         return ReferenceImageStyleProfile(textDescription: combined)
     }
 }
+
+// MARK: - Reference Analysis for the Outfit Prompt
+
+/// The VLM's reference descriptions, prepared for the per-look outfit prompt.
+nonisolated struct ReferenceStyleAnalysis: Sendable {
+    /// The reference outfits as text: the recap paragraph, or the per-photo descriptions.
+    let promptDescription: String
+    /// The outfit structure the descriptions mention most, so the reference look keeps the same pieces.
+    /// `nil` when the text doesn't make it clear.
+    let suggestedStructure: OutfitStructure?
+
+    /// Words in a VLM description that point to a one-piece outfit or an outer layer.
+    private static let onePieceKeywords = ["dress", "gown", "jumpsuit", "romper", "playsuit"]
+    private static let outerKeywords = ["jacket", "blazer", "coat", "cardigan", "outer", "kimono", "trench", "bomber"]
+
+    /// - Parameters:
+    ///   - descriptions: One VLM description per reference photo.
+    ///   - recap: The single-paragraph recap of all descriptions, used as the prompt text when present.
+    init?(descriptions: [String], recap: String?) {
+        let cleaned = descriptions
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !cleaned.isEmpty else { return nil }
+
+        if let recap, !recap.isEmpty {
+            promptDescription = recap
+        } else {
+            promptDescription = cleaned.enumerated()
+                .map { "Photo \($0.offset + 1): \($0.element)" }
+                .joined(separator: "\n")
+        }
+
+        let structures = cleaned.map(Self.structure(in:))
+        suggestedStructure = Dictionary(grouping: structures, by: { $0 })
+            .max { $0.value.count < $1.value.count }?
+            .key
+    }
+
+    /// The pieces one description mentions: a dress or jumpsuit (with or without an outer layer),
+    /// or separates (with or without an outer layer).
+    private static func structure(in description: String) -> OutfitStructure {
+        let text = description.lowercased()
+        let hasOnePiece = onePieceKeywords.contains { text.contains($0) }
+        let hasOuter = outerKeywords.contains { text.contains($0) }
+        switch (hasOnePiece, hasOuter) {
+        case (true, true): return .dressWithOuter
+        case (true, false): return .dress
+        case (false, true): return .outerTopBottom
+        case (false, false): return .topBottom
+        }
+    }
+}

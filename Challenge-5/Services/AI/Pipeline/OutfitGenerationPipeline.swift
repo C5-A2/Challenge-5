@@ -64,15 +64,15 @@ protocol OutfitGenerationPipelineProtocol {
 
 /// Orchestrates the 5-look outfit recommendation pipeline.
 ///
-/// **Strategy Architecture:**
-/// Uses a **single unified generation pass** with 5 distinct stylistic archetypes rather than
-/// 5 sequential calls with escalating temperature.
+/// **Strategy:** one LLM call per look. Each look has its own creative direction
+/// (`OutfitArchetype`: reference match, personality, body shape, surprise me, look more),
+/// its own pieces (`OutfitStructure`: separates or a dress, with an outer layer only when the model decides it fits),
+/// and its own sampling temperature. Earlier looks are passed to the next prompt so the
+/// looks differ in style and pieces, not only in color.
 ///
-/// **Why Single Generation Pass Wins:**
-/// 1. **UX Latency:** Produces all 5 looks in a single roundtrip (~2-4 seconds) instead of 15-25 seconds of sequential calls.
-/// 2. **Zero Garment Duplication:** The model maintains global context across all 5 looks, guaranteeing distinct cuts, colors, and layering.
-/// 3. **Strict Rule Adherence:** Increasing temperature destabilizes seasonal palette hex codes and violates body silhouette constraints.
-/// 4. **Individual Garment Rationales:** Every garment includes a dedicated body-fit rationale explaining why its cut flatters the user's body.
+/// Reference photos are first described one by one by the on-device vision-language model
+/// (Qwen 2.5 VL, `ReferenceImageStyleAnalyzer`), because the text model can't see images.
+/// The descriptions are recapped into one paragraph and passed to every look's prompt.
 @MainActor
 final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
@@ -84,6 +84,17 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
     public static var injectedLLMResponseJSON: String? = nil
 
     private let promptBuilder: OutfitPromptBuilder
+
+    /// Number of looks in one generation.
+    private static let lookCount = 5
+    /// One look is generated at most this many times when it repeats an earlier look or can't be parsed.
+    private static let maximumAttemptsPerLook = 3
+    /// Each new attempt gets this much more temperature, so it moves away from the repeated look.
+    private static let retryTemperatureStep: Float = 0.15
+    private static let maximumRetryTemperature: Float = 1.1
+    /// Token limit for one look's JSON. One look is a few hundred tokens; the limit leaves room
+    /// for the prompt inside the 4,096-token context.
+    private static let maximumTokensPerLook = 1536
 
     init(promptBuilder: OutfitPromptBuilder? = nil) {
         self.promptBuilder = promptBuilder ?? OutfitPromptBuilder()
@@ -104,6 +115,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         try await generateLooks(for: occasion, profile: profile, onStageChange: nil)
     }
 
+    /// - Parameter onStageChange: Loading overlay updates `(title, subtitle, VLM descriptions so far)`.
     func generateLooks(
         for occasion: OccasionItem,
         profile: UserProfile,
@@ -120,122 +132,286 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        // 2. Stage 1: Analyze user reference photos FIRST via on-device VLM (scan 1-by-1, then unload VLM)
-        let allImageData = occasion.referenceImagesData.isEmpty
-            ? (occasion.referenceImageData.map { [$0] } ?? [])
-            : occasion.referenceImagesData
+        // 2. Stage 1: describe the reference photos with the VLM (1 by 1, then the VLM is unloaded).
+        let referenceDescriptions = await scanReferencePhotos(of: occasion, onStageChange: onStageChange)
+        let referenceAnalysis = ReferenceStyleAnalysis(
+            descriptions: referenceDescriptions,
+            recap: await recapReferenceStyle(referenceDescriptions, occasionID: occasion.id)
+        )
 
-        let referenceDescriptions: [String]
-        if !allImageData.isEmpty {
-            let totalRefs = allImageData.count
-            onStageChange?(
-                "Analyzing References",
-                "Scanning 1 of \(totalRefs) reference photo\(totalRefs == 1 ? "" : "s") with Qwen 2.5 VL...",
-                []
-            )
-
-            referenceDescriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(
-                for: allImageData
-            ) { completed, total, descriptionsSoFar in
-                if completed < total {
-                    onStageChange?(
-                        "Analyzing References",
-                        "Scanning \(completed + 1) of \(total) reference photos with Qwen 2.5 VL...",
-                        descriptionsSoFar
-                    )
-                } else {
-                    onStageChange?(
-                        "Analyzing References",
-                        "Scanned \(total) reference photo\(total == 1 ? "" : "s"). Preparing main LLM recommendation...",
-                        descriptionsSoFar
-                    )
-                }
-            }
-
-            ReferenceImageStyleAnalyzer.shared.saveDescriptions(referenceDescriptions, forOccasionID: occasion.id)
-
-            print("\n====== [VLM DEBUG OUTPUT (\(occasion.title)) — ALL REFS → ALL LOOKS] ======")
-            if referenceDescriptions.isEmpty {
-                print("   (No VLM text descriptions returned)")
-            } else {
-                for (i, desc) in referenceDescriptions.enumerated() {
-                    print("   Ref \(i + 1): \(desc)")
-                }
-            }
-            print("=========================================================================\n")
-        } else {
-            referenceDescriptions = []
-            ReferenceImageStyleAnalyzer.shared.saveDescriptions([], forOccasionID: occasion.id)
-        }
-
-        let analyzedImageStyle = await recapReferenceStyle(referenceDescriptions, occasionID: occasion.id)
-
-        // 3. Stage 2: Main LLM Sequential generation — one LLM call = one look, fed by ALL VLM reference descriptions (Ref 1–3).
-        //    After each look is parsed, its garment summary is appended to the next call's
-        //    system prompt so the model aims for variety across looks.
-        let totalLooks = 5
-
-        // Escalating temperature per look: Look 0 is grounded/safe; each subsequent look gets
-        // progressively more creative, ensuring the 5 looks feel meaningfully distinct.
-        let temperatures: [Float] = [0.30, 0.45, 0.55, 0.65, 0.72]
-
+        // 3. Stage 2: one LLM call per look. Each look has its own direction, pieces and temperature,
+        //    and gets the earlier looks so it doesn't repeat them.
         var generatedLooks: [OutfitLook] = []
         var previousSummaries: [GeneratedLookSummary] = []
 
-        for lookIndex in 0..<totalLooks {
-            let temperature = temperatures[lookIndex]
-
-            let refStatusSuffix = !referenceDescriptions.isEmpty
-                ? " (using Ref 1\(referenceDescriptions.count > 1 ? "–\(referenceDescriptions.count)" : ""))"
-                : ""
+        for lookIndex in 0..<Self.lookCount {
+            let refStatusSuffix = referenceDescriptions.isEmpty
+                ? ""
+                : " (using Ref 1\(referenceDescriptions.count > 1 ? "–\(referenceDescriptions.count)" : ""))"
             onStageChange?(
                 "Curating Your Looks",
-                "Generating Look \(lookIndex + 1) of \(totalLooks)\(refStatusSuffix) tailored to \(occasion.title)...",
+                "Generating Look \(lookIndex + 1) of \(Self.lookCount)\(refStatusSuffix) tailored to \(occasion.title)...",
                 referenceDescriptions
             )
 
-            print("🔧 [OutfitGenerationPipeline] Building prompt for look \(lookIndex)/\(totalLooks - 1) (temp: \(temperature), refs: \(referenceDescriptions.isEmpty ? "none" : "all \(referenceDescriptions.count) refs"))…")
+            let parsedLook = try await generateLook(
+                for: occasion,
+                profile: profile,
+                lookIndex: lookIndex,
+                previousLooks: previousSummaries,
+                referenceAnalysis: referenceAnalysis,
+                minimumTemperature: nil
+            )
+            generatedLooks.append(parsedLook)
+            previousSummaries.append(GeneratedLookSummary(from: parsedLook))
+            print("✅ [OutfitGenerationPipeline] Look \(lookIndex) accepted. \(generatedLooks.count)/\(Self.lookCount) complete.")
+        }
 
-            // Build a single-look prompt, injecting ALL reference descriptions (Ref 1–3) and past look summaries.
+        return generatedLooks
+    }
+
+    /// Generates a single new tailored outfit look for an occasion, appending all previous looks and using high temperature (0.75) for diversity.
+    func generateSingleLook(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        lookIndex: Int,
+        existingLooks: [OutfitLook],
+        temperature: Float = 0.75
+    ) async throws -> OutfitLook {
+        // Validate the GGUF model file is present before attempting inference.
+        try LLMResource.validateModelAvailability()
+
+        // 1. Injected JSON short-circuit (prompt testing / UI previews).
+        if let injectedJSON = OutfitGenerationPipeline.injectedLLMResponseJSON, !injectedJSON.isEmpty {
+            if let looks = try? parseLooks(from: injectedJSON, colorSeason: profile.colorSeason), let first = looks.first {
+                first.lookIndex = lookIndex
+                return first
+            }
+        }
+
+        // 2. Reuse the VLM descriptions saved for this occasion; scan again only when the photos changed.
+        let allImageData = referenceImagesData(of: occasion)
+        let persistedDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
+        let referenceDescriptions: [String]
+        if !allImageData.isEmpty && persistedDescriptions.count == allImageData.count {
+            referenceDescriptions = persistedDescriptions
+        } else {
+            referenceDescriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(for: allImageData)
+            if !referenceDescriptions.isEmpty {
+                ReferenceImageStyleAnalyzer.shared.saveDescriptions(referenceDescriptions, forOccasionID: occasion.id)
+            }
+        }
+        let referenceAnalysis = ReferenceStyleAnalysis(
+            descriptions: referenceDescriptions,
+            recap: await recapReferenceStyle(referenceDescriptions, occasionID: occasion.id)
+        )
+        let previousSummaries = existingLooks.map { GeneratedLookSummary(from: $0) }
+
+        print("🔧 [OutfitGenerationPipeline] Generating extra look \(lookIndex) (previous looks appended: \(previousSummaries.count), refs: \(referenceDescriptions.count))…")
+
+        // 3. Extra looks cycle through the 5 directions, at least as creative as `temperature`.
+        return try await generateLook(
+            for: occasion,
+            profile: profile,
+            lookIndex: lookIndex,
+            previousLooks: previousSummaries,
+            referenceAnalysis: referenceAnalysis,
+            minimumTemperature: temperature
+        )
+    }
+
+    /// Generates a single additional outfit look, taking into account all previously generated looks
+    /// so the new look remains distinct and tailored.
+    func generateSingleLook(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        existingLooks: [OutfitLook]
+    ) async throws -> OutfitLook {
+        try await generateSingleLook(
+            for: occasion,
+            profile: profile,
+            lookIndex: existingLooks.count,
+            existingLooks: existingLooks,
+            temperature: 0.75
+        )
+    }
+
+    // MARK: - One Look
+
+    /// Builds the prompt for one look (direction from its index), runs the model and parses the result.
+    ///
+    /// A look that repeats an earlier one (`repeatedLookIndex(of:in:)`) or can't be parsed is generated
+    /// again at a higher temperature, up to `maximumAttemptsPerLook` times. After the last attempt a
+    /// repeated look is kept (better than no look), but a parse failure is thrown.
+    private func generateLook(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        lookIndex: Int,
+        previousLooks: [GeneratedLookSummary],
+        referenceAnalysis: ReferenceStyleAnalysis?,
+        minimumTemperature: Float?
+    ) async throws -> OutfitLook {
+        let archetype = OutfitArchetype(lookIndex: lookIndex)
+        let structure = archetype.structure(
+            referenceStructure: referenceAnalysis?.suggestedStructure,
+            dresscodeStructure: OutfitStructure(dresscode: occasion.dresscode)
+        )
+        let baseTemperature = max(archetype.temperature, minimumTemperature ?? 0)
+
+        // Rejected repeats are added to the "previous looks" list, so the next attempt avoids them too.
+        var avoidedLooks = previousLooks
+        var lastRepeatedLook: OutfitLook?
+
+        for attempt in 0..<Self.maximumAttemptsPerLook {
+            let temperature = min(baseTemperature + Float(attempt) * Self.retryTemperatureStep, Self.maximumRetryTemperature)
             let prompt = promptBuilder.buildFormattedPrompt(
                 occasion: occasion,
                 profile: profile,
                 lookIndex: lookIndex,
-                previousLooks: previousSummaries,
-                analyzedImageStyle: analyzedImageStyle
+                structure: structure,
+                previousLooks: avoidedLooks,
+                referenceAnalysis: referenceAnalysis
             )
-            print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) prompt built (\(prompt.count) chars). Running \(LLMResource.activeModelFilename)…")
+            print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) \(archetype) / \(structure.rawValue) (temp \(temperature), attempt \(attempt + 1)/\(Self.maximumAttemptsPerLook)). Prompt \(prompt.count) chars. Running \(LLMResource.activeModelFilename)…")
 
-            // One LLM call — generates exactly one look's JSON.
-            // maxTokens = 4096: the model tends to be verbose (~2100 tokens observed for one look),
-            // so 4096 gives a safe ceiling with no truncation risk.
-            // The model stops naturally at its EOG token well before this limit.
             let rawOutput = try await LLMEngine.shared.generate(
                 prompt: prompt,
-                maxTokens: 4096,
-                temperature: temperature
+                maxTokens: Self.maximumTokensPerLook,
+                temperature: temperature,
+                topP: archetype.topP
             )
-
             print("✅ [OutfitGenerationPipeline] Look \(lookIndex) raw output (\(rawOutput.count) chars):\n\(rawOutput)")
 
-            // Parse the single look and fix its index to match the intended lookIndex.
-            let rawClean = rawOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-            let parsedLooks = try parseLooks(from: rawClean, colorSeason: profile.colorSeason)
-            guard let parsedLook = parsedLooks.first else {
-                throw LLMError.invalidOutput("LLM returned 0 looks for look index \(lookIndex).")
+            let parsedLook: OutfitLook
+            do {
+                let parsedLooks = try parseLooks(
+                    from: rawOutput.trimmingCharacters(in: .whitespacesAndNewlines),
+                    colorSeason: profile.colorSeason,
+                    structure: structure,
+                    allowsOffPaletteAccent: archetype.allowsOffPaletteAccent
+                )
+                guard let first = parsedLooks.first else {
+                    throw LLMError.invalidOutput("LLM returned 0 looks for look index \(lookIndex).")
+                }
+                parsedLook = first
+            } catch {
+                print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) attempt \(attempt + 1) could not be parsed: \(error.localizedDescription)")
+                if attempt == Self.maximumAttemptsPerLook - 1 {
+                    if let lastRepeatedLook { return lastRepeatedLook }
+                    throw error
+                }
+                continue
             }
-
-            // Enforce the correct lookIndex regardless of what the model output.
+            // Enforce the intended index regardless of what the model output.
             parsedLook.lookIndex = lookIndex
 
-            generatedLooks.append(parsedLook)
-
-            // Build a summary of this look and feed it into the next prompt.
-            previousSummaries.append(GeneratedLookSummary(from: parsedLook))
-            print("✅ [OutfitGenerationPipeline] Look \(lookIndex) accepted. \(generatedLooks.count)/\(totalLooks) complete.")
+            guard let repeatedIndex = Self.repeatedLookIndex(of: parsedLook, in: avoidedLooks) else {
+                return parsedLook
+            }
+            print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) repeats look \(repeatedIndex + 1). Generating it again.")
+            lastRepeatedLook = parsedLook
+            avoidedLooks.append(GeneratedLookSummary(from: parsedLook))
         }
 
-        return generatedLooks
+        // Every attempt repeated an earlier look: keep the last one rather than failing the whole set.
+        guard let lastRepeatedLook else {
+            throw LLMError.invalidOutput("Could not generate look index \(lookIndex).")
+        }
+        return lastRepeatedLook
+    }
+
+    // MARK: - Repeat Check
+
+    /// The index of the earlier look that `look` repeats, or `nil` when it's new.
+    ///
+    /// A look repeats an earlier one when a garment has the same category and name as one there,
+    /// or when every garment matches one there in category and color (the same outfit, renamed).
+    private static func repeatedLookIndex(of look: OutfitLook, in previousLooks: [GeneratedLookSummary]) -> Int? {
+        let garments = look.garments.map {
+            (category: $0.category.rawValue, name: normalizedGarmentText($0.name), color: normalizedGarmentText($0.colorName))
+        }
+        guard !garments.isEmpty else { return nil }
+
+        for previous in previousLooks {
+            let previousGarments = previous.garments.map {
+                (category: $0.category, name: normalizedGarmentText($0.name), color: normalizedGarmentText($0.colorName))
+            }
+            let repeatsGarment = garments.contains { garment in
+                previousGarments.contains { $0.category == garment.category && $0.name == garment.name }
+            }
+            let repeatsOutfit = garments.count == previousGarments.count && garments.allSatisfy { garment in
+                previousGarments.contains { $0.category == garment.category && $0.color == garment.color }
+            }
+            if repeatsGarment || repeatsOutfit {
+                return previous.lookIndex
+            }
+        }
+        return nil
+    }
+
+    /// Lowercased words only, so "High-Waisted Trousers" and "high waisted trousers" compare equal.
+    private static func normalizedGarmentText(_ text: String) -> String {
+        text.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    // MARK: - Reference Photos (VLM)
+
+    private func referenceImagesData(of occasion: OccasionItem) -> [Data] {
+        occasion.referenceImagesData.isEmpty
+            ? (occasion.referenceImageData.map { [$0] } ?? [])
+            : occasion.referenceImagesData
+    }
+
+    /// Describes each reference photo with the on-device VLM and saves the descriptions for the occasion
+    /// (shown in the Output's VLM debug). Reports progress through `onStageChange`.
+    private func scanReferencePhotos(
+        of occasion: OccasionItem,
+        onStageChange: (@MainActor @Sendable (_ title: String, _ subtitle: String, _ vlmDescriptions: [String]) -> Void)?
+    ) async -> [String] {
+        let allImageData = referenceImagesData(of: occasion)
+        guard !allImageData.isEmpty else {
+            ReferenceImageStyleAnalyzer.shared.saveDescriptions([], forOccasionID: occasion.id)
+            return []
+        }
+
+        let totalRefs = allImageData.count
+        onStageChange?(
+            "Analyzing References",
+            "Scanning 1 of \(totalRefs) reference photo\(totalRefs == 1 ? "" : "s") with Qwen 2.5 VL...",
+            []
+        )
+        let descriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(
+            for: allImageData
+        ) { completed, total, descriptionsSoFar in
+            if completed < total {
+                onStageChange?(
+                    "Analyzing References",
+                    "Scanning \(completed + 1) of \(total) reference photos with Qwen 2.5 VL...",
+                    descriptionsSoFar
+                )
+            } else {
+                onStageChange?(
+                    "Analyzing References",
+                    "Scanned \(total) reference photo\(total == 1 ? "" : "s"). Preparing main LLM recommendation...",
+                    descriptionsSoFar
+                )
+            }
+        }
+        ReferenceImageStyleAnalyzer.shared.saveDescriptions(descriptions, forOccasionID: occasion.id)
+
+        print("\n====== [VLM DEBUG OUTPUT (\(occasion.title)) — ALL REFS → ALL LOOKS] ======")
+        if descriptions.isEmpty {
+            print("   (No VLM text descriptions returned)")
+        } else {
+            for (index, description) in descriptions.enumerated() {
+                print("   Ref \(index + 1): \(description)")
+            }
+        }
+        print("=========================================================================\n")
+        return descriptions
     }
 
     /// Condenses all per-photo VLM descriptions (Ref 1–3) into ONE short paragraph so the per-look prompt stays small.
@@ -273,94 +449,6 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         return cleaned.joined(separator: " ")
     }
 
-    /// Generates a single new tailored outfit look for an occasion, appending all previous looks and using high temperature (0.75) for diversity.
-    func generateSingleLook(
-        for occasion: OccasionItem,
-        profile: UserProfile,
-        lookIndex: Int,
-        existingLooks: [OutfitLook],
-        temperature: Float = 0.75
-    ) async throws -> OutfitLook {
-        // Validate the GGUF model file is present before attempting inference.
-        try LLMResource.validateModelAvailability()
-
-        // 1. Injected JSON short-circuit (prompt testing / UI previews).
-        if let injectedJSON = OutfitGenerationPipeline.injectedLLMResponseJSON, !injectedJSON.isEmpty {
-            if let looks = try? parseLooks(from: injectedJSON, colorSeason: profile.colorSeason), let first = looks.first {
-                first.lookIndex = lookIndex
-                return first
-            }
-        }
-
-        // 2. Retrieve or analyze user reference photos via VLM (scan 1-by-1, cached)
-        let allImageData = occasion.referenceImagesData.isEmpty
-            ? (occasion.referenceImageData.map { [$0] } ?? [])
-            : occasion.referenceImagesData
-        let persistedDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
-        let referenceDescriptions: [String]
-        if !allImageData.isEmpty && persistedDescriptions.count == allImageData.count {
-            referenceDescriptions = persistedDescriptions
-        } else {
-            referenceDescriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(for: allImageData)
-            if !referenceDescriptions.isEmpty {
-                ReferenceImageStyleAnalyzer.shared.saveDescriptions(referenceDescriptions, forOccasionID: occasion.id)
-            }
-        }
-        let analyzedImageStyle = await recapReferenceStyle(referenceDescriptions, occasionID: occasion.id)
-        if !referenceDescriptions.isEmpty {
-            print("👁️ [OutfitGenerationPipeline] Single look reference images ready (\(referenceDescriptions.count) photos available).")
-        }
-
-        // 3. Extract summaries of all previous looks generated for this occasion (e.g. 5 previous looks or more)
-        let previousSummaries = existingLooks.map { GeneratedLookSummary(from: $0) }
-
-        print("🔧 [OutfitGenerationPipeline] Generating single look \(lookIndex) (temperature: \(temperature), refs: \(referenceDescriptions.isEmpty ? "none" : "all \(referenceDescriptions.count) refs"))…")
-
-        // 4. Build single-look prompt injecting ALL reference descriptions (Ref 1–3)
-        let prompt = promptBuilder.buildFormattedPrompt(
-            occasion: occasion,
-            profile: profile,
-            lookIndex: lookIndex,
-            previousLooks: previousSummaries,
-            analyzedImageStyle: analyzedImageStyle
-        )
-
-        // 5. Run LLM generation with temperature
-        let rawOutput = try await LLMEngine.shared.generate(
-            prompt: prompt,
-            maxTokens: 4096,
-            temperature: temperature
-        )
-
-        print("✅ [OutfitGenerationPipeline] Look \(lookIndex) raw output (\(rawOutput.count) chars):\n\(rawOutput)")
-
-        let rawClean = rawOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-        let parsedLooks = try parseLooks(from: rawClean, colorSeason: profile.colorSeason)
-        guard let parsedLook = parsedLooks.first else {
-            throw LLMError.invalidOutput("LLM returned 0 looks for look index \(lookIndex).")
-        }
-
-        parsedLook.lookIndex = lookIndex
-        return parsedLook
-    }
-
-    /// Generates a single additional outfit look, taking into account all previously generated looks
-    /// so the new look remains distinct and tailored.
-    func generateSingleLook(
-        for occasion: OccasionItem,
-        profile: UserProfile,
-        existingLooks: [OutfitLook]
-    ) async throws -> OutfitLook {
-        try await generateSingleLook(
-            for: occasion,
-            profile: profile,
-            lookIndex: existingLooks.count,
-            existingLooks: existingLooks,
-            temperature: 0.75
-        )
-    }
-
-
     /// Synchronous generation for seamless instant UI transitions upon form submit.
     ///
     /// > Note: Real LLM inference runs asynchronously via `generateLooks(for:profile:)` in `OccasionOutputViewModel`.
@@ -395,7 +483,17 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
     /// 3. Falls back to extracting the outermost `{ ... }` JSON blob from the raw text.
     /// 4. If the JSON is truncated (e.g. hit token limit on look 5), closes open brackets
     ///    so whatever looks were fully completed (e.g. 4 looks) parse cleanly without failing.
-    public func parseLooks(from jsonString: String, colorSeason: ColorSeason? = nil) throws -> [OutfitLook] {
+    ///
+    /// - Parameters:
+    ///   - structure: The pieces the look should have; garments outside it are dropped when possible.
+    ///   - allowsOffPaletteAccent: The surprise look may keep one color outside the palette.
+    func parseLooks(
+        from jsonString: String,
+        colorSeason: ColorSeason? = nil,
+        structure: OutfitStructure? = nil,
+        allowsOffPaletteAccent: Bool = false
+    ) throws -> [OutfitLook] {
+        let options = ParseOptions(colorSeason: colorSeason, structure: structure, allowsOffPaletteAccent: allowsOffPaletteAccent)
         var cleanJSON = jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Strip markdown code fences the model may have wrapped the JSON in
@@ -405,20 +503,20 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         // 1. Try to decode the cleaned string directly as-is (happy path)
-        if let looks = try? decodeLooks(from: cleanJSON, colorSeason: colorSeason), !looks.isEmpty {
+        if let looks = try? decodeLooks(from: cleanJSON, options: options), !looks.isEmpty {
             return looks
         }
 
         // 2. Extract the first balanced { ... } block (cuts off trailing garbage like `}]` or extra tokens)
         if let balanced = extractFirstBalancedJSONObject(from: cleanJSON),
-           let looks = try? decodeLooks(from: balanced, colorSeason: colorSeason), !looks.isEmpty {
+           let looks = try? decodeLooks(from: balanced, options: options), !looks.isEmpty {
             print("✅ [OutfitGenerationPipeline] Decoded look from balanced JSON block.")
             return looks
         }
 
         // 3. Extract the outermost { ... } blob from mixed prose+JSON output
         if let extracted = extractJSONObject(from: cleanJSON),
-           let looks = try? decodeLooks(from: extracted, colorSeason: colorSeason), !looks.isEmpty {
+           let looks = try? decodeLooks(from: extracted, options: options), !looks.isEmpty {
             print("⚠️ [OutfitGenerationPipeline] Extracted JSON from mixed output.")
             return looks
         }
@@ -426,11 +524,11 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         // 4. Try wrapping with {"looks":[ ... ]} if it was an unnested look continuation
         if !cleanJSON.contains("\"looks\"") {
             let wrapped = "{\"looks\":[" + cleanJSON + "]}"
-            if let looks = try? decodeLooks(from: wrapped, colorSeason: colorSeason), !looks.isEmpty {
+            if let looks = try? decodeLooks(from: wrapped, options: options), !looks.isEmpty {
                 return looks
             }
             if let balancedWrapped = extractFirstBalancedJSONObject(from: wrapped),
-               let looks = try? decodeLooks(from: balancedWrapped, colorSeason: colorSeason), !looks.isEmpty {
+               let looks = try? decodeLooks(from: balancedWrapped, options: options), !looks.isEmpty {
                 return looks
             }
         }
@@ -438,20 +536,20 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         // 5. Auto-fix repeated `"garments": [` keys if present
         let sanitized = sanitizeMalformedLLMJSON(cleanJSON)
         if sanitized != cleanJSON {
-            if let looks = try? decodeLooks(from: sanitized, colorSeason: colorSeason), !looks.isEmpty {
+            if let looks = try? decodeLooks(from: sanitized, options: options), !looks.isEmpty {
                 return looks
             }
             if let balanced = extractFirstBalancedJSONObject(from: sanitized),
-               let looks = try? decodeLooks(from: balanced, colorSeason: colorSeason), !looks.isEmpty {
+               let looks = try? decodeLooks(from: balanced, options: options), !looks.isEmpty {
                 return looks
             }
         }
 
         // 6. JSON may be truncated (model hit maxTokens mid-generation). Try closing open
         //    brackets so the partial output becomes valid JSON with whatever looks were completed.
-        let repaired = repairTruncatedJSON(cleanJSON)
+        let repaired = repairTruncatedJSON(sanitized)
         do {
-            let looks = try decodeLooks(from: repaired, colorSeason: colorSeason)
+            let looks = try decodeLooks(from: repaired, options: options)
             if !looks.isEmpty {
                 print("⚠️ [OutfitGenerationPipeline] Decoded \(looks.count) looks from repaired truncated JSON.")
                 return looks
@@ -461,13 +559,20 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
 
         // 7. Fallback: Parse individual garment objects directly if the wrapper was badly mangled
-        if let fallbackLooks = extractLooksFromMalformedText(cleanJSON, colorSeason: colorSeason), !fallbackLooks.isEmpty {
+        if let fallbackLooks = extractLooksFromMalformedText(sanitized, options: options), !fallbackLooks.isEmpty {
             print("⚠️ [OutfitGenerationPipeline] Recovered \(fallbackLooks.count) looks using garment scanner fallback.")
             return fallbackLooks
         }
 
         // All strategies failed — throw with the raw output for debugging
         throw LLMError.invalidOutput("Could not parse JSON from LLM output (\(cleanJSON.count) chars):\n\(cleanJSON)")
+    }
+
+    /// How a parsed look is checked against the requested look.
+    private struct ParseOptions {
+        let colorSeason: ColorSeason?
+        let structure: OutfitStructure?
+        let allowsOffPaletteAccent: Bool
     }
 
     // MARK: - LLM JSON Sanitization & Resilient Fallback
@@ -515,11 +620,18 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "}, {")
         }
 
+        // Fix a dropped key: `"colorName":"Sage","#9CAF88"` -> `"colorName":"Sage","hexColor":"#9CAF88"`
+        let missingHexKeyPattern = ##"(\"colorName\"\s*:\s*\"[^\"]*\"\s*,\s*)(\"#[0-9A-Fa-f]{3,8}\")"##
+        if let regex = try? NSRegularExpression(pattern: missingHexKeyPattern, options: []) {
+            let range = NSRange(result.startIndex..<result.endIndex, in: result)
+            result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "$1\"hexColor\":$2")
+        }
+
         return result
     }
 
     /// Scans text for individual `{ "category": ... }` garment JSON objects if outer wrapper is broken.
-    private func extractLooksFromMalformedText(_ text: String, colorSeason: ColorSeason?) -> [OutfitLook]? {
+    private func extractLooksFromMalformedText(_ text: String, options: ParseOptions) -> [OutfitLook]? {
         // Find fitRationale if present
         let fitRationale: String
         let rationalePattern = #"\"fitRationale\"\s*:\s*\"([^\"]+)\""#
@@ -533,7 +645,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
         // Find all garment-like objects: { ... "category" ... }
         var garments: [GarmentItem] = []
-        let palette = colorSeason?.palette ?? []
+        let palette = options.colorSeason?.palette ?? []
 
         var depth = 0
         var objStart: String.Index? = nil
@@ -564,7 +676,8 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                             // Pieces outside Outer / Top / Bottom (shoes, accessories) are skipped.
                             if let cat = GarmentCategory(generatedLabel: dto.category)
                                 ?? GarmentCategory(generatedLabel: dto.name) {
-                                let color = resolveSeasonalColor(rawName: dto.colorName, rawHex: dto.hexColor, palette: palette)
+                                let color = resolveSeasonalColor(rawName: dto.colorName, rawHex: dto.hexColor, palette: palette,
+                                                                 allowsOffPalette: options.allowsOffPaletteAccent)
                                 let garment = GarmentItem(
                                     category: cat,
                                     name: dto.name,
@@ -593,7 +706,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             isBookmarked: false,
             lookImageData: nil
         )
-        let trimmedGarments = makeOutfitGarments(from: garments)
+        let trimmedGarments = makeOutfitGarments(from: garments, structure: options.structure)
         for g in trimmedGarments {
             g.outfitLook = look
         }
@@ -603,16 +716,26 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
     // MARK: - JSON Parsing Helpers
 
-    /// Keeps the first garment of each category (one inner top, one outer, one bottom)
-    /// and orders them like the Output cards: inner top, outer, bottom.
-    private func makeOutfitGarments(from garments: [GarmentItem]) -> [GarmentItem] {
+    /// Keeps one garment per category, ordered like the Output cards.
+    /// - A dress replaces a separate top and bottom, so they are dropped when a dress is present.
+    /// - With a requested `structure`, garments outside it are dropped, unless that would leave
+    ///   nothing (the model's own valid outfit is kept instead of an empty look).
+    private func makeOutfitGarments(from garments: [GarmentItem], structure: OutfitStructure?) -> [GarmentItem] {
         var seenCategories: Set<GarmentCategory> = []
-        return garments
-            .filter { seenCategories.insert($0.category).inserted }
-            .sortedForOutfitDisplay()
+        var outfit = garments.filter { seenCategories.insert($0.category).inserted }
+        if seenCategories.contains(.dress) {
+            outfit.removeAll { $0.category == .top || $0.category == .bottom }
+        }
+        if let structure {
+            let requested = outfit.filter { structure.allowedCategories.contains($0.category) }
+            if !requested.isEmpty {
+                outfit = requested
+            }
+        }
+        return outfit.sortedForOutfitDisplay()
     }
 
-    private func decodeLooks(from jsonString: String, colorSeason: ColorSeason? = nil) throws -> [OutfitLook] {
+    private func decodeLooks(from jsonString: String, options: ParseOptions) throws -> [OutfitLook] {
         guard let data = jsonString.data(using: .utf8) else {
             throw LLMError.invalidOutput("Unable to convert JSON string to UTF-8 data")
         }
@@ -629,7 +752,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             throw LLMError.invalidOutput("Unable to decode looks from JSON")
         }
 
-        let palette = colorSeason?.palette ?? []
+        let palette = options.colorSeason?.palette ?? []
         var looks: [OutfitLook] = []
         for lookDTO in lookDTOs {
             let look = OutfitLook(
@@ -648,7 +771,8 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 let resolvedColor = resolveSeasonalColor(
                     rawName: gDTO.colorName,
                     rawHex: gDTO.hexColor,
-                    palette: palette
+                    palette: palette,
+                    allowsOffPalette: options.allowsOffPaletteAccent
                 )
 
                 let garment = GarmentItem(
@@ -662,7 +786,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 garments.append(garment)
             }
             // At most one garment per category, ordered inner top, outer, bottom.
-            let outfitGarments = makeOutfitGarments(from: garments)
+            let outfitGarments = makeOutfitGarments(from: garments, structure: options.structure)
             for garment in outfitGarments {
                 garment.outfitLook = look
             }
@@ -672,39 +796,66 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         return looks
     }
 
-    /// Snaps the model's generated color name/hex code to the verified seasonal palette swatch.
-    /// If the model outputs a hallucinated name/hex, this finds the best matching seasonal color.
+    /// Snaps the model's color to the seasonal palette.
+    /// 1. Same hex as a swatch, 2. same or contained name, 3. with `allowsOffPalette` (surprise look)
+    /// a valid hex is kept as it is, 4. otherwise the closest swatch by RGB distance, so the result
+    /// is stable and close to what the model meant (the old `hashValue` pick changed on every launch).
     private func resolveSeasonalColor(
         rawName: String,
         rawHex: String,
-        palette: [ColorSeason.ColorSwatch]
+        palette: [ColorSeason.ColorSwatch],
+        allowsOffPalette: Bool = false
     ) -> (name: String, hex: String) {
+        let cleanHex = rawHex.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).uppercased()
         guard !palette.isEmpty else {
-            return (rawName, rawHex.hasPrefix("#") ? rawHex : "#\(rawHex)")
+            return (rawName, "#\(cleanHex)")
         }
 
-        // 1. Exact or normalized hex match in palette
-        let cleanHex = rawHex.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).uppercased()
         if let match = palette.first(where: {
             $0.hex.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).uppercased() == cleanHex
         }) {
             return (match.name, match.hex)
         }
 
-        // 2. Exact or substring name match in palette
         let lowerName = rawName.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        if let match = palette.first(where: {
+        if !lowerName.isEmpty, let match = palette.first(where: {
             let palName = $0.name.lowercased()
             return palName == lowerName || palName.contains(lowerName) || lowerName.contains(palName)
         }) {
             return (match.name, match.hex)
         }
 
-        // 3. If the model hallucinated a completely unknown color, fallback to a harmonious palette swatch
-        // based on hash consistency so it's stable and strictly adheres to the user's season.
-        let stableIndex = abs(rawName.hashValue) % palette.count
+        let rawColor = rgbComponents(fromHex: cleanHex)
+        if allowsOffPalette, rawColor != nil {
+            return (rawName, "#\(cleanHex)")
+        }
+
+        if let rawColor, let closest = palette.min(by: { first, second in
+            colorDistance(rawColor, rgbComponents(fromHex: first.hex)) < colorDistance(rawColor, rgbComponents(fromHex: second.hex))
+        }) {
+            return (closest.name, closest.hex)
+        }
+
+        // No usable hex: a stable pick from the name (same name, same swatch on every launch).
+        let stableIndex = rawName.unicodeScalars.reduce(0) { ($0 + Int($1.value)) % palette.count }
         let fallback = palette[stableIndex]
         return (fallback.name, fallback.hex)
+    }
+
+    private func rgbComponents(fromHex hex: String) -> (red: Double, green: Double, blue: Double)? {
+        let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
+        return (Double((value >> 16) & 0xFF), Double((value >> 8) & 0xFF), Double(value & 0xFF))
+    }
+
+    /// RGB distance; a swatch with an unreadable hex counts as infinitely far.
+    private func colorDistance(_ color: (red: Double, green: Double, blue: Double),
+                               _ other: (red: Double, green: Double, blue: Double)?) -> Double {
+        guard let other else { return .infinity }
+        let redDelta = color.red - other.red
+        let greenDelta = color.green - other.green
+        let blueDelta = color.blue - other.blue
+        return (redDelta * redDelta + greenDelta * greenDelta + blueDelta * blueDelta).squareRoot()
     }
 
     /// Scans the string for the first `{` and the last `}` and returns the substring between them.
@@ -804,289 +955,6 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             trimmedRepaired.append(closeChar)
         }
         return trimmedRepaired
-    }
-
-    // MARK: - Domain-Rule Synthesis Engine
-
-    /// Synthesizes 5 highly tailored looks matching the 5 archetypes and personal profiling rules.
-    private func synthesizeLooks(
-        for occasion: OccasionItem,
-        bodyType: BodyType,
-        torsoBalance: TorsoBalance,
-        colorSeason: ColorSeason
-    ) -> [OutfitLook] {
-        let swatches = colorSeason.palette
-        let dresscode = occasion.dresscode.lowercased()
-        let isFormal = dresscode.contains("formal") || dresscode.contains("black tie") || dresscode.contains("cocktail") || dresscode.contains("gala")
-        let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
-
-        var generatedLooks: [OutfitLook] = []
-
-        for index in 0..<5 {
-            let look = OutfitLook(
-                lookIndex: index,
-                fitRationale: generateLookFitRationale(
-                    index: index,
-                    occasion: occasion,
-                    bodyType: bodyType,
-                    torsoBalance: torsoBalance,
-                    colorSeason: colorSeason,
-                    hasReferenceImages: hasReferenceImages
-                ),
-                isBookmarked: false,
-                lookImageData: nil // Image Playground generation is deferred
-            )
-
-            let garments = generateGarments(
-                index: index,
-                isFormal: isFormal,
-                bodyType: bodyType,
-                torsoBalance: torsoBalance,
-                swatches: swatches,
-                visions: occasion.visions
-            )
-
-            for g in garments {
-                g.outfitLook = look
-            }
-            look.garments = garments
-            generatedLooks.append(look)
-        }
-
-        return generatedLooks
-    }
-
-    // MARK: - Look Fit Rationale Builder
-
-    private func generateLookFitRationale(
-        index: Int,
-        occasion: OccasionItem,
-        bodyType: BodyType,
-        torsoBalance: TorsoBalance,
-        colorSeason: ColorSeason,
-        hasReferenceImages: Bool
-    ) -> String {
-        let visionText: String
-        if let vision = occasion.visions.first {
-            visionText = " Infused with \(vision.adjective.lowercased()) styling using \(vision.materialsAndSilhouettes.lowercased())."
-        } else {
-            visionText = ""
-        }
-
-        let referenceNote = hasReferenceImages
-            ? " Subtly adjusted to reflect textures and aesthetic mood from your reference photos."
-            : ""
-
-        switch index {
-        case 0:
-            return "Coordinated for \(occasion.title), featuring cuts that flatter your \(bodyType.displayName) silhouette and \(torsoBalance.rawValue.lowercased()). Exact \(colorSeason.rawValue) tones establish harmonic balance.\(visionText)\(referenceNote)"
-
-        case 1:
-            return "Tailored for \(occasion.dresscode.isEmpty ? "the occasion" : occasion.dresscode), optimizing your \(torsoBalance.rawValue.lowercased()) proportions and complementing your natural waistline in \(colorSeason.rawValue) shades.\(visionText)\(referenceNote)"
-
-        case 2:
-            return "Structured proportions designed to enhance your \(bodyType.displayName) line and collarbones, balanced with rich \(colorSeason.rawValue) palette swatches.\(visionText)\(referenceNote)"
-
-        case 3:
-            return "A clean vertical silhouette that visually elongates your frame and optimizes your \(torsoBalance.rawValue.lowercased()) balance effortlessly for \(occasion.title).\(visionText)\(referenceNote)"
-
-        default:
-            return "A complete ensemble designed for \(occasion.title), tailored to your \(bodyType.displayName) silhouette and \(torsoBalance.rawValue.lowercased()) in radiant \(colorSeason.rawValue) tones.\(visionText)\(referenceNote)"
-        }
-    }
-
-    // MARK: - Garment Synthesis with Individual Rationales
-
-    private func generateGarments(
-        index: Int,
-        isFormal: Bool,
-        bodyType: BodyType,
-        torsoBalance: TorsoBalance,
-        swatches: [ColorSeason.ColorSwatch],
-        visions: [StyleVision]
-    ) -> [GarmentItem] {
-        // Partition swatches into stylist tonal roles for harmonic outfit coordination
-        let neutralCount = min(8, swatches.count)
-        let neutrals = Array(swatches[0..<neutralCount])
-        let accents = Array(swatches[neutralCount..<min(20, swatches.count)])
-        let statements = Array(swatches[min(20, swatches.count)..<swatches.count])
-
-        // Harmonic Color Selection across the 35 swatches:
-        // 1. Outerwear: grounding neutral or deep tonal statement layer
-        let c1: ColorSeason.ColorSwatch = (index % 2 == 0)
-            ? (neutrals.indices.contains(index) ? neutrals[index] : swatches[0])
-            : (statements.isEmpty ? swatches[(index + 15) % swatches.count] : statements[(index * 2) % statements.count])
-
-        // 2. Top: flattering, vivid seasonal accent near the face
-        let c2: ColorSeason.ColorSwatch = accents.isEmpty
-            ? swatches[(index * 4 + 7) % swatches.count]
-            : accents[(index * 2 + 1) % accents.count]
-
-        // 3. Bottom: foundational grounding neutral trousers/skirt
-        let c3: ColorSeason.ColorSwatch = neutrals.isEmpty
-            ? swatches[(index + 4) % swatches.count]
-            : neutrals[(index + 3) % neutrals.count]
-
-        let (outerData, topData, bottomData) = garmentTemplates(
-            index: index,
-            isFormal: isFormal,
-            bodyType: bodyType,
-            torsoBalance: torsoBalance
-        )
-
-        let outer = GarmentItem(
-            category: .outer,
-            name: outerData.name,
-            material: outerData.material,
-            colorName: c1.name,
-            hexColor: c1.hex,
-            rationale: outerData.rationale
-        )
-
-        let top = GarmentItem(
-            category: .top,
-            name: topData.name,
-            material: topData.material,
-            colorName: c2.name,
-            hexColor: c2.hex,
-            rationale: topData.rationale
-        )
-
-        let bottom = GarmentItem(
-            category: .bottom,
-            name: bottomData.name,
-            material: bottomData.material,
-            colorName: c3.name,
-            hexColor: c3.hex,
-            rationale: bottomData.rationale
-        )
-
-        return [outer, top, bottom]
-    }
-
-    // MARK: - Garment Templates & Body-Fit Rationales
-
-    private func garmentTemplates(
-        index: Int,
-        isFormal: Bool,
-        bodyType: BodyType,
-        torsoBalance: TorsoBalance
-    ) -> (
-        outer: (name: String, material: String, rationale: String),
-        top: (name: String, material: String, rationale: String),
-        bottom: (name: String, material: String, rationale: String)
-    ) {
-        // Tailor specific garment cuts and rationales to BodyType and TorsoBalance
-        let torsoNote: String
-        let riseRecommendation: String
-        switch torsoBalance {
-        case .shortTorso:
-            torsoNote = "Untucked hemline visually lowers the waistline to elongate your upper body silhouette."
-            riseRecommendation = "Mid-to-low rise waistband avoids compressing your torso while elongating the torso-to-leg ratio."
-        case .balanced:
-            torsoNote = "Clean hip-level hemline preserves your natural 1:1 proportion between upper body and legs."
-            riseRecommendation = "Regular-rise waistline anchors naturally at the hip bone, maintaining balanced body symmetry."
-        case .longTorso:
-            torsoNote = "Tucked or cropped hemline visually raises the waistline to lengthen your leg proportion."
-            riseRecommendation = "High-waisted tailoring creates an elevated waistline, visually balancing a longer torso."
-        }
-
-        switch index {
-        case 0: // Signature Classic
-            let outerName = isFormal ? "Tailored Single-Breasted Blazer" : "Structured Soft Blazer"
-            let outerMaterial = isFormal ? "Fine Crepe Wool" : "Textured Cotton Blend"
-            let outerRationale = "Clean single-breasted lapels narrow shoulder breadth and define the waistline without added bulk, complementing your \(bodyType.displayName)."
-
-            let topName = isFormal ? "Silk V-Neck Shell" : "Pima Cotton Crewneck"
-            let topMaterial = isFormal ? "Mulberry Silk" : "Mercerized Pima Cotton"
-            let topRationale = "The neckline draws focus vertically toward your centerline, flattering the bust and collarbones. \(torsoNote)"
-
-            let bottomName = isFormal ? "Straight-Leg Flat-Front Trousers" : "Tailored Chino Trousers"
-            let bottomMaterial = isFormal ? "Fluid Wool Gabardine" : "Cotton Twill"
-            let bottomRationale = "\(riseRecommendation) The straight cut creates a sleek vertical column that balances lower body contours."
-
-            return (
-                (outerName, outerMaterial, outerRationale),
-                (topName, topMaterial, topRationale),
-                (bottomName, bottomMaterial, bottomRationale)
-            )
-
-        case 1: // Contemporary Relaxed
-            let outerName = "Unstructured Overshirt"
-            let outerMaterial = "Brushed Tencel Twill"
-            let outerRationale = "Open front creates fluid vertical lines down the torso, softening width across the midsection for an effortless drape."
-
-            let topName = "Relaxed Camp-Collar Shirt"
-            let topMaterial = "Textured Linen Blend"
-            let topRationale = "The open camp collar creates a subtle V-shape framing the neck. \(torsoNote)"
-
-            let bottomName = "Relaxed Pleated Trousers"
-            let bottomMaterial = "Draped Lyocell Gabardine"
-            let bottomRationale = "\(riseRecommendation) Single pleats skim gently over the thighs without creating excess volume."
-
-            return (
-                (outerName, outerMaterial, outerRationale),
-                (topName, topMaterial, topRationale),
-                (bottomName, bottomMaterial, bottomRationale)
-            )
-
-        case 2: // Elevated Statement
-            let outerName = isFormal ? "Peak-Lapel Dinner Jacket" : "Sculpted Duster Coat"
-            let outerMaterial = isFormal ? "Silk-Blend Jacquard" : "Double-Faced Wool Blend"
-            let outerRationale = "Architectural lapels frame the upper silhouette and enhance posture, drawing attention upward toward your face."
-
-            let topName = "Fitted Mockneck Knit"
-            let topMaterial = "Fine Merino Wool"
-            let topRationale = "A close-to-body knit provides a smooth, unbulky base layer that highlights waist definition. \(torsoNote)"
-
-            let bottomName = "Wide-Leg Palazzo Trousers"
-            let bottomMaterial = "Fluid Fluid Crepe"
-            let bottomRationale = "\(riseRecommendation) Sweeping wide leg balances upper structure and creates graceful movement."
-
-            return (
-                (outerName, outerMaterial, outerRationale),
-                (topName, topMaterial, topRationale),
-                (bottomName, bottomMaterial, bottomRationale)
-            )
-
-        case 3: // Minimalist Sleek
-            let outerName = "Minimalist Collarless Jacket"
-            let outerMaterial = "Compact Wool Crepe"
-            let outerRationale = "Eliminating collar bulk keeps focus on your clean silhouette, producing a streamlined profile without distractions."
-
-            let topName = "Seamless High-Neck Shell"
-            let topMaterial = "Matte Rayon Jersey"
-            let topRationale = "Clean, unembellished cut flatters your shoulder line and provides a sleek column silhouette. \(torsoNote)"
-
-            let bottomName = "Slim-Straight Cigarette Pants"
-            let bottomMaterial = "Tailored Bi-Stretch Crepe"
-            let bottomRationale = "\(riseRecommendation) Tapered straight line visually lengthens the legs while contouring cleanly."
-
-            return (
-                (outerName, outerMaterial, outerRationale),
-                (topName, topMaterial, topRationale),
-                (bottomName, bottomMaterial, bottomRationale)
-            )
-
-        default: // Layered Dynamic
-            let outerName = "Belted Trench Duster"
-            let outerMaterial = "Water-Resistant Cotton Gabardine"
-            let outerRationale = "Adjustable waist tie allows precise waist placement customization to accentuate your natural silhouette curves."
-
-            let topName = "Fine Gauge Polo Sweater"
-            let topMaterial = "Cashmere Silk Blend"
-            let topRationale = "Sharp collar with neat button placket adds refined vertical detail to your upper torso. \(torsoNote)"
-
-            let bottomName = "Tailored Fluid Culottes"
-            let bottomMaterial = "Virgin Wool Blend"
-            let bottomRationale = "\(riseRecommendation) A-line flare skims over hips and thighs while balancing upper layering."
-
-            return (
-                (outerName, outerMaterial, outerRationale),
-                (topName, topMaterial, topRationale),
-                (bottomName, bottomMaterial, bottomRationale)
-            )
-        }
     }
 }
 

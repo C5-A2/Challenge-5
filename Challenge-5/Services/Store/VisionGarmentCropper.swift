@@ -28,6 +28,8 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
         /// An outer piece, which can be longer than a top (coats).
         let outerBody: CGRect
         let lowerBody: CGRect
+        /// A one-piece garment: from the neck to about the knees.
+        let dressBody: CGRect
         /// `nil` when the inner layer can't be located (no body pose found).
         let innerTop: CGRect?
         /// Where the outer piece ends (pixels from the top), `nil` when it can't be found.
@@ -63,6 +65,8 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
             }
         case .bottom:
             garmentRect = bottomRect(in: regions, hasOuterLayer: request.hasOuterLayer)
+        case .dress:
+            garmentRect = regions.dressBody
         }
 
         let clippedRect = garmentRect.intersection(imageBounds).integral
@@ -168,8 +172,13 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
         let innerTop = CGRect(x: shoulderCenterX - innerTopWidth / 2, y: upperStartY,
                               width: innerTopWidth, height: hipY - upperStartY)
 
+        let dressEndY = min(hipY + torsoLength * StoreConstants.Crop.dressExtensionBelowHipTorsoRatio,
+                            personBounds.maxY)
+        let dressBody = CGRect(x: personBounds.minX, y: upperStartY,
+                               width: personBounds.width, height: dressEndY - upperStartY)
+
         return BodyRegions(upperBody: upperBody, outerBody: outerBody, lowerBody: lowerBody,
-                           innerTop: innerTop, outerHemY: hemY, torsoLength: torsoLength)
+                           dressBody: dressBody, innerTop: innerTop, outerHemY: hemY, torsoLength: torsoLength)
     }
 
     /// Regions from the person's proportions, used when no body pose is found (C5-59).
@@ -187,8 +196,14 @@ actor VisionGarmentCropper: GarmentCroppingProtocol {
             width: personBounds.width,
             height: personBounds.height * StoreConstants.Crop.fallbackLowerBodyHeightRatio
         )
+        let dressBody = CGRect(
+            x: personBounds.minX,
+            y: upperBody.minY,
+            width: personBounds.width,
+            height: personBounds.height * StoreConstants.Crop.fallbackDressHeightRatio
+        )
         return BodyRegions(upperBody: upperBody, outerBody: upperBody, lowerBody: lowerBody,
-                           innerTop: nil, outerHemY: nil, torsoLength: nil)
+                           dressBody: dressBody, innerTop: nil, outerHemY: nil, torsoLength: nil)
     }
 
     // MARK: - Outer Hem

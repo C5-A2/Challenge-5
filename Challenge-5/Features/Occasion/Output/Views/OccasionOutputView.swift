@@ -219,7 +219,8 @@ struct OccasionOutputView: View {
         .onChange(of: viewModel.selectedLookIndex) { _, _ in
             updatePlaygroundPackage()
         }
-        .task(id: viewModel.currentLook?.id) {
+        // Re-crop when the look changes or gets a new image (Image Playground).
+        .task(id: "\(viewModel.currentLook?.id.uuidString ?? "")-\(viewModel.currentLook?.lookImageData?.count ?? 0)") {
             // Crop the garments of the look on screen for the "On this outfit" thumbnails.
             await viewModel.loadCurrentGarmentCrops()
         }
@@ -273,13 +274,15 @@ struct OccasionOutputView: View {
         }
     }
 
-    private var activePlaygroundSourceImage: Image {
+    /// The user's own front body photo. Without one, Image Playground creates the person from
+    /// the text only (no mock photo, which made every result look like `mock_result_1`).
+    private var activePlaygroundSourceImage: Image? {
         let activeProfile = userProfiles.first ?? viewModel.profile
         if let frontData = activeProfile?.frontBodyPhotoData,
            let uiImage = UIImage(data: frontData) {
             return Image(uiImage: uiImage)
         }
-        return Image("user_profile_avatar")
+        return nil
     }
     
     // MARK: - Studio Stage Background (Asset Spotlight)
