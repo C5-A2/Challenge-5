@@ -5,14 +5,16 @@
 //  Created by Team Challenge-5 on 28/10/26.
 //
 
+import PhotosUI
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// A temporary profile configuration sheet allowing developers and testers
-/// to choose and persist the user's `BodyType`, `TorsoBalance`, and `ColorSeason`.
+/// to choose and persist the user's `ColorSeason`, `BodyType`, `TorsoBalance`, and Front Profile Body Scan photo.
 ///
 /// Data saved here is written to the persistent SwiftData `UserProfile` and feeds directly
-/// into `OutfitPromptBuilder` and `OutfitGenerationPipeline`.
+/// into `OutfitPromptBuilder`, `OutfitGenerationPipeline`, and Image Playground.
 struct TemporaryProfileFormSheet: View {
     
     // MARK: - Environment & SwiftData Query
@@ -26,6 +28,10 @@ struct TemporaryProfileFormSheet: View {
     @State private var selectedBodyType: BodyType = .hourglass
     @State private var selectedTorsoBalance: TorsoBalance = .balanced
     @State private var selectedColorSeason: ColorSeason = .trueAutumn
+    @State private var selectedFrontBodyPhotoData: Data? = nil
+    @State private var frontPhotoPickerItem: PhotosPickerItem? = nil
+    @State private var isShowingCameraPicker: Bool = false
+    @State private var isProcessingFrontPhoto: Bool = false
     @State private var isShowingPromptPreview: Bool = false
     @State private var isShowingJSONInjector: Bool = false
     @State private var pastedLLMJSON: String = ""
@@ -74,22 +80,25 @@ struct TemporaryProfileFormSheet: View {
                             // Informational Notice Banner
                             bannerNoticeView
                             
-                            // 1. Body Type Picker Section
-                            bodyTypeSection
-                            
-                            // 2. Torso Balance Picker Section
-                            torsoBalanceSection
-                            
-                            // 3. Color Season Picker Section
+                            // 1. Color Season Picker Section
                             colorSeasonSection
                             
-                            // 4. Live Prompt Inspector (Collapsible)
+                            // 2. Body Type Picker Section
+                            bodyTypeSection
+                            
+                            // 3. Torso Balance Picker Section
+                            torsoBalanceSection
+                            
+                            // 4. Front Profile Body Scan Picture Section
+                            frontBodyScanSection
+                            
+                            // 5. Live Prompt Inspector (Collapsible)
                             promptInspectorSection
                             
-                            // 5. LLM JSON Response Injector (Collapsible - Prompt Testing)
+                            // 6. LLM JSON Response Injector (Collapsible - Prompt Testing)
                             jsonInjectorSection
                             
-                            // 6. Save Button
+                            // 7. Save Button
                             PrimaryPillButton(
                                 title: "Save Profile to Device",
                                 iconSystemName: "checkmark"
@@ -111,6 +120,20 @@ struct TemporaryProfileFormSheet: View {
                 }
             }
             .onAppear(perform: loadCurrentProfile)
+            .onChange(of: frontPhotoPickerItem) { _, newItem in
+                guard let newItem else { return }
+                Task {
+                    await loadPickedFrontPhoto(from: newItem)
+                }
+            }
+            .fullScreenCover(isPresented: $isShowingCameraPicker) {
+                DebugFrontCameraPicker { capturedImage in
+                    Task {
+                        await processSelectedFrontUIImage(capturedImage)
+                    }
+                }
+                .ignoresSafeArea()
+            }
         }
     }
     
@@ -504,6 +527,137 @@ struct TemporaryProfileFormSheet: View {
         .padding(.leading, 4)
     }
     
+    // MARK: - Subviews: Front Profile Body Scan Section
+
+    private var frontBodyScanSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader(
+                title: "Front Profile Body Scan",
+                subtitle: "Select or capture a front full-body photo for your profile and Image Playground"
+            )
+
+            HStack(alignment: .center, spacing: 14) {
+                // Thumbnail Preview
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(AppColors.cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(AppColors.inputBorder, lineWidth: 1)
+                        )
+
+                    if isProcessingFrontPhoto {
+                        ProgressView()
+                            .tint(AppColors.espressoTitle)
+                    } else if let data = selectedFrontBodyPhotoData,
+                              let uiImage = UIImage(data: data) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFit()
+                            .padding(4)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    } else {
+                        VStack(spacing: 6) {
+                            Image(systemName: "figure.stand")
+                                .font(.system(size: 28))
+                                .foregroundStyle(AppColors.mutedCaption.opacity(0.6))
+                            Text("No Photo")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(AppColors.mutedCaption)
+                        }
+                    }
+                }
+                .frame(width: 96, height: 132)
+
+                // Picker Actions
+                VStack(alignment: .leading, spacing: 8) {
+                    PhotosPicker(
+                        selection: $frontPhotoPickerItem,
+                        matching: .images
+                    ) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "photo.on.rectangle")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Choose from Photos")
+                                .font(.system(size: 13.5, weight: .semibold))
+                            Spacer()
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(AppColors.primaryBlack)
+                        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+
+                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                        Button {
+                            isShowingCameraPicker = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "camera")
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text("Take Photo")
+                                    .font(.system(size: 13.5, weight: .semibold))
+                                Spacer()
+                            }
+                            .foregroundStyle(AppColors.espressoTitle)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .background(AppColors.cardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                    .strokeBorder(AppColors.inputBorder, lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    HStack(spacing: 8) {
+                        Button {
+                            if let sampleImg = UIImage(named: "mock_result_2") ?? UIImage(named: "mock_result_1"),
+                               let png = sampleImg.pngData() {
+                                selectedFrontBodyPhotoData = png
+                            }
+                        } label: {
+                            Text("Use Sample")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppColors.espressoTitle)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .background(AppColors.circularButtonBackground)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        if selectedFrontBodyPhotoData != nil {
+                            Button {
+                                selectedFrontBodyPhotoData = nil
+                            } label: {
+                                Text("Clear")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(AppColors.destructiveRed)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 7)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(AppColors.cardBackground.opacity(0.55))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(AppColors.inputBorder, lineWidth: 1)
+                    )
+            )
+        }
+    }
+
     // MARK: - Logic & Actions
     
     /// Loads values from the persistent SwiftData UserProfile if one already exists.
@@ -521,7 +675,26 @@ struct TemporaryProfileFormSheet: View {
             if let season = existing.colorSeason {
                 selectedColorSeason = season
             }
+            if let frontData = existing.frontBodyPhotoData {
+                selectedFrontBodyPhotoData = frontData
+            }
         }
+    }
+
+    private func loadPickedFrontPhoto(from item: PhotosPickerItem) async {
+        defer { frontPhotoPickerItem = nil }
+        guard let rawData = try? await item.loadTransferable(type: Data.self),
+              let uiImage = UIImage(data: rawData) else { return }
+        await processSelectedFrontUIImage(uiImage)
+    }
+
+    private func processSelectedFrontUIImage(_ uiImage: UIImage) async {
+        isProcessingFrontPhoto = true
+        let processedData = await OutfitAttributeMapper.removeBackground(from: uiImage)
+            ?? uiImage.jpegData(compressionQuality: 0.88)
+            ?? uiImage.pngData()
+        selectedFrontBodyPhotoData = processedData
+        isProcessingFrontPhoto = false
     }
     
     /// Generates a snippet showing the exact directives the model will receive.
@@ -552,6 +725,10 @@ struct TemporaryProfileFormSheet: View {
         profile.bodyType = selectedBodyType
         profile.torsoBalance = selectedTorsoBalance
         profile.colorSeason = selectedColorSeason
+        profile.frontBodyPhotoData = selectedFrontBodyPhotoData
+        if profile.styleVision == nil {
+            profile.styleVision = .confident
+        }
         
         // Ensure default body measurements exist so hasCompletedProfileSetup is valid
         if profile.measurements == nil {
@@ -562,7 +739,7 @@ struct TemporaryProfileFormSheet: View {
         
         do {
             try modelContext.save()
-            print("✅ [TemporaryProfileFormSheet] Saved Profile: Body=\(selectedBodyType.rawValue), Torso=\(selectedTorsoBalance.rawValue), ColorSeason=\(selectedColorSeason.rawValue)")
+            print("✅ [TemporaryProfileFormSheet] Saved Profile: Body=\(selectedBodyType.rawValue), Torso=\(selectedTorsoBalance.rawValue), ColorSeason=\(selectedColorSeason.rawValue), FrontBodyScan=\(selectedFrontBodyPhotoData?.count ?? 0) bytes")
             
             onSave?(profile)
             
@@ -576,6 +753,49 @@ struct TemporaryProfileFormSheet: View {
         } catch {
             print("❌ [TemporaryProfileFormSheet] Failed to save profile: \(error.localizedDescription)")
             dismiss()
+        }
+    }
+}
+
+// MARK: - Native Camera Wrapper for Debug Front Body Scan
+
+private struct DebugFrontCameraPicker: UIViewControllerRepresentable {
+    var onImagePicked: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.cameraCaptureMode = .photo
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: DebugFrontCameraPicker
+
+        init(parent: DebugFrontCameraPicker) {
+            self.parent = parent
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            if let image = info[.originalImage] as? UIImage {
+                parent.onImagePicked(image)
+            }
+            parent.dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
         }
     }
 }

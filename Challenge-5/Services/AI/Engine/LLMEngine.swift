@@ -208,6 +208,25 @@ public actor LLMEngine {
         #endif
     }
     
+    /// Releases loaded LLM model and context weights from RAM/VRAM without tearing down the shared llama backend,
+    /// allowing `VLMEngine` to run multimodal reference analysis safely without simultaneous Metal VRAM contention.
+    public func releaseModelWeights() {
+        #if !targetEnvironment(simulator)
+        let hadAllocation = (context != nil || model != nil)
+        if let ctx = context {
+            llama_free(ctx)
+            context = nil
+        }
+        if let mdl = model {
+            llama_model_free(mdl)
+            model = nil
+        }
+        if hadAllocation {
+            print("🧹 [LLMEngine] Released text LLM weights from memory before VLM reference scan.")
+        }
+        #endif
+    }
+
     /// Unloads the model and context from RAM/VRAM to free memory.
     public func unloadModel() {
         #if !targetEnvironment(simulator)
@@ -240,36 +259,99 @@ public actor LLMEngine {
         #if targetEnvironment(simulator)
         // Instant simulated response for Xcode Previews and Simulator without crashing
         try? await Task.sleep(nanoseconds: 600_000_000)
+        let targetIndex: Int
+        if let regex = try? NSRegularExpression(pattern: #"\"lookIndex\":\s*(\d+)"#),
+           let match = regex.firstMatch(in: prompt, range: NSRange(prompt.startIndex..<prompt.endIndex, in: prompt)),
+           let range = Range(match.range(at: 1), in: prompt),
+           let num = Int(prompt[range]) {
+            targetIndex = num
+        } else {
+            targetIndex = 0
+        }
+
+        let simulatorOutfits: [(outer: (String, String, String, String), top: (String, String, String, String), bottom: (String, String, String, String), rationale: String)] = [
+            (
+                outer: ("Tailored Notch-Lapel Blazer", "Crepe Wool", "Navy", "#1B2A4A"),
+                top: ("Silk V-Neck Shell", "Mulberry Silk", "Ivory", "#FDFBF7"),
+                bottom: ("Wide-Leg Pleated Trousers", "Gabardine", "Charcoal", "#2C3539"),
+                rationale: "Clean single-breasted lines vertically elongate the silhouette and balance shoulder width."
+            ),
+            (
+                outer: ("Double-Faced Duster Coat", "Cashmere Blend", "Terracotta Ochre", "#C36B3D"),
+                top: ("Fine Ribbed Mockneck Knit", "Merino Wool", "Warm Umber", "#4A3222"),
+                bottom: ("Fluid Tailored Chinos", "Fine Twill", "Rich Caramel", "#82502E"),
+                rationale: "Warm earthy tones establish a streamlined vertical column that softens proportions."
+            ),
+            (
+                outer: ("Fluid Cocoon Kimono Jacket", "Virgin Wool", "Dusty Mauve", "#8E5D67"),
+                top: ("Draped Boatneck Blouse", "Charmeuse Silk", "Pale Blush", "#E8D7D8"),
+                bottom: ("Straight Cigarette Pants", "Stretch Wool", "Deep Plum", "#5E454B"),
+                rationale: "Gentle drape and romantic rose tones soften angular upper frame contours."
+            ),
+            (
+                outer: ("Structured Crop Trench Jacket", "Cotton Gabardine", "Deep Olive", "#354A21"),
+                top: ("Cashmere Knit Polo", "Pure Cashmere", "Warm Sand", "#C4B299"),
+                bottom: ("High-Rise Fluid Culottes", "Wool Crepe", "Espresso Brown", "#2B1D14"),
+                rationale: "High waistline and cropped outerwear harmonize upper and lower torso proportions."
+            ),
+            (
+                outer: ("Shawl-Collar Longline Tuxedo Jacket", "Satin Wool", "Obsidian Black", "#111111"),
+                top: ("Satin Camisole Top", "Silk Satin", "Champagne Gold", "#E4D0B4"),
+                bottom: ("Palazzo Fluid Pants", "Heavy Crepe", "Midnight Charcoal", "#1F2326"),
+                rationale: "Monochromatic luxury tailoring commands presence while elongating the full frame."
+            ),
+            (
+                outer: ("Relaxed Belted Safari Cardigan", "Milano Knit Cotton", "Forest Green", "#243E31"),
+                top: ("Crisp Band-Collar Poplin Shirt", "Supima Cotton", "Eggshell White", "#F4F1EA"),
+                bottom: ("Pleated Flannel Trousers", "Lightweight Flannel", "Heather Slate", "#4E5860"),
+                rationale: "Textural contrast between crisp poplin and knit outerwear brings modern distinction."
+            ),
+            (
+                outer: ("Unstructured Minimalist Car Coat", "Double-Weave Twill", "Rich Camel", "#B07D4F"),
+                top: ("Fine-Gauge Short Sleeve Knit", "Silk Linen", "Soft Buttercream", "#FAF0D7"),
+                bottom: ("Tailored Straight-Cut Slacks", "Tropical Wool", "Espresso", "#291E18"),
+                rationale: "Sleek car coat cut frames torso cleanly without adding lateral volume."
+            ),
+            (
+                outer: ("Asymmetric Wrap Overcoat", "Felted Wool", "Deep Burgundy", "#5A1827"),
+                top: ("Cowl Neck Silk Shell", "Mulberry Silk", "Antique Cream", "#FFFDD0"),
+                bottom: ("Fluid Darted Trousers", "Gabardine", "Dark Cabernet", "#381018"),
+                rationale: "Rich berry depths and fluid draping accentuate waistline and torso harmony."
+            )
+        ]
+
+        let selected = simulatorOutfits[targetIndex % simulatorOutfits.count]
+
         return """
         {
           "looks": [
             {
-              "lookIndex": 0,
-              "fitRationale": "Balanced layering with tailored silhouettes that flatter vertical proportions and suit the event.",
+              "lookIndex": \(targetIndex),
+              "fitRationale": "\(selected.rationale)",
               "garments": [
                 {
                   "category": "Outer",
-                  "name": "Single-Breasted Duster Coat",
-                  "material": "Crepe Wool",
-                  "colorName": "Navy",
-                  "hexColor": "#1B2A4A",
-                  "rationale": "Elongates vertical frame and balances shoulder proportions."
+                  "name": "\(selected.outer.0)",
+                  "material": "\(selected.outer.1)",
+                  "colorName": "\(selected.outer.2)",
+                  "hexColor": "\(selected.outer.3)",
+                  "rationale": "Frames the torso cleanly and complements silhouette balance."
                 },
                 {
                   "category": "Top",
-                  "name": "Silk Blend Knit",
-                  "material": "Silk Wool",
-                  "colorName": "Ivory",
-                  "hexColor": "#FDFBF7",
-                  "rationale": "Softens upper body lines and complements neckline."
+                  "name": "\(selected.top.0)",
+                  "material": "\(selected.top.1)",
+                  "colorName": "\(selected.top.2)",
+                  "hexColor": "\(selected.top.3)",
+                  "rationale": "Softens neckline and vertically optimizes upper proportions."
                 },
                 {
                   "category": "Bottom",
-                  "name": "Fluid Pleated Trousers",
-                  "material": "Gabardine",
-                  "colorName": "Charcoal",
-                  "hexColor": "#2C3539",
-                  "rationale": "Mid-rise cut elongates the legs and harmonizes torso balance."
+                  "name": "\(selected.bottom.0)",
+                  "material": "\(selected.bottom.1)",
+                  "colorName": "\(selected.bottom.2)",
+                  "hexColor": "\(selected.bottom.3)",
+                  "rationale": "Elongates legs and creates a balanced vertical column."
                 }
               ]
             }

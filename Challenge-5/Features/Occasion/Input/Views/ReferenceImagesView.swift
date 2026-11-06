@@ -22,6 +22,7 @@ struct ReferenceImagesView: View {
     // MARK: - Properties
 
     @Bindable var viewModel: OccasionInputViewModel
+    var isEditable: Bool = true
     /// Saved looks (bookmarked), newest first, same order as the Library.
     @Query(filter: #Predicate<OutfitLook> { $0.isBookmarked },
            sort: [SortDescriptor(\OutfitLook.savedAt, order: .reverse)])
@@ -59,7 +60,7 @@ struct ReferenceImagesView: View {
 
     // MARK: - Subviews
 
-    /// "Reference (Optional)" with the photo counter, matching the other form section headers.
+    /// "Reference (Optional)" with the photo counter or camera icon.
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             Text("Reference")
@@ -69,9 +70,15 @@ struct ReferenceImagesView: View {
                 .font(AppTypography.caption)
                 .foregroundStyle(AppColors.mutedCaption)
             Spacer()
-            Text("\(viewModel.referenceImages.count)/\(ReferencePickerConstants.maximumReferenceCount)")
-                .font(AppTypography.caption)
-                .foregroundStyle(viewModel.canAddMoreReferences ? AppColors.mutedCaption : AppColors.espressoTitle)
+            if isEditable {
+                Text("\(viewModel.referenceImages.count)/\(ReferencePickerConstants.maximumReferenceCount)")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(viewModel.canAddMoreReferences ? AppColors.mutedCaption : AppColors.espressoTitle)
+            } else {
+                Image(systemName: "camera")
+                    .font(.system(size: 15))
+                    .foregroundStyle(AppColors.mutedCaption)
+            }
         }
         // Same inset as the Dresscode and "I want to look more" headers.
         .padding(.leading, ReferencePickerConstants.Row.headerInset)
@@ -79,18 +86,37 @@ struct ReferenceImagesView: View {
     }
 
     private var referenceRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: AppDimensions.elementSpacing) {
-                if viewModel.canAddMoreReferences {
-                    addReferenceTile
+        Group {
+            if !isEditable && viewModel.referenceImages.isEmpty {
+                HStack {
+                    Text("No reference photos attached")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.mutedCaption)
+                    Spacer()
                 }
-                ForEach(Array(viewModel.referenceImages.enumerated()), id: \.offset) { index, imageData in
-                    referenceThumbnail(imageData, at: index)
-                }
-                if viewModel.isLoadingReferencePhotos {
-                    ProgressView()
-                        .frame(width: ReferencePickerConstants.Row.tileWidth,
-                               height: ReferencePickerConstants.Row.tileHeight)
+                .padding(.horizontal, 18)
+                .frame(height: 52)
+                .background(AppColors.inputBackground)
+                .clipShape(RoundedRectangle(cornerRadius: AppDimensions.inputCornerRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppDimensions.inputCornerRadius)
+                        .strokeBorder(AppColors.inputBorder, lineWidth: 1)
+                )
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppDimensions.elementSpacing) {
+                        if isEditable && viewModel.canAddMoreReferences {
+                            addReferenceTile
+                        }
+                        ForEach(Array(viewModel.referenceImages.enumerated()), id: \.offset) { index, imageData in
+                            referenceThumbnail(imageData, at: index)
+                        }
+                        if isEditable && viewModel.isLoadingReferencePhotos {
+                            ProgressView()
+                                .frame(width: ReferencePickerConstants.Row.tileWidth,
+                                       height: ReferencePickerConstants.Row.tileHeight)
+                        }
+                    }
                 }
             }
         }
@@ -125,20 +151,22 @@ struct ReferenceImagesView: View {
             thumbnailImage(imageData)
                 .frame(width: ReferencePickerConstants.Row.tileWidth, height: ReferencePickerConstants.Row.tileHeight)
                 .clipShape(.rect(cornerRadius: AppDimensions.chipCornerRadius))
-            Button {
-                viewModel.removeReferenceImage(at: index)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(AppTypography.caption.weight(.bold))
-                    .foregroundStyle(AppColors.bodyText)
-                    .frame(width: ReferencePickerConstants.Row.removeButtonSize,
-                           height: ReferencePickerConstants.Row.removeButtonSize)
-                    .background(AppColors.cardBackground)
-                    .clipShape(Circle())
+            if isEditable {
+                Button {
+                    viewModel.removeReferenceImage(at: index)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(AppTypography.caption.weight(.bold))
+                        .foregroundStyle(AppColors.bodyText)
+                        .frame(width: ReferencePickerConstants.Row.removeButtonSize,
+                               height: ReferencePickerConstants.Row.removeButtonSize)
+                        .background(AppColors.cardBackground)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(ReferencePickerConstants.Row.removeButtonInset)
+                .accessibilityLabel("Remove reference photo \(index + 1)")
             }
-            .buttonStyle(.plain)
-            .padding(ReferencePickerConstants.Row.removeButtonInset)
-            .accessibilityLabel("Remove reference photo \(index + 1)")
         }
     }
 

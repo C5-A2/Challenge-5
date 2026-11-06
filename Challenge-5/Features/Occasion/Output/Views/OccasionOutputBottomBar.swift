@@ -9,42 +9,33 @@ import SwiftUI
 
 struct OccasionOutputBottomBar: View {
     
-    
     var onInfoTap: (() -> Void)? = nil
     /// Whether the current look is saved to the Library (filled icon when true).
     var isBookmarked: Bool = false
     var isBookmarkDisabled: Bool = false
     var onBookmarkTap: (() -> Void)? = nil
-    var isAddLookDisabled: Bool = false
-    var onAddLookTap: (() -> Void)? = nil
-    /// Visualizes the current look with Image Playground.
     var onPlaygroundTap: (() -> Void)? = nil
-    
     
     init(
         onInfoTap: (() -> Void)? = nil,
         isBookmarked: Bool = false,
         isBookmarkDisabled: Bool = false,
         onBookmarkTap: (() -> Void)? = nil,
-        isAddLookDisabled: Bool = false,
-        onAddLookTap: (() -> Void)? = nil,
         onPlaygroundTap: (() -> Void)? = nil
     ) {
         self.onInfoTap = onInfoTap
         self.isBookmarked = isBookmarked
         self.isBookmarkDisabled = isBookmarkDisabled
         self.onBookmarkTap = onBookmarkTap
-        self.isAddLookDisabled = isAddLookDisabled
-        self.onAddLookTap = onAddLookTap
         self.onPlaygroundTap = onPlaygroundTap
     }
     
-    
     var body: some View {
         HStack(spacing: 12) {
-            CircularIconButton(systemName: "info.bubble") {
+            CircularIconButton(systemName: "books.vertical") {
                 onInfoTap?()
             }
+            .accessibilityLabel("Look Details")
             
             Spacer()
             
@@ -52,14 +43,6 @@ struct OccasionOutputBottomBar: View {
                 onPlaygroundTap?()
             }
             .accessibilityLabel("Visualize Look with Image Playground")
-            
-            CircularIconButton(
-                systemName: "plus",
-                isEnabled: !isAddLookDisabled
-            ) {
-                onAddLookTap?()
-            }
-            .accessibilityLabel("Generate More Looks")
             
             CircularIconButton(
                 systemName: isBookmarked ? "bookmark.fill" : "bookmark",

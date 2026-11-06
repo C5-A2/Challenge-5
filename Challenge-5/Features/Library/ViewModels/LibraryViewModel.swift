@@ -77,10 +77,15 @@ public final class LibraryViewModel {
     public func toggleBookmark(for look: SavedLookItem) {
         guard let index = savedLooks.firstIndex(where: { $0.id == look.id }) else { return }
         
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-            savedLooks[index].isBookmarked.toggle()
+        let newStatus = !savedLooks[index].isBookmarked
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            savedLooks[index].isBookmarked = newStatus
         }
-        persistSavedState(savedLooks[index].isBookmarked, forLookID: look.id)
+        
+        // Persist to SwiftData asynchronously to prevent UI hitch during menu dismiss
+        Task { @MainActor [weak self] in
+            self?.persistSavedState(newStatus, forLookID: look.id)
+        }
     }
     
     /// Unsave and remove a look directly from the library collection
@@ -143,6 +148,11 @@ public final class LibraryViewModel {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             self.savedLooks = SavedLookItem.samples
         }
+    }
+    
+    /// Returns the OutfitLook entity stored in SwiftData for a given SavedLookItem.
+    func outfitLook(for look: SavedLookItem) -> OutfitLook? {
+        outfitLooksByID[look.id]
     }
     
     // MARK: - SwiftData Integration Hook [C5-100 Ready]

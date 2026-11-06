@@ -69,7 +69,6 @@ struct AvatarStageView: View {
             
             ZStack(alignment: .center) {
                 if viewModel.isLookLoading(at: index) {
-                    // "Generate more" is still creating this look.
                     loadingRingCard(for: index, width: width, height: height, isCenter: isCenter)
                 } else if index < viewModel.looks.count,
                    let data = viewModel.looks[index].lookImageData,
@@ -97,8 +96,7 @@ struct AvatarStageView: View {
                 let isUngenerated = index >= viewModel.looks.count 
                     || viewModel.looks[index].lookImageData == nil 
                     || OccasionOutputViewModel.isPlaceholderData(viewModel.looks[index].lookImageData ?? Data(), lookIndex: viewModel.looks[index].lookIndex)
-                // The loading card isn't a look yet, so it never opens Image Playground.
-                if isCenter && isUngenerated && !viewModel.isLookLoading(at: index) {
+                if isCenter && isUngenerated {
                     onPlaygroundTap?()
                 } else {
                     handleCardTap(at: index)
@@ -107,8 +105,6 @@ struct AvatarStageView: View {
         }
     }
     
-    // MARK: - Loading Card ("generate more")
-
     @ViewBuilder
     private func loadingRingCard(for index: Int, width: CGFloat, height: CGFloat, isCenter: Bool) -> some View {
         VStack(spacing: 16) {
@@ -273,20 +269,25 @@ struct AvatarStageView: View {
             
             HStack(spacing: 6) {
                 ForEach(0..<viewModel.totalCarouselCount, id: \.self) { index in
+                    let isSelected = index == viewModel.selectedLookIndex
                     let isLookLoading = viewModel.isLookLoading(at: index)
+                    
                     Circle()
                         .fill(
-                            index == viewModel.selectedLookIndex
+                            isSelected
                                 ? Color.white
                                 : (isLookLoading ? AppColors.espressoTitle.opacity(0.25) : Color.white.opacity(0.45))
                         )
                         .frame(
-                            width: index == viewModel.selectedLookIndex ? 7.5 : 5,
-                            height: index == viewModel.selectedLookIndex ? 7.5 : 5
+                            width: isSelected ? 7.5 : 5,
+                            height: isSelected ? 7.5 : 5
                         )
                         .overlay(
                             Circle()
-                                .stroke(Color.black.opacity(0.18), lineWidth: 0.5)
+                                .stroke(
+                                    isLookLoading ? AppColors.espressoTitle.opacity(0.55) : Color.black.opacity(0.18),
+                                    lineWidth: isLookLoading ? 0.8 : 0.5
+                                )
                         )
                         .onTapGesture {
                             viewModel.selectLook(at: index)

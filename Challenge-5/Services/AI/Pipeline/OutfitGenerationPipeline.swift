@@ -50,6 +50,14 @@ protocol OutfitGenerationPipelineProtocol {
         existingLooks: [OutfitLook],
         temperature: Float
     ) async throws -> OutfitLook
+
+    /// Generates a single additional outfit look, taking into account all previously generated looks
+    /// so the new look remains distinct and tailored.
+    func generateSingleLook(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        existingLooks: [OutfitLook]
+    ) async throws -> OutfitLook
 }
 
 // MARK: - Default Outfit Generation Pipeline
@@ -62,8 +70,9 @@ protocol OutfitGenerationPipelineProtocol {
 /// and its own sampling temperature. Earlier looks are passed to the next prompt so the
 /// looks differ in style and pieces, not only in color.
 ///
-/// Reference photos are read on device (`ReferenceImageStyleAnalyzer`) and described in text,
-/// because the language model can't see images.
+/// Reference photos are first described one by one by the on-device vision-language model
+/// (Qwen 2.5 VL, `ReferenceImageStyleAnalyzer`), because the text model can't see images.
+/// The descriptions are recapped into one paragraph and passed to every look's prompt.
 @MainActor
 final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
@@ -98,6 +107,15 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         for occasion: OccasionItem,
         profile: UserProfile
     ) async throws -> [OutfitLook] {
+        try await generateLooks(for: occasion, profile: profile, onStageChange: nil)
+    }
+
+    /// - Parameter onStageChange: Loading overlay updates `(title, subtitle, VLM descriptions so far)`.
+    func generateLooks(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        onStageChange: (@MainActor @Sendable (_ title: String, _ subtitle: String, _ vlmDescriptions: [String]) -> Void)?
+    ) async throws -> [OutfitLook] {
         // Validate the GGUF model file is present before attempting inference.
         try LLMResource.validateModelAvailability()
 
@@ -109,15 +127,28 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        // 2. Read the reference photos on device (pieces, layering, colors mapped to the palette).
-        let referenceAnalysis = await analyzeReferencePhotos(of: occasion, profile: profile)
+        // 2. Stage 1: describe the reference photos with the VLM (1 by 1, then the VLM is unloaded).
+        let referenceDescriptions = await scanReferencePhotos(of: occasion, onStageChange: onStageChange)
+        let referenceAnalysis = ReferenceStyleAnalysis(
+            descriptions: referenceDescriptions,
+            recap: await recapReferenceStyle(referenceDescriptions, occasionID: occasion.id)
+        )
 
-        // 3. One LLM call per look. Each look has its own direction, pieces and temperature,
+        // 3. Stage 2: one LLM call per look. Each look has its own direction, pieces and temperature,
         //    and gets the earlier looks so it doesn't repeat them.
         var generatedLooks: [OutfitLook] = []
         var previousSummaries: [GeneratedLookSummary] = []
 
         for lookIndex in 0..<Self.lookCount {
+            let refStatusSuffix = referenceDescriptions.isEmpty
+                ? ""
+                : " (using Ref 1\(referenceDescriptions.count > 1 ? "–\(referenceDescriptions.count)" : ""))"
+            onStageChange?(
+                "Curating Your Looks",
+                "Generating Look \(lookIndex + 1) of \(Self.lookCount)\(refStatusSuffix) tailored to \(occasion.title)...",
+                referenceDescriptions
+            )
+
             let parsedLook = try await generateLook(
                 for: occasion,
                 profile: profile,
@@ -153,15 +184,28 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        // 2. Read the reference photos and summarize every look generated so far.
-        let referenceAnalysis = await analyzeReferencePhotos(of: occasion, profile: profile)
+        // 2. Reuse the VLM descriptions saved for this occasion; scan again only when the photos changed.
+        let allImageData = referenceImagesData(of: occasion)
+        let persistedDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
+        let referenceDescriptions: [String]
+        if !allImageData.isEmpty && persistedDescriptions.count == allImageData.count {
+            referenceDescriptions = persistedDescriptions
+        } else {
+            referenceDescriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(for: allImageData)
+            if !referenceDescriptions.isEmpty {
+                ReferenceImageStyleAnalyzer.shared.saveDescriptions(referenceDescriptions, forOccasionID: occasion.id)
+            }
+        }
+        let referenceAnalysis = ReferenceStyleAnalysis(
+            descriptions: referenceDescriptions,
+            recap: await recapReferenceStyle(referenceDescriptions, occasionID: occasion.id)
+        )
         let previousSummaries = existingLooks.map { GeneratedLookSummary(from: $0) }
 
-        print("🔧 [OutfitGenerationPipeline] Generating extra look \(lookIndex) (previous looks appended: \(previousSummaries.count))…")
+        print("🔧 [OutfitGenerationPipeline] Generating extra look \(lookIndex) (previous looks appended: \(previousSummaries.count), refs: \(referenceDescriptions.count))…")
 
         // 3. Extra looks cycle through the 5 directions, at least as creative as `temperature`.
-        //    The look image is left empty: the Output fills a placeholder until image generation exists.
-        let parsedLook = try await generateLook(
+        return try await generateLook(
             for: occasion,
             profile: profile,
             lookIndex: lookIndex,
@@ -169,7 +213,22 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             referenceAnalysis: referenceAnalysis,
             minimumTemperature: temperature
         )
-        return parsedLook
+    }
+
+    /// Generates a single additional outfit look, taking into account all previously generated looks
+    /// so the new look remains distinct and tailored.
+    func generateSingleLook(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        existingLooks: [OutfitLook]
+    ) async throws -> OutfitLook {
+        try await generateSingleLook(
+            for: occasion,
+            profile: profile,
+            lookIndex: existingLooks.count,
+            existingLooks: existingLooks,
+            temperature: 0.75
+        )
     }
 
     // MARK: - One Look
@@ -219,20 +278,96 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         return parsedLook
     }
 
-    /// Reads the occasion's reference photos, `nil` when there are none or nothing could be read.
-    private func analyzeReferencePhotos(of occasion: OccasionItem, profile: UserProfile) async -> ReferenceStyleAnalysis? {
-        let imagesData = occasion.referenceImagesData.isEmpty
+    // MARK: - Reference Photos (VLM)
+
+    private func referenceImagesData(of occasion: OccasionItem) -> [Data] {
+        occasion.referenceImagesData.isEmpty
             ? (occasion.referenceImageData.map { [$0] } ?? [])
             : occasion.referenceImagesData
-        guard !imagesData.isEmpty else { return nil }
-        let analysis = await ReferenceImageStyleAnalyzer.shared.analyzeOutfits(
-            from: imagesData,
-            palette: profile.colorSeason?.palette ?? []
-        )
-        if let analysis {
-            print("👁️ [OutfitGenerationPipeline] Reference photos (\(analysis.suggestedStructure?.rawValue ?? "unknown structure")):\n\(analysis.promptDescription)")
+    }
+
+    /// Describes each reference photo with the on-device VLM and saves the descriptions for the occasion
+    /// (shown in the Output's VLM debug). Reports progress through `onStageChange`.
+    private func scanReferencePhotos(
+        of occasion: OccasionItem,
+        onStageChange: (@MainActor @Sendable (_ title: String, _ subtitle: String, _ vlmDescriptions: [String]) -> Void)?
+    ) async -> [String] {
+        let allImageData = referenceImagesData(of: occasion)
+        guard !allImageData.isEmpty else {
+            ReferenceImageStyleAnalyzer.shared.saveDescriptions([], forOccasionID: occasion.id)
+            return []
         }
-        return analysis
+
+        let totalRefs = allImageData.count
+        onStageChange?(
+            "Analyzing References",
+            "Scanning 1 of \(totalRefs) reference photo\(totalRefs == 1 ? "" : "s") with Qwen 2.5 VL...",
+            []
+        )
+        let descriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(
+            for: allImageData
+        ) { completed, total, descriptionsSoFar in
+            if completed < total {
+                onStageChange?(
+                    "Analyzing References",
+                    "Scanning \(completed + 1) of \(total) reference photos with Qwen 2.5 VL...",
+                    descriptionsSoFar
+                )
+            } else {
+                onStageChange?(
+                    "Analyzing References",
+                    "Scanned \(total) reference photo\(total == 1 ? "" : "s"). Preparing main LLM recommendation...",
+                    descriptionsSoFar
+                )
+            }
+        }
+        ReferenceImageStyleAnalyzer.shared.saveDescriptions(descriptions, forOccasionID: occasion.id)
+
+        print("\n====== [VLM DEBUG OUTPUT (\(occasion.title)) — ALL REFS → ALL LOOKS] ======")
+        if descriptions.isEmpty {
+            print("   (No VLM text descriptions returned)")
+        } else {
+            for (index, description) in descriptions.enumerated() {
+                print("   Ref \(index + 1): \(description)")
+            }
+        }
+        print("=========================================================================\n")
+        return descriptions
+    }
+
+    /// Condenses all per-photo VLM descriptions (Ref 1–3) into ONE short paragraph so the per-look prompt stays small.
+    /// A single description is used as-is. The recap is cached per occasion until descriptions change.
+    private func recapReferenceStyle(_ descriptions: [String], occasionID: UUID) async -> String? {
+        let cleaned = descriptions.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !cleaned.isEmpty else { return nil }
+        if cleaned.count == 1 { return cleaned[0] }
+        if let cached = ReferenceImageStyleAnalyzer.shared.savedRecap(forOccasionID: occasionID) { return cached }
+
+        let numbered = cleaned.enumerated().map { "Photo \($0.offset + 1): \($0.element)" }.joined(separator: "\n")
+        let system = """
+        You condense outfit descriptions into one paragraph.
+        Merge the photo descriptions below into ONE paragraph of 3 to 4 sentences.
+        Keep every concrete garment name, cut, fabric, surface pattern and main color exactly as written. Only mention a pattern if a photo description states it. Do not invent anything. No lists, no JSON.
+        """
+        let prompt: String
+        if LLMResource.isQwenActive {
+            prompt = "<|im_start|>system\n\(system)<|im_end|>\n<|im_start|>user\n\(numbered)<|im_end|>\n<|im_start|>assistant\n"
+        } else {
+            prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n\(system)<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n\(numbered)<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        }
+
+        do {
+            let raw = try await LLMEngine.shared.generate(prompt: prompt, maxTokens: 220, temperature: 0.2)
+            let recap = raw.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !recap.isEmpty {
+                print("📝 [OutfitGenerationPipeline] Reference recap (\(cleaned.count) → 1 paragraph): \(recap)")
+                ReferenceImageStyleAnalyzer.shared.saveRecap(recap, forOccasionID: occasionID)
+                return recap
+            }
+        } catch {
+            print("⚠️ [OutfitGenerationPipeline] Reference recap failed: \(error.localizedDescription). Using joined descriptions.")
+        }
+        return cleaned.joined(separator: " ")
     }
 
     /// Synchronous generation for seamless instant UI transitions upon form submit.
