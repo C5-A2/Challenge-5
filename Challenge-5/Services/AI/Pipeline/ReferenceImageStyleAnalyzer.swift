@@ -94,9 +94,26 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
         "vlm_debug_descriptions_\(occasionID.uuidString)"
     }
 
+    private static func recapStorageKey(for occasionID: UUID) -> String {
+        "vlm_recap_\(occasionID.uuidString)"
+    }
+
+    /// Persists the single-paragraph recap of all reference descriptions for an occasion.
+    public func saveRecap(_ recap: String, forOccasionID occasionID: UUID) {
+        UserDefaults.standard.set(recap, forKey: Self.recapStorageKey(for: occasionID))
+    }
+
+    /// Retrieves the cached single-paragraph recap for an occasion, if any.
+    public func savedRecap(forOccasionID occasionID: UUID) -> String? {
+        let value = UserDefaults.standard.string(forKey: Self.recapStorageKey(for: occasionID))
+        return (value?.isEmpty == false) ? value : nil
+    }
+
     /// Persists extracted 1-by-1 VLM descriptions for an occasion so `OccasionOutputView` can display them.
     public func saveDescriptions(_ descriptions: [String], forOccasionID occasionID: UUID) {
         let key = Self.debugStorageKey(for: occasionID)
+        // New/changed descriptions invalidate any previously recapped paragraph.
+        UserDefaults.standard.removeObject(forKey: Self.recapStorageKey(for: occasionID))
         if descriptions.isEmpty {
             UserDefaults.standard.removeObject(forKey: key)
         } else {

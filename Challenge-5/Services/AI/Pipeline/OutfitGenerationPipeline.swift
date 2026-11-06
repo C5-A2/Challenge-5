@@ -168,7 +168,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             ReferenceImageStyleAnalyzer.shared.saveDescriptions([], forOccasionID: occasion.id)
         }
 
-        let analyzedImageStyle = ReferenceImageStyleAnalyzer.formatCombinedStyle(from: referenceDescriptions)
+        let analyzedImageStyle = await recapReferenceStyle(referenceDescriptions, occasionID: occasion.id)
 
         // 3. Stage 2: Main LLM Sequential generation — one LLM call = one look, fed by ALL VLM reference descriptions (Ref 1–3).
         //    After each look is parsed, its garment summary is appended to the next call's
@@ -238,6 +238,41 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         return generatedLooks
     }
 
+    /// Condenses all per-photo VLM descriptions (Ref 1–3) into ONE short paragraph so the per-look prompt stays small.
+    /// A single description is used as-is. The recap is cached per occasion until descriptions change.
+    private func recapReferenceStyle(_ descriptions: [String], occasionID: UUID) async -> String? {
+        let cleaned = descriptions.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !cleaned.isEmpty else { return nil }
+        if cleaned.count == 1 { return cleaned[0] }
+        if let cached = ReferenceImageStyleAnalyzer.shared.savedRecap(forOccasionID: occasionID) { return cached }
+
+        let numbered = cleaned.enumerated().map { "Photo \($0.offset + 1): \($0.element)" }.joined(separator: "\n")
+        let system = """
+        You condense outfit descriptions into one paragraph.
+        Merge the photo descriptions below into ONE paragraph of 3 to 4 sentences.
+        Keep every concrete garment name, cut, fabric, surface pattern and main color exactly as written. Only mention a pattern if a photo description states it. Do not invent anything. No lists, no JSON.
+        """
+        let prompt: String
+        if LLMResource.isQwenActive {
+            prompt = "<|im_start|>system\n\(system)<|im_end|>\n<|im_start|>user\n\(numbered)<|im_end|>\n<|im_start|>assistant\n"
+        } else {
+            prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n\(system)<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n\(numbered)<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        }
+
+        do {
+            let raw = try await LLMEngine.shared.generate(prompt: prompt, maxTokens: 220, temperature: 0.2)
+            let recap = raw.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !recap.isEmpty {
+                print("📝 [OutfitGenerationPipeline] Reference recap (\(cleaned.count) → 1 paragraph): \(recap)")
+                ReferenceImageStyleAnalyzer.shared.saveRecap(recap, forOccasionID: occasionID)
+                return recap
+            }
+        } catch {
+            print("⚠️ [OutfitGenerationPipeline] Reference recap failed: \(error.localizedDescription). Using joined descriptions.")
+        }
+        return cleaned.joined(separator: " ")
+    }
+
     /// Generates a single new tailored outfit look for an occasion, appending all previous looks and using high temperature (0.75) for diversity.
     func generateSingleLook(
         for occasion: OccasionItem,
@@ -271,7 +306,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 ReferenceImageStyleAnalyzer.shared.saveDescriptions(referenceDescriptions, forOccasionID: occasion.id)
             }
         }
-        let analyzedImageStyle = ReferenceImageStyleAnalyzer.formatCombinedStyle(from: referenceDescriptions)
+        let analyzedImageStyle = await recapReferenceStyle(referenceDescriptions, occasionID: occasion.id)
         if !referenceDescriptions.isEmpty {
             print("👁️ [OutfitGenerationPipeline] Single look reference images ready (\(referenceDescriptions.count) photos available).")
         }

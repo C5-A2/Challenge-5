@@ -424,21 +424,21 @@ struct OutfitPromptBuilder: Sendable {
             rules.append("STYLE VISION (reflect in garments):\n\(visionsDetails)")
         }
 
-        // Reference images: Injects ALL scanned reference descriptions (Ref 1–3) into every look
+        // Reference images: Injects ONE recapped paragraph summarising all scanned references (Ref 1–3) into every look
         if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
             rules.append("""
             ======================================================================
-            USER REFERENCE PHOTOS (ALL REFERENCES APPLIED TO THIS LOOK)
+            PRIMARY INSPIRATION: USER REFERENCE PHOTOS (RECAP OF ALL REFERENCES)
             ======================================================================
-            The user provided reference photo(s) defining their desired styling mood, silhouettes, and fabrics.
-            The Vision-Language Model extracted the following styling descriptions across ALL attached reference photos:
-            \(analyzedStyle)
+            This look must be directly styled and inspired by the user's reference photos:
+            "\(analyzedStyle)"
 
-            CRITICAL INSTRUCTIONS FOR SYNTHESIZING ALL REFERENCES INTO THIS LOOK:
-            1. Unified Inspiration: Draw inspiration from ALL reference descriptions above together (blending their cuts, proportions, layering dynamics, and aesthetic vibe into a cohesive outfit).
-            2. Fabric & Pattern: Incorporate tactile fabrics, weaves, motifs, and textures highlighted across the reference photos.
-            3. Palette Harmony: Select colors strictly from the user's seasonal Color Palette that harmonize with the color mood and contrast of the reference photos.
-            4. Body Shape Fit: Adapt the silhouettes so they flatter the user's specific body shape rules.
+            CRITICAL STYLING INSTRUCTIONS FOR THIS LOOK:
+            1. Cut & Silhouette: Recreate or closely echo the garment cuts, proportions, and layering dynamic from the references.
+            2. Pattern: ONLY if the reference text above explicitly names a surface pattern or motif, keep that exact pattern word inside the garment "name" (pattern word + garment type). If the reference text names no pattern, use plain solid garments and do NOT invent or add any pattern.
+            3. Fabric: "material" stays the real fabric only (e.g. Cotton Poplin, Silk, Linen) — never put the pattern word in "material".
+            4. Palette Harmony: Select colors strictly from the user's seasonal Color Palette that harmonize with the references' color mood and contrast.
+            5. Body Shape Fit: Adapt only the cut/proportions to the user's body shape rules; keep the reference garment types and patterns.
             """)
         } else {
             let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
@@ -479,7 +479,7 @@ struct OutfitPromptBuilder: Sendable {
         OUTPUT FORMAT: Return ONLY valid JSON, no markdown, no conversational text.
         IMPORTANT: Put all 3 garments inside ONE single "garments" array. Do NOT repeat the "garments" key.
         Allowed garment fields: "category", "name", "material", "colorName", "hexColor", "rationale" (6 fields only).
-        "name" must contain ONLY the garment item type without color adjectives (e.g. "Blouse", "Tailored Blazer", "Pleated Trousers"). Colors belong exclusively in "colorName".
+        "name" is the garment item type (plus a surface pattern word only if the reference text names one), without color adjectives, e.g. "Tailored Blazer", "Pleated Trousers". Colors belong exclusively in "colorName"; "material" is the fabric only.
         "colorName" and "hexColor" must be copied verbatim from the palette — do not invent colors.
         Keep rationales extremely concise:
         - "fitRationale": 1 short sentence.
@@ -553,9 +553,9 @@ struct OutfitPromptBuilder: Sendable {
         let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
         if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
             lines.append("""
-            User Reference Photos (ALL references apply to Look \(lookIndex + 1)):
-            \(analyzedStyle)
-            -> Synthesize the silhouettes, fabrics, patterns, and styling cues across ALL reference photos above into Look \(lookIndex + 1).
+            PRIMARY INSPIRATION (User Reference Photos recap):
+            "\(analyzedStyle)"
+            -> Directly translate these references' cuts, silhouette, patterns (only those explicitly named above) and aesthetic vibe into look \(lookIndex + 1).
             """)
         } else if hasReferenceImages {
             let count = occasion.referenceImagesData.isEmpty ? 1 : occasion.referenceImagesData.count
