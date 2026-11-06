@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import SwiftData
 
 #if canImport(UIKit)
 import UIKit
@@ -18,12 +19,23 @@ struct FrontBodyGuideView: View {
     // MARK: - Dependencies
 
     @Bindable var viewModel: BodyScanViewModel
+    var showsBackButton: Bool? = nil
+    var onBack: (() -> Void)? = nil
     var onDismiss: (() -> Void)? = nil
 
     // MARK: - State & Environment
 
+    @Query private var userProfiles: [UserProfile]
     @State private var selectedPickerItem: PhotosPickerItem? = nil
     @Environment(\.dismiss) private var dismiss
+
+    private var hasExistingData: Bool {
+        userProfiles.first?.bodyType != nil
+    }
+
+    private var shouldShowBackButton: Bool {
+        showsBackButton ?? !hasExistingData
+    }
 
     // MARK: - Body
 
@@ -43,9 +55,9 @@ struct FrontBodyGuideView: View {
                 headerBar
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 24) {
+                    VStack(spacing: 20) {
                         illustrationCard
-                            .padding(.top, 24)
+                            .padding(.top, 16)
 
                         Text("For the most accurate results, stand upright facing the camera directly in fitted clothing against a plain, contrasting wall.")
                             .font(.system(size: 12.5, weight: .medium))
@@ -65,12 +77,13 @@ struct FrontBodyGuideView: View {
                             .padding(.vertical, 8)
                             .padding(.horizontal, 16)
                         }
-                        .padding(.top, 4)
 
-                        Spacer(minLength: 24)
+                        Spacer(minLength: 16)
                     }
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
                 }
+
+                bottomActionBar
             }
         }
         .onChange(of: selectedPickerItem) { _, newItem in
@@ -94,22 +107,29 @@ struct FrontBodyGuideView: View {
 
     private var headerBar: some View {
         HStack {
-            // Left: Back (<) Button
-            Button {
-                if let onDismiss = onDismiss {
-                    onDismiss()
-                } else {
-                    dismiss()
+            // Left: Back (<) Button — shown only when no existing data (first time)
+            if shouldShowBackButton {
+                Button {
+                    if let onBack = onBack {
+                        onBack()
+                    } else if let onDismiss = onDismiss {
+                        onDismiss()
+                    } else {
+                        dismiss()
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(Color(hex: "#1C1C1E"))
+                        .frame(width: 44, height: 44)
+                        .background(Color(hex: "#EFEFF0"))
+                        .clipShape(Circle())
                 }
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                .buttonStyle(.plain)
+            } else {
+                Color.clear
                     .frame(width: 44, height: 44)
-                    .background(Color(hex: "#EFEFF0"))
-                    .clipShape(Circle())
             }
-            .buttonStyle(.plain)
 
             Spacer()
 
@@ -121,22 +141,48 @@ struct FrontBodyGuideView: View {
 
             Spacer()
 
-            // Right: Camera Button
+            // Right: Close (X) Button
             Button {
-                viewModel.currentStep = .frontCamera
-                viewModel.startCamera()
+                if let onDismiss = onDismiss {
+                    onDismiss()
+                } else {
+                    dismiss()
+                }
             } label: {
-                Image(systemName: "camera")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color(hex: "#1C1C1E"))
                     .frame(width: 44, height: 44)
-                    .background(Color.black)
+                    .background(Color(hex: "#EFEFF0"))
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
         .padding(.vertical, 8)
+    }
+
+    // MARK: - Bottom Action Bar
+
+    private var bottomActionBar: some View {
+        VStack(spacing: 12) {
+            Button {
+                viewModel.currentStep = .frontCamera
+                viewModel.startCamera()
+            } label: {
+                Text("Take Photo")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(Color.black)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+        .padding(.top, 8)
+        .padding(.bottom, 20)
     }
 
     // MARK: - Center Illustration Card

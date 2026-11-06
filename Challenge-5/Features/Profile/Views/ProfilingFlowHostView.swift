@@ -50,9 +50,12 @@ struct ProfilingFlowHostView: View {
     private var skinScanFlow: some View {
         switch skinViewModel.currentStep {
         case .guide:
-            SkinScanGuideView(viewModel: skinViewModel) {
-                closeFlow()
-            }
+            SkinScanGuideView(
+                viewModel: skinViewModel,
+                showsBackButton: true,
+                onBack: { closeFlow() },
+                onDismiss: { closeFlow() }
+            )
         case .camera:
             FaceCameraView(viewModel: skinViewModel)
         case .review:
@@ -73,17 +76,29 @@ struct ProfilingFlowHostView: View {
     private var bodyScanFlow: some View {
         switch bodyViewModel.currentStep {
         case .frontGuide:
-            FrontBodyGuideView(viewModel: bodyViewModel) {
-                closeFlow()
-            }
+            FrontBodyGuideView(
+                viewModel: bodyViewModel,
+                showsBackButton: true,
+                onBack: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        phase = .skinScan
+                    }
+                },
+                onDismiss: { closeFlow() }
+            )
         case .frontCamera:
             FrontBodyCameraView(viewModel: bodyViewModel)
         case .frontReview:
             FrontBodyReviewView(viewModel: bodyViewModel)
         case .sideGuide:
-            SideBodyGuideView(viewModel: bodyViewModel) {
-                closeFlow()
-            }
+            SideBodyGuideView(
+                viewModel: bodyViewModel,
+                showsBackButton: true,
+                onBack: {
+                    bodyViewModel.currentStep = .frontReview
+                },
+                onDismiss: { closeFlow() }
+            )
         case .sideCamera:
             SideBodyCameraView(viewModel: bodyViewModel)
         case .sideReview, .metricsInput:
