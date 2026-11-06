@@ -468,7 +468,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
         // 6. JSON may be truncated (model hit maxTokens mid-generation). Try closing open
         //    brackets so the partial output becomes valid JSON with whatever looks were completed.
-        let repaired = repairTruncatedJSON(cleanJSON)
+        let repaired = repairTruncatedJSON(sanitized)
         do {
             let looks = try decodeLooks(from: repaired, options: options)
             if !looks.isEmpty {
@@ -480,7 +480,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
 
         // 7. Fallback: Parse individual garment objects directly if the wrapper was badly mangled
-        if let fallbackLooks = extractLooksFromMalformedText(cleanJSON, options: options), !fallbackLooks.isEmpty {
+        if let fallbackLooks = extractLooksFromMalformedText(sanitized, options: options), !fallbackLooks.isEmpty {
             print("⚠️ [OutfitGenerationPipeline] Recovered \(fallbackLooks.count) looks using garment scanner fallback.")
             return fallbackLooks
         }
@@ -539,6 +539,13 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         if let regex = try? NSRegularExpression(pattern: pattern1, options: []) {
             let range = NSRange(result.startIndex..<result.endIndex, in: result)
             result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "}, {")
+        }
+
+        // Fix a dropped key: `"colorName":"Sage","#9CAF88"` -> `"colorName":"Sage","hexColor":"#9CAF88"`
+        let missingHexKeyPattern = ##"(\"colorName\"\s*:\s*\"[^\"]*\"\s*,\s*)(\"#[0-9A-Fa-f]{3,8}\")"##
+        if let regex = try? NSRegularExpression(pattern: missingHexKeyPattern, options: []) {
+            let range = NSRange(result.startIndex..<result.endIndex, in: result)
+            result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "$1\"hexColor\":$2")
         }
 
         return result
