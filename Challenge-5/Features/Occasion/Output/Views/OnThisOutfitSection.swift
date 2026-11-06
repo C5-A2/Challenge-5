@@ -64,7 +64,7 @@ struct OnThisOutfitSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("On this outfit")
-                .font(.system(size: 19, weight: .bold))
+                .font(AppTypography.sfProSemiboldExtended(size: 20))
                 .foregroundStyle(AppColors.espressoTitle)
                 .padding(.horizontal, AppDimensions.screenHorizontalPadding)
             

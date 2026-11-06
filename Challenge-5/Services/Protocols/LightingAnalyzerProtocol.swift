@@ -45,9 +45,13 @@ public struct RealTimeFaceAnalysisResult: Sendable {
     public let isFaceDetected: Bool
     public let isFaceCentered: Bool
     public let isHeadPoseDirect: Bool
+    public let isFaceUnobstructed: Bool
+    public let isBareFace: Bool
     public let rollAngleDegrees: Double
     public let yawAngleDegrees: Double
+    public let pitchAngleDegrees: Double
     public let captureQuality: Float
+    public let obstructionReason: String?
     public let guidanceText: String
     public let isReadyForOptimalCapture: Bool
 
@@ -57,9 +61,13 @@ public struct RealTimeFaceAnalysisResult: Sendable {
         isFaceDetected: Bool = false,
         isFaceCentered: Bool = false,
         isHeadPoseDirect: Bool = false,
+        isFaceUnobstructed: Bool = false,
+        isBareFace: Bool = true,
         rollAngleDegrees: Double = 0.0,
         yawAngleDegrees: Double = 0.0,
+        pitchAngleDegrees: Double = 0.0,
         captureQuality: Float = 0.0,
+        obstructionReason: String? = nil,
         guidanceText: String = "Position face within the oval guide",
         isReadyForOptimalCapture: Bool = false
     ) {
@@ -68,9 +76,13 @@ public struct RealTimeFaceAnalysisResult: Sendable {
         self.isFaceDetected = isFaceDetected
         self.isFaceCentered = isFaceCentered
         self.isHeadPoseDirect = isHeadPoseDirect
+        self.isFaceUnobstructed = isFaceUnobstructed
+        self.isBareFace = isBareFace
         self.rollAngleDegrees = rollAngleDegrees
         self.yawAngleDegrees = yawAngleDegrees
+        self.pitchAngleDegrees = pitchAngleDegrees
         self.captureQuality = captureQuality
+        self.obstructionReason = obstructionReason
         self.guidanceText = guidanceText
         self.isReadyForOptimalCapture = isReadyForOptimalCapture
     }

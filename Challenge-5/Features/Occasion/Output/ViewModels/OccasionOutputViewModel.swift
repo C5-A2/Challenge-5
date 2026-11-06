@@ -124,6 +124,17 @@ final class OccasionOutputViewModel {
         }
     }
     
+    /// Returns true if the current look on stage has a real generated/styled image.
+    var isCurrentLookImageGenerated: Bool {
+        guard let currentLook,
+              let data = currentLook.lookImageData,
+              !data.isEmpty,
+              !OccasionOutputViewModel.isPlaceholderData(data, lookIndex: currentLook.lookIndex) else {
+            return false
+        }
+        return true
+    }
+    
     /// Garments of the current look, always left to right: inner top, outer, bottom.
     /// SwiftData doesn't keep relationship order, so they're sorted by category here;
     /// each card shows the name and the crop of the same garment, so they always match.
@@ -264,6 +275,7 @@ final class OccasionOutputViewModel {
                 self.isUsingMockPlaceholders = false
                 self.selectedLookIndex = 0
                 self.isLoading = false
+                try? self.occasion.modelContext?.save()
             }
             try? self.occasion.modelContext?.save()
         } catch {
@@ -328,11 +340,24 @@ final class OccasionOutputViewModel {
     /// Adds looks that aren't stored yet (for example mock looks) to the occasion,
     /// so a saved look keeps its occasion and stays after this screen closes.
     private func attachLooksToOccasion() {
-        guard !isCallerSuppliedLooks, !isUsingMockPlaceholders, occasion.modelContext != nil else { return }
+        guard !isCallerSuppliedLooks, !isUsingMockPlaceholders, let modelContext = occasion.modelContext else { return }
         let storedLookIDs = Set(occasion.generatedLooks.map(\.id))
         for look in looks where !storedLookIDs.contains(look.id) {
+            modelContext.insert(look)
+            for garment in look.garments {
+                modelContext.insert(garment)
+            }
             occasion.generatedLooks.append(look)
         }
+        try? modelContext.save()
+    }
+    
+    /// Updates the visual look image for a given look, links looks to the occasion, and saves to SwiftData.
+    func updateLookImage(_ imageData: Data, for look: OutfitLook) {
+        look.lookImageData = imageData
+        look.imageGeneratedAt = Date()
+        attachLooksToOccasion()
+        try? occasion.modelContext?.save()
     }
     
     /// Opens "Where to Buy" for a garment of the current look.
@@ -348,7 +373,7 @@ final class OccasionOutputViewModel {
     /// Without a generated image (no Image Playground image yet) nothing is cropped,
     /// so the cards show placeholders instead of crops of a mock image.
     func loadCurrentGarmentCrops() async {
-        guard let look = currentLook else { return }
+        guard let look = currentLook, isCurrentLookImageGenerated else { return }
         prepareLookForCropping(look)
         for garment in look.garments {
             garmentCropImages[garment.id] = nil
@@ -430,6 +455,7 @@ final class OccasionOutputViewModel {
                     self.selectedLookIndex = 0
                     self.isUsingMockPlaceholders = false
                     self.isLoading = false
+                    try? self.occasion.modelContext?.save()
                 }
                 try? self.occasion.modelContext?.save()
                 print("🔄 [OccasionOutputViewModel] Regenerated \(newLooks.count) looks for same occasion id=\(preservedOccasionID.uuidString) (\(self.occasion.title))")
@@ -481,7 +507,11 @@ final class OccasionOutputViewModel {
                         self.occasion.generatedLooks.append(newLook)
                     }
                     self.looks.append(newLook)
+                    self.occasion.generatedLooks = self.looks
+                    self.selectedLookIndex = self.looks.count - 1
                     self.isGeneratingMore = false
+                    self.isLoading = false
+                    try? self.occasion.modelContext?.save()
                 }
             } catch {
                 let errorMsg = error.localizedDescription
@@ -622,11 +652,6 @@ extension OccasionOutputViewModel {
         look5.garments = makeGarmentCopies(of: [coat2, inner2, pants2])
         
         let mockLooks = [look1, look2, look3, look4, look5]
-        // Dummy look images (same assets as the avatar stage), so saved mock looks
-        // show in the Library and in "From Library" references. Replace with generated images.
-        for look in mockLooks {
-            look.lookImageData = makePlaceholderLookImageData(for: look.lookIndex)
-        }
         return mockLooks
     }
     

@@ -26,6 +26,15 @@ public enum AppTypography {
     public static let buttonLabel = Font.system(size: 16, weight: .semibold, design: .default)
     public static let chipLabel = Font.system(size: 14, weight: .medium, design: .default)
     
+    /// Font standar (bukan expanded) untuk header section / accordion seperti "Past Occasion"
+    public static let sectionHeaderStandard = Font.system(size: 17, weight: .semibold, design: .default)
+    
+    /// Font standar untuk tanggal & bulan pada kartu folder (SF Pro Standar)
+    public static let folderCardDayNumber = Font.system(size: 32, weight: .bold, design: .default)
+    public static let folderCardMonth = Font.system(size: 15, weight: .semibold, design: .default)
+    public static let folderCardTitle = Font.system(size: 21, weight: .semibold, design: .default)
+    public static let folderCardDresscode = Font.system(size: 13, weight: .semibold, design: .default)
+    
     // MARK: - Jadwal / Schedule & Dates (SF Pro Expanded)
     /// Angka tanggal besar pada kartu jadwal/occasion (misal: "13")
     public static let scheduleDayNumber = Font.system(size: 28, weight: .bold, design: .default)

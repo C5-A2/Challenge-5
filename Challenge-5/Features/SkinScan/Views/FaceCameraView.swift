@@ -7,10 +7,11 @@
 
 import SwiftUI
 import AVFoundation
+import PhotosUI
 
-/// Live AVFoundation camera capture screen for facial personal color analysis (C5-82).
-/// Features real-time video preview, golden facial framing grid, lighting indicator dot,
-/// flash toggle, countdown timer, and high-resolution photo capture.
+/// Live AVFoundation camera capture screen for facial personal color analysis (C5-82 & C5-123).
+/// Features real-time video preview, golden facial framing grid, smart obstruction/pose/lighting HUD,
+/// flash toggle, countdown timer, gallery picker, and high-resolution photo capture.
 struct FaceCameraView: View {
 
     // MARK: - State & Dependencies
@@ -20,6 +21,7 @@ struct FaceCameraView: View {
     @State private var lightingAnalyzer = LightingAnalyzer()
     @State private var isCapturing: Bool = false
     @State private var countdownRemaining: Int = 3
+    @State private var selectedPickerItem: PhotosPickerItem? = nil
 
     // MARK: - Body
 
@@ -235,41 +237,67 @@ struct FaceCameraView: View {
         }
     }
 
-    // MARK: - 5. Bottom Control Bar
+    // MARK: - 5. Bottom Control Bar & Smart Real-Time HUD (C5-123)
+
+    private var canTriggerShutter: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return viewModel.isReadyForOptimalCapture
+        #endif
+    }
 
     private var bottomControlBar: some View {
-        VStack {
+        VStack(spacing: 14) {
             Spacer()
 
+            // Real-time 4-criteria smart check pills (C5-123)
+            realTimeSmartChecklistHUD
+                .padding(.horizontal, 16)
+
             HStack(alignment: .center) {
-                // Left: Flash Status / Quick Setting
-                Button {
-                    viewModel.toggleFlash()
-                    cameraService.isFlashEnabled = viewModel.isFlashEnabled
-                } label: {
-                    Image(systemName: viewModel.isFlashEnabled ? "bolt.circle.fill" : "bolt.circle")
-                        .font(.system(size: 32))
-                        .foregroundStyle(viewModel.isFlashEnabled ? .yellow : .white.opacity(0.85))
+                // Left: Photo Gallery Picker
+                PhotosPicker(selection: $selectedPickerItem, matching: .images) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .frame(width: 48, height: 48)
+                        .background(Color.white.opacity(0.18))
+                        .clipShape(Circle())
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .onChange(of: selectedPickerItem) { _, newItem in
+                    guard let newItem else { return }
+                    Task {
+                        if let data = try? await newItem.loadTransferable(type: Data.self),
+                           let uiImage = UIImage(data: data) {
+                            await MainActor.run {
+                                viewModel.setCapturedPhoto(uiImage)
+                            }
+                        }
+                        await MainActor.run {
+                            selectedPickerItem = nil
+                        }
+                    }
+                }
 
-                // Center: Shutter Capture Button
+                // Center: Shutter Capture Button (Gated until C5-123 checks pass)
                 Button {
                     triggerCaptureFlow()
                 } label: {
                     ZStack {
                         Circle()
-                            .stroke(Color.white, lineWidth: 4)
+                            .stroke(canTriggerShutter ? Color.white : viewModel.lightingStatusColor.opacity(0.65), lineWidth: 4)
                             .frame(width: 76, height: 76)
 
                         Circle()
-                            .fill(Color.white)
+                            .fill(canTriggerShutter ? Color.white : Color.white.opacity(0.35))
                             .frame(width: 62, height: 62)
                     }
                     .scaleEffect(isCapturing ? 0.92 : 1.0)
                     .animation(.easeInOut(duration: 0.15), value: isCapturing)
                 }
-                .disabled(isCapturing || viewModel.isCountingDown)
+                .disabled(!canTriggerShutter || isCapturing || viewModel.isCountingDown)
 
                 // Right: Camera Switch Button (Front / Rear)
                 Button {
@@ -278,7 +306,7 @@ struct FaceCameraView: View {
                     }
                 } label: {
                     Image(systemName: "camera.rotate.fill")
-                        .font(.system(size: 26))
+                        .font(.system(size: 24))
                         .foregroundStyle(.white.opacity(0.85))
                         .frame(width: 48, height: 48)
                         .background(Color.white.opacity(0.18))
@@ -287,14 +315,56 @@ struct FaceCameraView: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .padding(.horizontal, 32)
-            .padding(.bottom, 36)
+            .padding(.bottom, 32)
         }
+    }
+
+    private var realTimeSmartChecklistHUD: some View {
+        HStack(spacing: 6) {
+            smartCriterionBadge(
+                title: "Uncovered",
+                isPassed: viewModel.isFaceInFrame && viewModel.isFaceUnobstructed
+            )
+            smartCriterionBadge(
+                title: "Daylight",
+                isPassed: viewModel.isLightingAdequate
+            )
+            smartCriterionBadge(
+                title: "Eye Level",
+                isPassed: viewModel.isFaceInFrame && viewModel.isHeadPoseDirect
+            )
+            smartCriterionBadge(
+                title: "Bare Face",
+                isPassed: viewModel.isFaceInFrame && viewModel.isBareFaceDetected
+            )
+        }
+    }
+
+    private func smartCriterionBadge(title: String, isPassed: Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: isPassed ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(isPassed ? Color(hex: "#34C759") : Color(hex: "#FF9500"))
+
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(Color.black.opacity(0.58))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .stroke(isPassed ? Color(hex: "#34C759").opacity(0.55) : Color.white.opacity(0.18), lineWidth: 1)
+        )
     }
 
     // MARK: - Actions
 
     private func triggerCaptureFlow() {
-        guard !isCapturing else { return }
+        guard !isCapturing, canTriggerShutter else { return }
 
         // Start 3-second countdown for steady posture
         viewModel.isCountingDown = true
@@ -303,9 +373,21 @@ struct FaceCameraView: View {
         Task { @MainActor in
             while countdownRemaining > 1 {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
+                #if !targetEnvironment(simulator)
+                if !viewModel.isReadyForOptimalCapture {
+                    viewModel.isCountingDown = false
+                    return
+                }
+                #endif
                 countdownRemaining -= 1
             }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
+            #if !targetEnvironment(simulator)
+            if !viewModel.isReadyForOptimalCapture {
+                viewModel.isCountingDown = false
+                return
+            }
+            #endif
             viewModel.isCountingDown = false
             executeCapture()
         }

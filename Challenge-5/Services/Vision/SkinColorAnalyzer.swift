@@ -105,34 +105,42 @@ public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @unchecked Send
             throw AnalyzerError.imageProcessingFailed
         }
 
-        // 1. Extract 4-point facial skin RGB samples with Vision
+        // 1. Extract 4-point facial skin RGB samples with Vision (with illuminant & exposure stabilization)
         let samples = try await extractFaceSamples(from: cgImage)
 
-        // 2. Convert RGB samples to CIELAB D65
+        // 2. Convert stabilized RGB samples to CIELAB D65
         let leftCheekLab = Self.rgbToLab(r: samples.leftCheekRGB.r, g: samples.leftCheekRGB.g, b: samples.leftCheekRGB.b)
         let rightCheekLab = Self.rgbToLab(r: samples.rightCheekRGB.r, g: samples.rightCheekRGB.g, b: samples.rightCheekRGB.b)
         let foreheadLab = Self.rgbToLab(r: samples.foreheadRGB.r, g: samples.foreheadRGB.g, b: samples.foreheadRGB.b)
         let perioralLab = Self.rgbToLab(r: samples.perioralRGB.r, g: samples.perioralRGB.g, b: samples.perioralRGB.b)
 
-        // 3. Bilateral cheek fusion (eliminates side-lighting asymmetry)
+        // 3. Shadow-aware bilateral cheek fusion (favors the better-lit cheek to prevent side-shadow drift)
+        let leftWeight: Double = leftCheekLab.L >= rightCheekLab.L ? 0.65 : 0.35
+        let rightWeight: Double = 1.0 - leftWeight
         let bilateralCheekLab = LabColor(
-            L: (leftCheekLab.L + rightCheekLab.L) * 0.5,
-            a: (leftCheekLab.a + rightCheekLab.a) * 0.5,
-            b: (leftCheekLab.b + rightCheekLab.b) * 0.5
+            L: (leftCheekLab.L * leftWeight) + (rightCheekLab.L * rightWeight),
+            a: (leftCheekLab.a * leftWeight) + (rightCheekLab.a * rightWeight),
+            b: (leftCheekLab.b * leftWeight) + (rightCheekLab.b * rightWeight)
         )
 
-        // 4. Compute weighted zone metrics: Cheeks 45%, Forehead 30%, Perioral 25%
-        let avgL = (bilateralCheekLab.L * 0.45) + (foreheadLab.L * 0.30) + (perioralLab.L * 0.25)
-        let avgA = (bilateralCheekLab.a * 0.45) + (foreheadLab.a * 0.30) + (perioralLab.a * 0.25)
-        let avgB = (bilateralCheekLab.b * 0.45) + (foreheadLab.b * 0.30) + (perioralLab.b * 0.25)
+        // 4. Compute weighted zone metrics: Inner Malar Cheeks 55%, Forehead 25%, Chin/Perioral 20%
+        let rawL = (bilateralCheekLab.L * 0.55) + (foreheadLab.L * 0.25) + (perioralLab.L * 0.20)
+        let rawA = (bilateralCheekLab.a * 0.55) + (foreheadLab.a * 0.25) + (perioralLab.a * 0.20)
+        let rawB = (bilateralCheekLab.b * 0.55) + (foreheadLab.b * 0.25) + (perioralLab.b * 0.20)
 
-        let chroma = sqrt(pow(avgA, 2) + pow(avgB, 2))
+        // Quantize to 0.5 Lab units to eliminate frame-to-frame sensor & AWB micro-jitter
+        let avgL = (rawL * 2.0).rounded() / 2.0
+        let avgA = (rawA * 2.0).rounded() / 2.0
+        let avgB = (rawB * 2.0).rounded() / 2.0
+
+        let chroma = (sqrt(pow(avgA, 2) + pow(avgB, 2)) * 2.0).rounded() / 2.0
 
         var hueAngle = atan2(avgB, avgA) * 180.0 / .pi
         if hueAngle < 0 { hueAngle += 360.0 }
+        hueAngle = (hueAngle * 2.0).rounded() / 2.0
 
         let safeB = abs(avgB) < 0.001 ? 0.001 : avgB
-        let ita = atan((avgL - 50.0) / safeB) * 180.0 / .pi
+        let ita = ((atan((avgL - 50.0) / safeB) * 180.0 / .pi) * 2.0).rounded() / 2.0
 
         // 5. Scientific boundary classification
         let undertone: Undertone
@@ -282,81 +290,96 @@ public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @unchecked Send
                 var foreheadPt: CGPoint
                 var perioralPt: CGPoint
 
-                // 1. Forehead region: between eyebrows shifted up ~18% of face height
+                // 1. Forehead region: between eyebrows shifted up ~16% of face height
                 if let leftEyebrow = landmarks?.leftEyebrow,
                    let rightEyebrow = landmarks?.rightEyebrow,
                    let innerLeft = leftEyebrow.normalizedPoints.last,
                    let innerRight = rightEyebrow.normalizedPoints.first {
                     let midX = (innerLeft.x + innerRight.x) * 0.5
                     let midY = (innerLeft.y + innerRight.y) * 0.5
-                    let relative = CGPoint(x: midX, y: min(1.0, midY + 0.18))
+                    let relative = CGPoint(x: midX, y: min(0.95, midY + 0.16))
                     foreheadPt = toImagePixelPoint(landmarkPoint: relative)
                 } else {
                     foreheadPt = CGPoint(
                         x: (box.origin.x + box.size.width * 0.50) * imgW,
-                        y: (1.0 - (box.origin.y + box.size.height * 0.88)) * imgH
+                        y: (1.0 - (box.origin.y + box.size.height * 0.86)) * imgH
                     )
                 }
 
-                // 2. Left Cheek / Jawline region: contour point index 4 shifted slightly inward
-                if let contour = landmarks?.faceContour, contour.normalizedPoints.count >= 10 {
-                    let pts = contour.normalizedPoints
-                    let pt = pts[min(4, pts.count - 1)]
-                    let relative = CGPoint(x: pt.x + 0.09, y: pt.y + 0.06)
-                    leftCheekPt = toImagePixelPoint(landmarkPoint: relative)
+                // 2. Left Inner Malar Cheek: between left eye center and nose base (avoids jawline shadow & hair)
+                if let leftEye = landmarks?.leftEye,
+                   let nose = landmarks?.nose,
+                   !leftEye.normalizedPoints.isEmpty,
+                   !nose.normalizedPoints.isEmpty {
+                    let eyePts = leftEye.normalizedPoints
+                    let eyeCenterX = eyePts.map(\.x).reduce(0, +) / CGFloat(eyePts.count)
+                    let eyeCenterY = eyePts.map(\.y).reduce(0, +) / CGFloat(eyePts.count)
+                    let nosePts = nose.normalizedPoints
+                    let noseMinY = nosePts.map(\.y).min() ?? 0.42
+                    let malarX = eyeCenterX * 0.85 + 0.04
+                    let malarY = (eyeCenterY * 0.38) + (noseMinY * 0.62)
+                    leftCheekPt = toImagePixelPoint(landmarkPoint: CGPoint(x: malarX, y: malarY))
                 } else {
                     leftCheekPt = CGPoint(
-                        x: (box.origin.x + box.size.width * 0.22) * imgW,
-                        y: (1.0 - (box.origin.y + box.size.height * 0.35)) * imgH
+                        x: (box.origin.x + box.size.width * 0.31) * imgW,
+                        y: (1.0 - (box.origin.y + box.size.height * 0.44)) * imgH
                     )
                 }
 
-                // 3. Right Cheek region: contour point count - 5 shifted slightly inward
-                if let contour = landmarks?.faceContour, contour.normalizedPoints.count >= 10 {
-                    let pts = contour.normalizedPoints
-                    let pt = pts[max(0, pts.count - 5)]
-                    let relative = CGPoint(x: max(0.0, pt.x - 0.09), y: pt.y + 0.06)
-                    rightCheekPt = toImagePixelPoint(landmarkPoint: relative)
+                // 3. Right Inner Malar Cheek: between right eye center and nose base (avoids jawline shadow & hair)
+                if let rightEye = landmarks?.rightEye,
+                   let nose = landmarks?.nose,
+                   !rightEye.normalizedPoints.isEmpty,
+                   !nose.normalizedPoints.isEmpty {
+                    let eyePts = rightEye.normalizedPoints
+                    let eyeCenterX = eyePts.map(\.x).reduce(0, +) / CGFloat(eyePts.count)
+                    let eyeCenterY = eyePts.map(\.y).reduce(0, +) / CGFloat(eyePts.count)
+                    let nosePts = nose.normalizedPoints
+                    let noseMinY = nosePts.map(\.y).min() ?? 0.42
+                    let malarX = eyeCenterX * 0.85 + 0.11
+                    let malarY = (eyeCenterY * 0.38) + (noseMinY * 0.62)
+                    rightCheekPt = toImagePixelPoint(landmarkPoint: CGPoint(x: malarX, y: malarY))
                 } else {
                     rightCheekPt = CGPoint(
-                        x: (box.origin.x + box.size.width * 0.78) * imgW,
-                        y: (1.0 - (box.origin.y + box.size.height * 0.35)) * imgH
+                        x: (box.origin.x + box.size.width * 0.69) * imgW,
+                        y: (1.0 - (box.origin.y + box.size.height * 0.44)) * imgH
                     )
                 }
 
-                // 4. Perioral region: between nose bottom and outer lip
-                if let nose = landmarks?.nose,
-                   let outerLips = landmarks?.outerLips,
-                   let noseBottom = nose.normalizedPoints.last,
-                   let leftLipCorner = outerLips.normalizedPoints.first {
-                    let perioralX = max(0.0, ((noseBottom.x + leftLipCorner.x) * 0.5) - 0.07)
-                    let perioralY = (noseBottom.y + leftLipCorner.y) * 0.5
-                    perioralPt = toImagePixelPoint(landmarkPoint: CGPoint(x: perioralX, y: perioralY))
+                // 4. Central Lower Chin / Perioral region: below lower lip (avoids nasolabial shadow crease)
+                if let outerLips = landmarks?.outerLips, !outerLips.normalizedPoints.isEmpty {
+                    let lipPts = outerLips.normalizedPoints
+                    let lipMidX = lipPts.map(\.x).reduce(0, +) / CGFloat(lipPts.count)
+                    let lipMinY = lipPts.map(\.y).min() ?? 0.25
+                    let chinY = max(0.08, lipMinY - 0.09)
+                    perioralPt = toImagePixelPoint(landmarkPoint: CGPoint(x: lipMidX, y: chinY))
                 } else {
                     perioralPt = CGPoint(
-                        x: (box.origin.x + box.size.width * 0.33) * imgW,
-                        y: (1.0 - (box.origin.y + box.size.height * 0.42)) * imgH
+                        x: (box.origin.x + box.size.width * 0.50) * imgW,
+                        y: (1.0 - (box.origin.y + box.size.height * 0.14)) * imgH
                     )
                 }
 
-                // Dynamic sampling radius: proportional to face size (8...36 px)
+                // Dynamic sampling radius: proportional to face size (10...34 px)
                 let facePixelWidth = box.size.width * imgW
-                let sampleRadius = max(8.0, min(36.0, facePixelWidth * 0.035))
+                let sampleRadius = max(10.0, min(34.0, facePixelWidth * 0.042))
 
-                guard let leftRGB = Self.getTrimmedAverageRGB(in: cgImage, center: leftCheekPt, radius: sampleRadius),
-                      let rightRGB = Self.getTrimmedAverageRGB(in: cgImage, center: rightCheekPt, radius: sampleRadius),
-                      let foreRGB = Self.getTrimmedAverageRGB(in: cgImage, center: foreheadPt, radius: sampleRadius),
-                      let periRGB = Self.getTrimmedAverageRGB(in: cgImage, center: perioralPt, radius: sampleRadius) else {
+                guard let rawLeft = Self.getTrimmedAverageRGB(in: cgImage, center: leftCheekPt, radius: sampleRadius),
+                      let rawRight = Self.getTrimmedAverageRGB(in: cgImage, center: rightCheekPt, radius: sampleRadius),
+                      let rawFore = Self.getTrimmedAverageRGB(in: cgImage, center: foreheadPt, radius: sampleRadius),
+                      let rawPeri = Self.getTrimmedAverageRGB(in: cgImage, center: perioralPt, radius: sampleRadius) else {
                     continuation.resume(throwing: AnalyzerError.imageProcessingFailed)
                     return
                 }
 
-                continuation.resume(returning: FaceSamples(
-                    leftCheekRGB: leftRGB,
-                    rightCheekRGB: rightRGB,
-                    foreheadRGB: foreRGB,
-                    perioralRGB: periRGB
-                ))
+                let stabilized = Self.stabilizeSkinSamples(
+                    left: rawLeft,
+                    right: rawRight,
+                    forehead: rawFore,
+                    perioral: rawPeri
+                )
+
+                continuation.resume(returning: stabilized)
             }
 
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
@@ -368,7 +391,63 @@ public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @unchecked Send
         }
     }
 
-    /// Computes 15% trimmed-mean RGB for a pixel patch to filter glare and dark pores.
+    /// Stabilizes multi-zone skin RGB samples against ambient AWB color-temperature drift and auto-exposure shifts.
+    private static func stabilizeSkinSamples(
+        left: RGBColor,
+        right: RGBColor,
+        forehead: RGBColor,
+        perioral: RGBColor
+    ) -> FaceSamples {
+        let zones = [left, right, forehead, perioral]
+        let meanR = zones.map(\.r).reduce(0, +) / 4.0
+        let meanG = zones.map(\.g).reduce(0, +) / 4.0
+        let meanB = zones.map(\.b).reduce(0, +) / 4.0
+        let meanLum = 0.299 * meanR + 0.587 * meanG + 0.114 * meanB
+
+        guard meanLum > 10.0, meanR > 5.0, meanG > 5.0, meanB > 5.0 else {
+            return FaceSamples(
+                leftCheekRGB: left,
+                rightCheekRGB: right,
+                foreheadRGB: forehead,
+                perioralRGB: perioral
+            )
+        }
+
+        // Canonical baseline skin-illuminant ratios under neutral D65 daylight
+        // Damped von Kries chromatic adaptation (35% damping) neutralizes extreme room-light casts
+        // while preserving 65% of the subject's natural genetic warm/cool undertone.
+        let canonicalRG = 1.18
+        let canonicalBG = 0.86
+        let observedRG = meanR / meanG
+        let observedBG = meanB / meanG
+
+        let damping = 0.35
+        let gainR = 1.0 + damping * ((canonicalRG / max(0.5, observedRG)) - 1.0)
+        let gainB = 1.0 + damping * ((canonicalBG / max(0.5, observedBG)) - 1.0)
+
+        // Soft auto-exposure anchoring toward canonical mid-skin luminance (162/255)
+        // Eliminates ITA° depth jumps when standing slightly closer/farther from light source
+        let targetLum = 162.0
+        let exposureDamping = 0.38
+        let exposureGain = 1.0 + exposureDamping * ((targetLum / meanLum) - 1.0)
+        let clampedExposure = min(1.22, max(0.82, exposureGain))
+
+        func normalize(_ c: RGBColor) -> RGBColor {
+            let r = min(255.0, max(0.0, c.r * gainR * clampedExposure))
+            let g = min(255.0, max(0.0, c.g * clampedExposure))
+            let b = min(255.0, max(0.0, c.b * gainB * clampedExposure))
+            return RGBColor(r: r, g: g, b: b)
+        }
+
+        return FaceSamples(
+            leftCheekRGB: normalize(left),
+            rightCheekRGB: normalize(right),
+            foreheadRGB: normalize(forehead),
+            perioralRGB: normalize(perioral)
+        )
+    }
+
+    /// Computes asymmetric trimmed-mean RGB (30% dark trim, 25% bright trim) to reject shadows, glasses, and glare.
     private static func getTrimmedAverageRGB(in cgImage: CGImage, center: CGPoint, radius: CGFloat) -> RGBColor? {
         let imgBounds = CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height)
         let rawRect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
@@ -416,10 +495,13 @@ public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @unchecked Send
             pixels.append(Pixel(r: r, g: g, b: b, lum: lum))
         }
 
-        // Trim 15% lowest luminance (pores/shadows) and 15% highest luminance (specular highlights)
+        // Trim 30% lowest luminance (shadows, pores, hair strands, glasses frames)
+        // and 25% highest luminance (specular oil shine / screen glare)
         pixels.sort { $0.lum < $1.lum }
-        let trimCount = Int(Double(totalPixels) * 0.15)
-        let validRange = trimCount..<(totalPixels - trimCount)
+        let lowTrim = Int(Double(totalPixels) * 0.30)
+        let highTrim = Int(Double(totalPixels) * 0.25)
+        let endIdx = max(lowTrim + 1, totalPixels - highTrim)
+        let validRange = lowTrim..<min(totalPixels, endIdx)
         let sampleSlice = validRange.isEmpty ? pixels : Array(pixels[validRange])
         let sampleCount = Double(sampleSlice.count)
         guard sampleCount > 0 else { return nil }

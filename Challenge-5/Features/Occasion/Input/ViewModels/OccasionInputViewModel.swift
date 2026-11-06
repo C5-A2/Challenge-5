@@ -27,6 +27,9 @@ public final class OccasionInputViewModel {
     
     // MARK: - Properties
     
+    /// Maximum character limit for the occasion title (ensures title fits the occasion folder card without clipping).
+    public static let maxTitleLength: Int = 22
+    
     /// The user-defined title for the occasion (e.g., "Gala Dinner", "Wedding Reception"). Required.
     public var title: String = ""
     
@@ -150,16 +153,18 @@ public final class OccasionInputViewModel {
     }
     
     /// Checks whether the required occasion fields are valid:
-    /// - Occasion `title` must be non-empty (required).
+    /// - Occasion `title` must be non-empty and not exceed `maxTitleLength` (required).
     /// - `date` cannot be in the past.
     /// - `selectedVisions` count must be between 1 and 3 (min 1, max 3).
     /// - `referenceImages` count must be between 0 and 3 (min 0, max 3).
     /// - `dresscode` is optional.
     public var isValid: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !isDateInPast &&
-        hasValidVisionCount &&
-        referenceImages.count <= ReferencePickerConstants.maximumReferenceCount
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmedTitle.isEmpty &&
+            trimmedTitle.count <= Self.maxTitleLength &&
+            !isDateInPast &&
+            hasValidVisionCount &&
+            referenceImages.count <= ReferencePickerConstants.maximumReferenceCount
     }
     
     /// Whether the user has selected between 1 and 3 style visions (required for submission).

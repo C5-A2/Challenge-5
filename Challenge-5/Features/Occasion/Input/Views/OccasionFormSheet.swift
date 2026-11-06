@@ -292,11 +292,32 @@ public struct OccasionFormSheet: View {
     
     private var editModeContent: some View {
         VStack(spacing: AppDimensions.elementSpacing + 4) {
-            // 1. Occasion Title Field (Required)
-            PillTextField(
-                placeholder: "Occasion Title",
-                text: $viewModel.title
-            )
+            // 1. Occasion Title Field (Required, Max 50 Characters)
+            VStack(alignment: .trailing, spacing: 6) {
+                PillTextField(
+                    placeholder: "Occasion Title",
+                    text: $viewModel.title
+                )
+                
+                HStack {
+                    if viewModel.title.count > OccasionInputViewModel.maxTitleLength {
+                        Text("Maximum \(OccasionInputViewModel.maxTitleLength) characters allowed")
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundStyle(Color(hex: "#FF3B30"))
+                    }
+                    
+                    Spacer()
+                    
+                    Text("\(viewModel.title.count)/\(OccasionInputViewModel.maxTitleLength)")
+                        .font(.system(size: 11.5, weight: .regular))
+                        .foregroundStyle(
+                            viewModel.title.count > OccasionInputViewModel.maxTitleLength
+                                ? Color(hex: "#FF3B30")
+                                : AppColors.mutedCaption
+                        )
+                }
+                .padding(.horizontal, 14)
+            }
             
             // 2. Date Picker Row (Defaults to tomorrow, past dates disabled)
             DatePicker(
