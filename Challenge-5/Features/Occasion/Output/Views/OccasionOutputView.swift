@@ -168,9 +168,7 @@ struct OccasionOutputView: View {
                     viewModel.regenerateLooks(profile: activeProfile)
                 },
                 onDelete: {
-                    ReferenceImageStyleAnalyzer.shared.saveDescriptions([], forOccasionID: viewModel.occasion.id)
-                    modelContext.delete(viewModel.occasion)
-                    try? modelContext.save()
+                    viewModel.occasion.deletePreservingBookmarkedLooks(in: modelContext)
                     isShowingOccasionDetailSheet = false
                     dismiss()
                     onDismiss?()

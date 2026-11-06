@@ -75,9 +75,9 @@ public struct SavedLookItem: Identifiable, Hashable, Sendable {
         cardHeightRatio: CGFloat = 1.35
     ) {
         self.id = outfitLook.id
-        self.occasionTitle = occasionTitle ?? outfitLook.occasion?.title ?? "Occasion Outfit"
-        self.dresscode = dresscode ?? outfitLook.occasion?.dresscode ?? "Smart Casual"
-        self.date = date ?? outfitLook.savedAt ?? outfitLook.occasion?.date ?? Date()
+        self.occasionTitle = occasionTitle ?? outfitLook.occasion?.title ?? outfitLook.cachedOccasionTitle ?? "Occasion Outfit"
+        self.dresscode = dresscode ?? outfitLook.occasion?.dresscode ?? outfitLook.cachedOccasionDresscode ?? "Smart Casual"
+        self.date = date ?? outfitLook.savedAt ?? outfitLook.occasion?.date ?? outfitLook.cachedOccasionDate ?? Date()
         self.lookIndex = outfitLook.lookIndex
         self.isBookmarked = outfitLook.isBookmarked
         self.fitRationale = outfitLook.fitRationale

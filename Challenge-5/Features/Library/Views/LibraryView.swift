@@ -35,7 +35,7 @@ public struct LibraryView: View {
     
     public init(
         selectedTab: Binding<CapsuleTabItem> = .constant(.library),
-        initialLooks: [SavedLookItem] = SavedLookItem.samples,
+        initialLooks: [SavedLookItem] = [],
         onProfileTap: (() -> Void)? = nil,
         onSelectLook: ((SavedLookItem) -> Void)? = nil
     ) {
@@ -72,7 +72,7 @@ public struct LibraryView: View {
                                 viewModel.loadSampleLooks()
                             }
                         )
-                        .padding(.top, 40)
+                        .padding(.top, 87)
                     } else {
                         staggeredLookGrid
                     }
@@ -111,12 +111,12 @@ public struct LibraryView: View {
     // MARK: - Subviews
     
     private var headerBar: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Top Row: Circular Icon Button at Top Right
-            HStack {
+        VStack(alignment: .leading, spacing: 10) {
+            // Top Row: Circular Icon Button at Top Right (Matches OccasionsHomeView)
+            HStack(spacing: 12) {
                 Spacer()
                 
-                CircularIconButton(systemName: "person.crop.circle") {
+                LiquidGlassCircularButton.profile {
                     if let onProfileTap {
                         onProfileTap()
                     } else {
@@ -125,7 +125,7 @@ public struct LibraryView: View {
                 }
             }
             
-            // Second Row: Large "Library" Title below the button
+            // Second Row: Large "Library" Title below the button (10 px below profile button)
             Text("Library")
                 .font(AppTypography.screenHeader)
                 .foregroundStyle(AppColors.espressoTitle)
