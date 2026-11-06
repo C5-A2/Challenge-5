@@ -9,28 +9,37 @@ import Foundation
 import AVFoundation
 import Vision
 import CoreImage
+#if canImport(UIKit)
+import UIKit
+#endif
 
-/// Real-time analyzer that processes camera video sample buffers to evaluate
-/// scene luminance, detect facial presence, verify head pose alignment (direct angle),
-/// and drive dynamic camera guidance feedback (C5-83).
+/// Real-time smart analyzer (C5-83 & C5-123) that processes camera video frames and static images to:
+/// 1. Verify bright, natural daylight illumination (`luminance` & bilateral evenness).
+/// 2. Enforce strict 3-axis head pose (`yaw`, `roll`, and `pitch` — must face camera directly at eye level, never from above or below).
+/// 3. Detect facial obstructions in real time (eyeglasses/sunglasses, face masks, hands, hair/bangs covering forehead or cheeks).
+/// 4. Verify bare face with no heavy makeup (lipstick / heavy blush check).
 @MainActor
 public final class LightingAnalyzer: LightingAnalyzerProtocol {
 
     // MARK: - Configuration & Thresholds
 
-    private let minOptimalLuminance: Double = 0.20
-    private let maxOptimalLuminance: Double = 0.90
-    private let maxRollAngleDegrees: Double = 12.0
-    private let maxYawAngleDegrees: Double = 14.0
+    /// Require bright natural daylight (>= 0.36 normalized luma) and avoid blown-out glare (<= 0.88).
+    private let minOptimalLuminance: Double = 0.36
+    private let maxOptimalLuminance: Double = 0.88
+
+    /// Strict 3-axis head pose thresholds (must be straight in front, not tilted up/down/sideways).
+    private let maxRollAngleDegrees: Double = 10.0
+    private let maxYawAngleDegrees: Double = 12.0
+    private let maxPitchAngleDegrees: Double = 11.0
 
     // High-accuracy geometric alignment targets matching the SwiftUI oval guide
     private let targetCenterX: CGFloat = 0.50
-    private let targetCenterY: CGFloat = 0.55
-    private let maxHorizontalTolerance: CGFloat = 0.07   // Face must be within ±7% of center X
-    private let maxVerticalTolerance: CGFloat = 0.08     // Face must be within ±8% of center Y
-    private let minFaceWidthRatio: CGFloat = 0.28        // Must comfortably fill the oval guide
-    private let maxFaceWidthRatio: CGFloat = 0.55        // Must not overflow the oval guide
-    private let minEyeNoseSymmetry: CGFloat = 0.58       // Strict front-facing symmetry (rejects profile)
+    private let targetCenterY: CGFloat = 0.54
+    private let maxHorizontalTolerance: CGFloat = 0.08
+    private let maxVerticalTolerance: CGFloat = 0.09
+    private let minFaceWidthRatio: CGFloat = 0.27
+    private let maxFaceWidthRatio: CGFloat = 0.58
+    private let minEyeNoseSymmetry: CGFloat = 0.62
 
     // Frame throttling (~8 FPS for smooth responsive UI and low thermal/battery load)
     private var isProcessing: Bool = false
@@ -71,7 +80,6 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
     // MARK: - Full Real-Time Frame Analysis
 
     public func analyzeFrame(_ sampleBuffer: CMSampleBuffer) async -> RealTimeFaceAnalysisResult? {
-        // Drop frame if another analysis is actively processing or within interval
         guard shouldProcessNextFrame() else {
             return nil
         }
@@ -84,25 +92,65 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
             return nil
         }
 
-        // 1. Calculate Real-Time Luminance (0.0 to 1.0)
-        let luminance = calculateLuminanceFromPixelBuffer(pixelBuffer)
+        let sceneLuminance = calculateLuminanceFromPixelBuffer(pixelBuffer)
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        let cgImage = context.createCGImage(ciImage, from: ciImage.extent)
+
+        return await evaluateFaceInFrame(
+            pixelBuffer: pixelBuffer,
+            cgImage: cgImage,
+            sceneLuminance: sceneLuminance
+        )
+    }
+
+    #if canImport(UIKit)
+    /// Evaluates a static `UIImage` (captured photo or gallery selection) using the exact same C5-123 criteria.
+    public func analyzeStaticImage(_ image: UIImage) async -> RealTimeFaceAnalysisResult {
+        guard let cgImage = Self.normalizedCGImage(from: image) else {
+            return RealTimeFaceAnalysisResult(
+                guidanceText: "Unable to read image for face validation",
+                isReadyForOptimalCapture: false
+            )
+        }
+        let sceneLum = Self.calculateLuminanceFromCGImage(cgImage)
+        return await evaluateFaceInFrame(
+            pixelBuffer: nil,
+            cgImage: cgImage,
+            sceneLuminance: sceneLum
+        )
+    }
+    #endif
+
+    // MARK: - Core Multi-Stage Evaluation (Pose + Lighting + Occlusion + Bare Face)
+
+    private func evaluateFaceInFrame(
+        pixelBuffer: CVPixelBuffer?,
+        cgImage: CGImage?,
+        sceneLuminance: Double
+    ) async -> RealTimeFaceAnalysisResult {
+        let faceEval = await detectFacePoseAndObstructions(pixelBuffer: pixelBuffer, cgImage: cgImage)
+
+        // Combine scene luminance with actual facial skin luminance if a face is present
+        let effectiveLuminance = faceEval.faceLuminance ?? sceneLuminance
+
         let lightingStatus: LightingStatus
-        if luminance < minOptimalLuminance {
+        if effectiveLuminance < minOptimalLuminance {
             lightingStatus = .tooDark
-        } else if luminance > maxOptimalLuminance {
+        } else if effectiveLuminance > maxOptimalLuminance {
             lightingStatus = .tooBright
+        } else if faceEval.isUnevenlyLit {
+            lightingStatus = .backlit
         } else {
             lightingStatus = .optimal
         }
 
-        // 2. Perform Vision Face & Pose Detection
-        let faceResult = await detectFaceAndPose(in: pixelBuffer)
-
-        // 3. Synthesize Guidance Text & Optimal State
         let isLightingOK = (lightingStatus == .optimal)
-        let isAngleOK = faceResult.isHeadPoseDirect
-        let isCentered = faceResult.isFaceCentered
-        let isDetected = faceResult.isFaceDetected
+        let isDetected = faceEval.isFaceDetected
+        let isCentered = faceEval.isFaceCentered
+        let isAngleOK = faceEval.isHeadPoseDirect
+        let isUnobstructed = faceEval.isFaceUnobstructed
+        let isBareFace = faceEval.isBareFace
 
         let guidanceText: String
         let isReady: Bool
@@ -110,38 +158,655 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
         if !isDetected {
             guidanceText = "Position face within the oval guide"
             isReady = false
-        } else if let specific = faceResult.poseSpecificGuidance {
-            guidanceText = specific
+        } else if let obstruction = faceEval.obstructionReason {
+            guidanceText = obstruction
+            isReady = false
+        } else if let poseMsg = faceEval.poseSpecificGuidance {
+            guidanceText = poseMsg
             isReady = false
         } else if !isCentered {
-            guidanceText = "Move face closer to the center"
+            guidanceText = "Center your face inside the oval guide"
             isReady = false
         } else if !isAngleOK {
-            guidanceText = "Face camera directly — keep head upright"
+            guidanceText = "Face camera directly at eye level"
             isReady = false
         } else if !isLightingOK {
             guidanceText = lightingStatus.statusText
             isReady = false
+        } else if !isBareFace {
+            guidanceText = "Makeup detected — bare face required"
+            isReady = false
         } else {
-            guidanceText = "Position & lighting optimal ✅"
+            guidanceText = "Face clear, direct & bright daylight ✅"
             isReady = true
         }
 
         return RealTimeFaceAnalysisResult(
-            luminance: luminance,
+            luminance: effectiveLuminance,
             lightingStatus: lightingStatus,
             isFaceDetected: isDetected,
             isFaceCentered: isCentered,
             isHeadPoseDirect: isAngleOK,
-            rollAngleDegrees: faceResult.rollDegrees,
-            yawAngleDegrees: faceResult.yawDegrees,
-            captureQuality: faceResult.quality,
+            isFaceUnobstructed: isUnobstructed,
+            isBareFace: isBareFace,
+            rollAngleDegrees: faceEval.rollDegrees,
+            yawAngleDegrees: faceEval.yawDegrees,
+            pitchAngleDegrees: faceEval.pitchDegrees,
+            captureQuality: faceEval.quality,
+            obstructionReason: faceEval.obstructionReason,
             guidanceText: guidanceText,
             isReadyForOptimalCapture: isReady
         )
     }
 
-    // MARK: - Luminance Calculation (Luma Sampling)
+    // MARK: - Vision Face, 3-Axis Pose & Occlusion Detection
+
+    private struct VisionFaceEvaluation {
+        var isFaceDetected: Bool = false
+        var isFaceCentered: Bool = false
+        var isHeadPoseDirect: Bool = false
+        var isFaceUnobstructed: Bool = false
+        var isBareFace: Bool = true
+        var isUnevenlyLit: Bool = false
+        var faceLuminance: Double? = nil
+        var rollDegrees: Double = 0.0
+        var yawDegrees: Double = 0.0
+        var pitchDegrees: Double = 0.0
+        var quality: Float = 0.0
+        var obstructionReason: String? = nil
+        var poseSpecificGuidance: String? = nil
+    }
+
+    private func detectFacePoseAndObstructions(
+        pixelBuffer: CVPixelBuffer?,
+        cgImage: CGImage?
+    ) async -> VisionFaceEvaluation {
+        await withCheckedContinuation { continuation in
+            let landmarksRequest = VNDetectFaceLandmarksRequest()
+            let classifyRequest = VNClassifyImageRequest()
+            let handPoseRequest = VNDetectHumanHandPoseRequest()
+            handPoseRequest.maximumHandCount = 2
+
+            let handler: VNImageRequestHandler?
+            if let cgImage {
+                handler = VNImageRequestHandler(cgImage: cgImage, orientation: .up, options: [:])
+            } else if let pixelBuffer {
+                handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
+            } else {
+                continuation.resume(returning: VisionFaceEvaluation())
+                return
+            }
+
+            do {
+                try handler?.perform([landmarksRequest, classifyRequest, handPoseRequest])
+            } catch {
+                do {
+                    try handler?.perform([landmarksRequest, classifyRequest])
+                } catch {
+                    continuation.resume(returning: VisionFaceEvaluation())
+                    return
+                }
+            }
+
+            guard let observations = landmarksRequest.results,
+                  !observations.isEmpty,
+                  let face = observations.max(by: {
+                      ($0.boundingBox.width * $0.boundingBox.height) < ($1.boundingBox.width * $1.boundingBox.height)
+                  }) else {
+                continuation.resume(returning: VisionFaceEvaluation(
+                    poseSpecificGuidance: "Position face within the oval guide"
+                ))
+                return
+            }
+
+            let box = face.boundingBox
+            let midX = box.midX
+            let midY = box.midY
+            let faceWidth = box.width
+
+            // 1. Distance & Centering relative to Oval Guide
+            let isDistanceTooFar = (faceWidth < self.minFaceWidthRatio)
+            let isDistanceTooClose = (faceWidth > self.maxFaceWidthRatio)
+            let isDistanceOK = !isDistanceTooFar && !isDistanceTooClose
+
+            let diffX = midX - self.targetCenterX
+            let diffY = midY - self.targetCenterY
+            let isCenteredX = abs(diffX) <= self.maxHorizontalTolerance
+            let isCenteredY = abs(diffY) <= self.maxVerticalTolerance
+            let isCentered = isCenteredX && isCenteredY && isDistanceOK
+
+            // 2. Check Vision Classifier & Hand Pose Detector for Hand / Eyewear / Mask / Face Covering
+            var glassesClassifierConfidence: Float = 0.0
+            var maskClassifierConfidence: Float = 0.0
+            var handClassifierConfidence: Float = 0.0
+            if let classifications = classifyRequest.results {
+                for item in classifications {
+                    let id = item.identifier.lowercased()
+                    if id.contains("sunglass") || id.contains("eyeglass") || id.contains("spectacle") || id.contains("goggle") || id.contains("glasses") {
+                        glassesClassifierConfidence = max(glassesClassifierConfidence, item.confidence)
+                    }
+                    if id.contains("mask") || id.contains("respirator") || id.contains("bandana") || id.contains("veil") || id.contains("scarf") || id.contains("helmet") {
+                        maskClassifierConfidence = max(maskClassifierConfidence, item.confidence)
+                    }
+                    if id.contains("hand") || id.contains("finger") || id.contains("palm") || id.contains("fist") || id.contains("gesture") || id.contains("thumb") {
+                        handClassifierConfidence = max(handClassifierConfidence, item.confidence)
+                    }
+                }
+            }
+
+            // Detect Human Hand / Fingers via VNDetectHumanHandPoseRequest
+            var isHandDetectedInFrame = false
+            let expandedFaceRect = box.insetBy(dx: -box.width * 0.35, dy: -box.height * 0.35)
+            if let handObservations = handPoseRequest.results, !handObservations.isEmpty {
+                for hand in handObservations {
+                    if let points = try? hand.recognizedPoints(.all) {
+                        let confidentJoints = points.values.filter { $0.confidence >= 0.18 }
+                        let jointsNearFace = confidentJoints.filter { pt in
+                            expandedFaceRect.contains(CGPoint(x: pt.location.x, y: pt.location.y))
+                        }
+                        if jointsNearFace.count >= 1 || confidentJoints.count >= 3 {
+                            isHandDetectedInFrame = true
+                            break
+                        }
+                    }
+                }
+            }
+
+            // 3. Verify All Essential Facial Landmarks Exist (Eyes, Eyebrows, Nose, Mouth, Contour)
+            guard let landmarks = face.landmarks,
+                  let leftEye = landmarks.leftEye, leftEye.pointCount >= 4,
+                  let rightEye = landmarks.rightEye, rightEye.pointCount >= 4,
+                  let leftEyebrow = landmarks.leftEyebrow, leftEyebrow.pointCount >= 3,
+                  let rightEyebrow = landmarks.rightEyebrow, rightEyebrow.pointCount >= 3,
+                  let nose = landmarks.nose, nose.pointCount >= 3,
+                  let outerLips = landmarks.outerLips, outerLips.pointCount >= 6,
+                  let innerLips = landmarks.innerLips, innerLips.pointCount >= 4,
+                  let contour = landmarks.faceContour, contour.pointCount >= 10 else {
+                continuation.resume(returning: VisionFaceEvaluation(
+                    isFaceDetected: true,
+                    isFaceCentered: isCentered,
+                    isHeadPoseDirect: false,
+                    isFaceUnobstructed: false,
+                    obstructionReason: "Face obstructed — uncover eyes, nose, and mouth"
+                ))
+                return
+            }
+
+            if landmarks.confidence < 0.68 {
+                continuation.resume(returning: VisionFaceEvaluation(
+                    isFaceDetected: true,
+                    isFaceCentered: isCentered,
+                    isHeadPoseDirect: false,
+                    isFaceUnobstructed: false,
+                    obstructionReason: "Face partially covered — remove glasses, mask, or hair"
+                ))
+                return
+            }
+
+            // 4. 3-Axis Head Pose Calculation (Roll, Yaw, Pitch — "Jangan dari bawah atau atas")
+            let leftEyeCenter = self.averagePoint(of: leftEye.normalizedPoints)
+            let rightEyeCenter = self.averagePoint(of: rightEye.normalizedPoints)
+            let noseCenter = self.averagePoint(of: nose.normalizedPoints)
+            let mouthCenter = self.averagePoint(of: outerLips.normalizedPoints)
+
+            // Roll (head tilt left/right)
+            let dx = rightEyeCenter.x - leftEyeCenter.x
+            let dy = rightEyeCenter.y - leftEyeCenter.y
+            let rollDeg = abs(atan2(dy, dx) * 180.0 / .pi)
+
+            // Yaw (turning head left/right)
+            let distToLeft = abs(noseCenter.x - leftEyeCenter.x)
+            let distToRight = abs(rightEyeCenter.x - noseCenter.x)
+            let minEyeDist = min(distToLeft, distToRight)
+            let maxEyeDist = max(distToLeft, distToRight)
+            let symmetryRatio = maxEyeDist > 0 ? (minEyeDist / maxEyeDist) : 0.0
+
+            var visionYawDeg = 0.0
+            if let yaw = face.yaw {
+                visionYawDeg = abs(yaw.doubleValue * 180.0 / .pi)
+            }
+
+            // Pitch (camera from below / chin up vs camera from above / chin down)
+            var visionPitchDeg = 0.0
+            var hasVisionPitch = false
+            if #available(iOS 15.0, *), let pitch = face.pitch {
+                visionPitchDeg = pitch.doubleValue * 180.0 / .pi
+                hasVisionPitch = true
+            }
+
+            // Geometric vertical pitch ratio: (eyeLineY - noseBottomY) / (noseBottomY - mouthCenterY)
+            let eyeMidY = (leftEyeCenter.y + rightEyeCenter.y) * 0.5
+            let noseMinY = nose.normalizedPoints.map(\.y).min() ?? noseCenter.y
+            let eyeToNose = max(0.01, eyeMidY - noseMinY)
+            let noseToMouth = max(0.01, noseMinY - mouthCenter.y)
+            let verticalPitchRatio = Double(eyeToNose / noseToMouth)
+
+            // Detect camera held too low (from below / chin tilted up) or too high (from above / chin tilted down)
+            let isLookingFromBelow = (hasVisionPitch && visionPitchDeg > self.maxPitchAngleDegrees) || (verticalPitchRatio < 1.08) || (eyeMidY > 0.75)
+            let isLookingFromAbove = (hasVisionPitch && visionPitchDeg < -self.maxPitchAngleDegrees) || (verticalPitchRatio > 2.25) || (eyeMidY < 0.52)
+            let isPitchOK = !isLookingFromBelow && !isLookingFromAbove
+
+            let isRollOK = (rollDeg <= self.maxRollAngleDegrees)
+            let isSymmetryOK = (symmetryRatio >= self.minEyeNoseSymmetry)
+            let isYawOK = (visionYawDeg <= self.maxYawAngleDegrees)
+            let isPoseDirect = isRollOK && isSymmetryOK && isYawOK && isPitchOK
+
+            // 5. Pixel-Level Smart Obstruction & Bare-Face Inspection (Hand, Glasses, Mask, Hair, Makeup)
+            var obstructionReason: String? = nil
+            var isBareFace = true
+            var isUnevenlyLit = false
+            var computedFaceLuma: Double? = nil
+
+            if isHandDetectedInFrame || handClassifierConfidence >= 0.25 {
+                obstructionReason = "Hand detected — please remove your hand from your face"
+            } else if maskClassifierConfidence >= 0.45 {
+                obstructionReason = "Mask or face cover detected — uncover your face"
+            } else if glassesClassifierConfidence >= 0.58 {
+                obstructionReason = "Glasses detected — please remove eyewear"
+            }
+
+            if let cgImage {
+                let skinCheck = Self.inspectFacialRegions(
+                    in: cgImage,
+                    faceBox: box,
+                    leftEye: leftEye.normalizedPoints,
+                    rightEye: rightEye.normalizedPoints,
+                    leftEyebrow: leftEyebrow.normalizedPoints,
+                    rightEyebrow: rightEyebrow.normalizedPoints,
+                    nose: nose.normalizedPoints,
+                    outerLips: outerLips.normalizedPoints,
+                    glassesClassifierConfidence: glassesClassifierConfidence,
+                    maskClassifierConfidence: maskClassifierConfidence,
+                    handClassifierConfidence: handClassifierConfidence
+                )
+                computedFaceLuma = skinCheck.averageFaceLuminance
+                isUnevenlyLit = skinCheck.isUnevenlyLit
+                isBareFace = skinCheck.isBareFace
+
+                if obstructionReason == nil {
+                    obstructionReason = skinCheck.obstructionMessage
+                }
+            }
+
+            // 6. Prioritized Guidance Message
+            var specificGuidance: String? = nil
+            if isDistanceTooFar {
+                specificGuidance = "Move closer to fit the oval guide"
+            } else if isDistanceTooClose {
+                specificGuidance = "Move slightly further back"
+            } else if !isCenteredX {
+                specificGuidance = (diffX < 0) ? "Move face slightly right" : "Move face slightly left"
+            } else if !isCenteredY {
+                specificGuidance = (diffY < 0) ? "Move face higher in the oval" : "Move face lower in the oval"
+            } else if isLookingFromBelow {
+                specificGuidance = "Angle too low — hold camera straight at eye level"
+            } else if isLookingFromAbove {
+                specificGuidance = "Angle too high — hold camera straight at eye level"
+            } else if !isRollOK {
+                specificGuidance = "Keep your head straight and upright"
+            } else if !isSymmetryOK || !isYawOK {
+                specificGuidance = "Face the camera directly — do not turn sideways"
+            }
+
+            let effectivePitchDeg: Double = {
+                if hasVisionPitch { return visionPitchDeg }
+                if isLookingFromBelow { return 16.0 }
+                if isLookingFromAbove { return -16.0 }
+                return 0.0
+            }()
+
+            let eval = VisionFaceEvaluation(
+                isFaceDetected: true,
+                isFaceCentered: isCentered,
+                isHeadPoseDirect: isPoseDirect,
+                isFaceUnobstructed: (obstructionReason == nil),
+                isBareFace: isBareFace,
+                isUnevenlyLit: isUnevenlyLit,
+                faceLuminance: computedFaceLuma,
+                rollDegrees: rollDeg,
+                yawDegrees: max(visionYawDeg, (1.0 - symmetryRatio) * 45.0),
+                pitchDegrees: effectivePitchDeg,
+                quality: face.faceCaptureQuality ?? 0.7,
+                obstructionReason: obstructionReason,
+                poseSpecificGuidance: specificGuidance
+            )
+
+            continuation.resume(returning: eval)
+        }
+    }
+
+    // MARK: - Regional Pixel Inspection (Hand, Glasses, Mask, Hair Bangs, Makeup & Lighting Symmetry)
+
+    private struct RegionalInspectionResult {
+        let averageFaceLuminance: Double
+        let isUnevenlyLit: Bool
+        let isBareFace: Bool
+        let obstructionMessage: String?
+    }
+
+    private struct PatchStats {
+        let r: Double
+        let g: Double
+        let b: Double
+        let luma: Double      // Normalized [0...1]
+        let cb: Double        // YCbCr Blue-difference [0...255]
+        let cr: Double        // YCbCr Red-difference [0...255]
+        let stdDevLuma: Double
+        let darkFraction: Double
+        let brightFraction: Double
+
+        var isPlausibleHumanSkin: Bool {
+            // Human skin across all Fitzpatrick types in YCbCr and RGB
+            let ycbcrOK = (cb >= 70.0 && cb <= 136.0) && (cr >= 129.0 && cr <= 182.0)
+            let rgbOrderOK = (r > g * 0.94) && (r > b * 1.02)
+            return ycbcrOK && rgbOrderOK && luma >= 0.14 && luma <= 0.95
+        }
+    }
+
+    private static func inspectFacialRegions(
+        in cgImage: CGImage,
+        faceBox: CGRect,
+        leftEye: [CGPoint],
+        rightEye: [CGPoint],
+        leftEyebrow: [CGPoint],
+        rightEyebrow: [CGPoint],
+        nose: [CGPoint],
+        outerLips: [CGPoint],
+        glassesClassifierConfidence: Float,
+        maskClassifierConfidence: Float,
+        handClassifierConfidence: Float
+    ) -> RegionalInspectionResult {
+        let imgW = CGFloat(cgImage.width)
+        let imgH = CGFloat(cgImage.height)
+
+        func toPixel(_ pt: CGPoint) -> CGPoint {
+            let vx = faceBox.origin.x + pt.x * faceBox.width
+            let vy = faceBox.origin.y + pt.y * faceBox.height
+            return CGPoint(x: vx * imgW, y: (1.0 - vy) * imgH)
+        }
+
+        let leftEyeCenter = average(of: leftEye)
+        let rightEyeCenter = average(of: rightEye)
+        let leftBrowCenter = average(of: leftEyebrow)
+        let rightBrowCenter = average(of: rightEyebrow)
+        let noseCenter = average(of: nose)
+        let lipCenter = average(of: outerLips)
+        let noseMinY = nose.map(\.y).min() ?? noseCenter.y
+        let lipMinY = outerLips.map(\.y).min() ?? (lipCenter.y - 0.04)
+        let leftEyeMinY = leftEye.map(\.y).min() ?? (leftEyeCenter.y - 0.025)
+        let rightEyeMinY = rightEye.map(\.y).min() ?? (rightEyeCenter.y - 0.025)
+        let leftEyeInnerX = leftEye.map(\.x).max() ?? (leftEyeCenter.x + 0.05)
+        let rightEyeInnerX = rightEye.map(\.x).min() ?? (rightEyeCenter.x - 0.05)
+
+        // 1. Key anatomical sample coordinates
+        let foreheadNorm = CGPoint(
+            x: (leftBrowCenter.x + rightBrowCenter.x) * 0.5,
+            y: min(0.91, ((leftBrowCenter.y + rightBrowCenter.y) * 0.5) + 0.11)
+        )
+        let leftCheekNorm = CGPoint(
+            x: leftEyeCenter.x * 0.85 + 0.04,
+            y: (leftEyeCenter.y * 0.38) + (noseMinY * 0.62)
+        )
+        let rightCheekNorm = CGPoint(
+            x: rightEyeCenter.x * 0.85 + 0.11,
+            y: (rightEyeCenter.y * 0.38) + (noseMinY * 0.62)
+        )
+        let chinNorm = CGPoint(
+            x: lipCenter.x,
+            y: max(0.07, lipMinY - 0.07)
+        )
+
+        // Narrow nasal bridge points strictly between inner eye corners (avoids eyelashes/canthus)
+        let bridgeMidX = (leftEyeInnerX + rightEyeInnerX) * 0.5
+        let bridgeMidY = (leftEyeCenter.y + rightEyeCenter.y) * 0.5
+        let noseBridgeCenterNorm = CGPoint(x: bridgeMidX, y: bridgeMidY)
+        let noseBridgeUpperNorm = CGPoint(x: bridgeMidX, y: bridgeMidY + 0.032)
+        let noseBridgeLowerNorm = CGPoint(x: bridgeMidX, y: bridgeMidY - 0.032)
+
+        // Under-eye orbital points (below eyelashes, where glasses lower rim / sunglasses lens sit)
+        let underLeftEyeNorm = CGPoint(
+            x: leftEyeCenter.x,
+            y: (leftEyeMinY * 0.58) + (leftCheekNorm.y * 0.42)
+        )
+        let underRightEyeNorm = CGPoint(
+            x: rightEyeCenter.x,
+            y: (rightEyeMinY * 0.58) + (rightCheekNorm.y * 0.42)
+        )
+
+        let patchRadius = max(5.0, min(22.0, faceBox.width * imgW * 0.032))
+        let innerEyeGapPx = max(8.0, abs(rightEyeInnerX - leftEyeInnerX) * faceBox.width * imgW)
+        let bridgeRadius = max(3.5, min(10.0, innerEyeGapPx * 0.18))
+
+        guard let forehead = samplePatchStats(in: cgImage, center: toPixel(foreheadNorm), radius: patchRadius),
+              let leftCheek = samplePatchStats(in: cgImage, center: toPixel(leftCheekNorm), radius: patchRadius),
+              let rightCheek = samplePatchStats(in: cgImage, center: toPixel(rightCheekNorm), radius: patchRadius),
+              let chin = samplePatchStats(in: cgImage, center: toPixel(chinNorm), radius: patchRadius * 0.85),
+              let noseTip = samplePatchStats(in: cgImage, center: toPixel(noseCenter), radius: patchRadius * 0.80),
+              let lips = samplePatchStats(in: cgImage, center: toPixel(lipCenter), radius: patchRadius * 0.80),
+              let leftEyePatch = samplePatchStats(in: cgImage, center: toPixel(leftEyeCenter), radius: patchRadius * 0.72),
+              let rightEyePatch = samplePatchStats(in: cgImage, center: toPixel(rightEyeCenter), radius: patchRadius * 0.72),
+              let nasalBridge = samplePatchStats(in: cgImage, center: toPixel(noseBridgeCenterNorm), radius: bridgeRadius),
+              let bridgeUpper = samplePatchStats(in: cgImage, center: toPixel(noseBridgeUpperNorm), radius: bridgeRadius),
+              let bridgeLower = samplePatchStats(in: cgImage, center: toPixel(noseBridgeLowerNorm), radius: bridgeRadius),
+              let underLeftEye = samplePatchStats(in: cgImage, center: toPixel(underLeftEyeNorm), radius: patchRadius * 0.65),
+              let underRightEye = samplePatchStats(in: cgImage, center: toPixel(underRightEyeNorm), radius: patchRadius * 0.65) else {
+            return RegionalInspectionResult(
+                averageFaceLuminance: 0.5,
+                isUnevenlyLit: false,
+                isBareFace: true,
+                obstructionMessage: nil
+            )
+        }
+
+        let cheekLuma = (leftCheek.luma + rightCheek.luma) * 0.5
+        let cheekCr = (leftCheek.cr + rightCheek.cr) * 0.5
+        let cheekCb = (leftCheek.cb + rightCheek.cb) * 0.5
+        let avgFaceLuma = (cheekLuma * 0.55) + (forehead.luma * 0.25) + (chin.luma * 0.20)
+
+        // Check bilateral lighting symmetry (side shadow check)
+        let isUnevenlyLit = abs(leftCheek.luma - rightCheek.luma) > 0.17
+
+        // A1. Check Skin-Colored Hand / Finger Occlusion Across Eyes, Mouth, Cheeks, Forehead, or Chin
+        // 1. Uncovered open eyes have dark iris/pupil + sclera contrast; a hand/finger over an eye turns it into skin or creates strong left-right eye mismatch
+        let leftEyeLooksLikeSkinCover = (leftEyePatch.luma > cheekLuma * 0.87 && leftEyePatch.stdDevLuma < 0.062)
+            || leftEyePatch.stdDevLuma < 0.042
+        let rightEyeLooksLikeSkinCover = (rightEyePatch.luma > cheekLuma * 0.87 && rightEyePatch.stdDevLuma < 0.062)
+            || rightEyePatch.stdDevLuma < 0.042
+        let eyeLumaAsymmetry = abs(leftEyePatch.luma - rightEyePatch.luma) > 0.135
+
+        // 2. Uncovered mouth has natural lip redness/line contrast; a hand over the mouth flattens lip redness to skin or adds sharp finger-gap shadows
+        let lipRednessOverSkin = lips.cr - min(cheekCr, chin.cr)
+        let mouthCoveredByHand = (lipRednessOverSkin < 1.8 && abs(lips.luma - chin.luma) < 0.055 && lips.stdDevLuma < 0.058)
+            || lips.stdDevLuma > 0.135
+
+        // 3. Hand/fingers on cheek, forehead, nose, or chin introduce finger-gap shadow edges (high stdDevLuma) or unilateral cheek asymmetry
+        let cheekLumaAsymmetry = abs(leftCheek.luma - rightCheek.luma)
+        let cheekColorAsymmetry = hypot(leftCheek.cr - rightCheek.cr, leftCheek.cb - rightCheek.cb)
+        let cheekStdDevAsymmetry = abs(leftCheek.stdDevLuma - rightCheek.stdDevLuma)
+        let hasFingerOrEdgeOnSmoothSkin = leftCheek.stdDevLuma > 0.092
+            || rightCheek.stdDevLuma > 0.092
+            || forehead.stdDevLuma > 0.102
+            || chin.stdDevLuma > 0.102
+            || noseTip.stdDevLuma > 0.112
+        let hasUnilateralCheekCover = (cheekLumaAsymmetry > 0.105 && cheekStdDevAsymmetry > 0.025)
+            || cheekColorAsymmetry > 4.6
+            || cheekStdDevAsymmetry > 0.040
+
+        if leftEyeLooksLikeSkinCover || rightEyeLooksLikeSkinCover || eyeLumaAsymmetry || mouthCoveredByHand || hasFingerOrEdgeOnSmoothSkin || hasUnilateralCheekCover || handClassifierConfidence >= 0.15 {
+            return RegionalInspectionResult(
+                averageFaceLuminance: avgFaceLuma,
+                isUnevenlyLit: isUnevenlyLit,
+                isBareFace: true,
+                obstructionMessage: "Hand or object covering face — keep face completely clear"
+            )
+        }
+
+        // A2. Check Mask / Non-Skin Object Covering Lower Face (Nose, Mouth, or Chin)
+        let lowerFaceColorDiff = hypot(chin.cr - cheekCr, chin.cb - cheekCb)
+        let noseColorDiff = hypot(noseTip.cr - cheekCr, noseTip.cb - cheekCb)
+        let lowerFaceLumaDiff = abs(chin.luma - cheekLuma)
+        let isMaskCoveringLowerFace = (!chin.isPlausibleHumanSkin && lowerFaceColorDiff > 12.0)
+            || (!noseTip.isPlausibleHumanSkin && noseColorDiff > 12.0)
+            || lowerFaceColorDiff > 15.0
+            || noseColorDiff > 15.0
+            || lowerFaceLumaDiff > 0.25
+            || (maskClassifierConfidence >= 0.24 && (lowerFaceColorDiff > 10.0 || !chin.isPlausibleHumanSkin))
+
+        if isMaskCoveringLowerFace {
+            return RegionalInspectionResult(
+                averageFaceLuminance: avgFaceLuma,
+                isUnevenlyLit: isUnevenlyLit,
+                isBareFace: true,
+                obstructionMessage: "Face covered — remove mask, hand, or object"
+            )
+        }
+
+        // B. Check Eyeglasses / Sunglasses (Zero-False-Positive Multi-Factor Verification)
+        // 1. Sunglasses: both under-eye orbital zones are covered by dark non-skin lenses
+        let isDarkSunglasses = !underLeftEye.isPlausibleHumanSkin
+            && !underRightEye.isPlausibleHumanSkin
+            && underLeftEye.luma < cheekLuma * 0.52
+            && underRightEye.luma < cheekLuma * 0.52
+
+        // 2. Horizontal frame bridge bar step across the narrow nasal bridge strip
+        let bridgeNeighborLuma = (bridgeUpper.luma + bridgeLower.luma) * 0.5
+        let bridgeVerticalStep = abs(nasalBridge.luma - bridgeNeighborLuma)
+        let bridgeToNoseColorDiff = hypot(nasalBridge.cr - noseTip.cr, nasalBridge.cb - noseTip.cb)
+
+        let hasDistinctBridgeBar = (!nasalBridge.isPlausibleHumanSkin && (bridgeVerticalStep > 0.14 || bridgeToNoseColorDiff > 16.0 || nasalBridge.darkFraction > 0.42))
+            || (bridgeVerticalStep > 0.20 && nasalBridge.stdDevLuma > 0.13)
+
+        let hasBilateralUnderEyeRim = (underLeftEye.stdDevLuma > 0.135 && underRightEye.stdDevLuma > 0.135)
+            && ((underLeftEye.darkFraction > 0.30 && underRightEye.darkFraction > 0.30)
+                || (!underLeftEye.isPlausibleHumanSkin && !underRightEye.isPlausibleHumanSkin))
+
+        // Require either dark sunglasses, strong physical frame across both bridge + rims, or Vision classifier + physical frame confirmation
+        let isWearingGlasses = isDarkSunglasses
+            || (hasDistinctBridgeBar && hasBilateralUnderEyeRim)
+            || (glassesClassifierConfidence >= 0.26 && (hasDistinctBridgeBar || hasBilateralUnderEyeRim || nasalBridge.stdDevLuma > 0.125))
+
+        if isWearingGlasses {
+            return RegionalInspectionResult(
+                averageFaceLuminance: avgFaceLuma,
+                isUnevenlyLit: isUnevenlyLit,
+                isBareFace: true,
+                obstructionMessage: "Glasses detected — please remove eyewear"
+            )
+        }
+
+        // C. Check Hair / Bangs Covering Forehead or Cheeks
+        let foreheadToCheekLumaDiff = cheekLuma - forehead.luma
+        let foreheadColorDiff = hypot(forehead.cr - cheekCr, forehead.cb - cheekCb)
+        let hairOnForehead = (!forehead.isPlausibleHumanSkin && (foreheadToCheekLumaDiff > 0.18 || forehead.darkFraction > 0.35 || foreheadColorDiff > 15.0))
+            || forehead.darkFraction > 0.48
+            || foreheadToCheekLumaDiff > 0.30
+        let hairOnCheeks = (!leftCheek.isPlausibleHumanSkin && leftCheek.darkFraction > 0.32)
+            || (!rightCheek.isPlausibleHumanSkin && rightCheek.darkFraction > 0.32)
+
+        if hairOnForehead || hairOnCheeks {
+            return RegionalInspectionResult(
+                averageFaceLuminance: avgFaceLuma,
+                isUnevenlyLit: isUnevenlyLit,
+                isBareFace: true,
+                obstructionMessage: "Hair covering face — tie or pull hair back"
+            )
+        }
+
+        // D. Check Bare Face (No Heavy Lipstick or Blush Makeup)
+        let lipRednessDelta = lips.cr - cheekCr
+        let cheekToForeheadRednessDelta = cheekCr - ((forehead.cr + chin.cr) * 0.5)
+        let hasHeavyMakeup = (lipRednessDelta > 22.5) || (cheekToForeheadRednessDelta > 9.5)
+
+        return RegionalInspectionResult(
+            averageFaceLuminance: avgFaceLuma,
+            isUnevenlyLit: isUnevenlyLit,
+            isBareFace: !hasHeavyMakeup,
+            obstructionMessage: hasHeavyMakeup ? "Makeup detected — please scan with a bare face" : nil
+        )
+    }
+
+    private static func samplePatchStats(in cgImage: CGImage, center: CGPoint, radius: CGFloat) -> PatchStats? {
+        let bounds = CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height)
+        let rawRect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
+        let rect = rawRect.intersection(bounds)
+        guard !rect.isNull, rect.width >= 2, rect.height >= 2,
+              let cropped = cgImage.cropping(to: rect) else { return nil }
+
+        let w = cropped.width
+        let h = cropped.height
+        let count = w * h
+        guard count > 0 else { return nil }
+
+        var raw = [UInt8](repeating: 0, count: count * 4)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        guard let ctx = CGContext(
+            data: &raw,
+            width: w,
+            height: h,
+            bitsPerComponent: 8,
+            bytesPerRow: w * 4,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        ) else { return nil }
+
+        ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        var sumR = 0.0
+        var sumG = 0.0
+        var sumB = 0.0
+        var sumLuma = 0.0
+        var lumas: [Double] = []
+        lumas.reserveCapacity(count)
+        var darkCount = 0
+        var brightCount = 0
+
+        for i in 0..<count {
+            let r = Double(raw[i * 4])
+            let g = Double(raw[i * 4 + 1])
+            let b = Double(raw[i * 4 + 2])
+            let y = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+
+            sumR += r
+            sumG += g
+            sumB += b
+            sumLuma += y
+            lumas.append(y)
+
+            if y < 0.25 { darkCount += 1 }
+            if y > 0.88 { brightCount += 1 }
+        }
+
+        let n = Double(count)
+        let meanR = sumR / n
+        let meanG = sumG / n
+        let meanB = sumB / n
+        let meanLuma = sumLuma / n
+
+        var varianceSum = 0.0
+        for y in lumas {
+            let d = y - meanLuma
+            varianceSum += d * d
+        }
+        let stdDev = sqrt(varianceSum / n)
+
+        let cb = 128.0 - (0.168736 * meanR) - (0.331264 * meanG) + (0.500000 * meanB)
+        let cr = 128.0 + (0.500000 * meanR) - (0.418688 * meanG) - (0.081312 * meanB)
+
+        return PatchStats(
+            r: meanR,
+            g: meanG,
+            b: meanB,
+            luma: meanLuma,
+            cb: cb,
+            cr: cr,
+            stdDevLuma: stdDev,
+            darkFraction: Double(darkCount) / n,
+            brightFraction: Double(brightCount) / n
+        )
+    }
+
+    // MARK: - Luminance Calculation Helpers
 
     private func calculateLuminance(from sampleBuffer: CMSampleBuffer) -> Double {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
@@ -154,14 +819,12 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
         CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
 
-        // If bi-planar YUV format (standard iOS camera output), plane 0 is Luminance (Y)
         if CVPixelBufferIsPlanar(pixelBuffer) && CVPixelBufferGetPlaneCount(pixelBuffer) >= 1 {
             guard let yPlane = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else { return 0.5 }
             let width = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
             let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
             let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
 
-            // Sample pixels on a coarse grid for maximum speed (~256 sample points)
             let stepX = max(1, width / 16)
             let stepY = max(1, height / 16)
             var totalLuma: UInt64 = 0
@@ -180,7 +843,6 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
             let avgLuma = Double(totalLuma) / Double(count)
             return min(max(avgLuma / 255.0, 0.0), 1.0)
         } else {
-            // Fallback for non-planar RGB buffers
             guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else { return 0.5 }
             let width = CVPixelBufferGetWidth(pixelBuffer)
             let height = CVPixelBufferGetHeight(pixelBuffer)
@@ -210,154 +872,54 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
         }
     }
 
-    // MARK: - Vision Face & Pose Detection
-
-    private struct VisionFaceEvaluation {
-        var isFaceDetected: Bool = false
-        var isFaceCentered: Bool = false
-        var isHeadPoseDirect: Bool = false
-        var rollDegrees: Double = 0.0
-        var yawDegrees: Double = 0.0
-        var quality: Float = 0.0
-        var poseSpecificGuidance: String? = nil
-    }
-
-    private func detectFaceAndPose(in pixelBuffer: CVPixelBuffer) async -> VisionFaceEvaluation {
-        await withCheckedContinuation { continuation in
-            let landmarksRequest = VNDetectFaceLandmarksRequest { request, error in
-                guard error == nil,
-                      let observations = request.results as? [VNFaceObservation],
-                      !observations.isEmpty else {
-                    continuation.resume(returning: VisionFaceEvaluation(
-                        poseSpecificGuidance: "Position face within the oval guide"
-                    ))
-                    return
-                }
-
-                // Pick primary / largest face in frame
-                guard let face = observations.max(by: {
-                    ($0.boundingBox.width * $0.boundingBox.height) < ($1.boundingBox.width * $1.boundingBox.height)
-                }) else {
-                    continuation.resume(returning: VisionFaceEvaluation(
-                        poseSpecificGuidance: "Position face within the oval guide"
-                    ))
-                    return
-                }
-
-                let box = face.boundingBox
-                let midX = box.midX
-                let midY = box.midY
-                let faceWidth = box.width
-
-                // 1. Strict Distance & Centering Checks relative to the Oval Guide
-                let isDistanceTooFar = (faceWidth < self.minFaceWidthRatio)
-                let isDistanceTooClose = (faceWidth > self.maxFaceWidthRatio)
-                let isDistanceOK = !isDistanceTooFar && !isDistanceTooClose
-
-                let diffX = midX - self.targetCenterX
-                let diffY = midY - self.targetCenterY
-
-                let isCenteredX = abs(diffX) <= self.maxHorizontalTolerance
-                let isCenteredY = abs(diffY) <= self.maxVerticalTolerance
-                let isCentered = isCenteredX && isCenteredY && isDistanceOK
-
-                // 2. Facial Landmarks & Side Profile Detection
-                // In a true side profile, either one eye is missing or landmarks fail to detect both eyes
-                guard let landmarks = face.landmarks,
-                      let leftEye = landmarks.leftEye,
-                      let rightEye = landmarks.rightEye,
-                      leftEye.pointCount >= 4,
-                      rightEye.pointCount >= 4,
-                      let nose = landmarks.nose ?? landmarks.noseCrest,
-                      nose.pointCount >= 2 else {
-                    // One eye or nose is occluded -> side profile detected
-                    continuation.resume(returning: VisionFaceEvaluation(
-                        isFaceDetected: true,
-                        isFaceCentered: isCentered,
-                        isHeadPoseDirect: false,
-                        rollDegrees: 0,
-                        yawDegrees: 45,
-                        quality: 0.3,
-                        poseSpecificGuidance: "Face camera directly — avoid side profile"
-                    ))
-                    return
-                }
-
-                // 3. Eye-Nose Horizontal Symmetry (Key check for front vs sideways angle)
-                let leftEyeCenter = self.averagePoint(of: leftEye.normalizedPoints)
-                let rightEyeCenter = self.averagePoint(of: rightEye.normalizedPoints)
-                let noseCenter = self.averagePoint(of: nose.normalizedPoints)
-
-                // Roll Angle (tilt) from eye line slope
-                let dx = rightEyeCenter.x - leftEyeCenter.x
-                let dy = rightEyeCenter.y - leftEyeCenter.y
-                let rollDeg = abs(atan2(dy, dx) * 180.0 / .pi)
-
-                // Distance from nose to left eye vs nose to right eye
-                let distToLeft = abs(noseCenter.x - leftEyeCenter.x)
-                let distToRight = abs(rightEyeCenter.x - noseCenter.x)
-
-                let minEyeDist = min(distToLeft, distToRight)
-                let maxEyeDist = max(distToLeft, distToRight)
-                let symmetryRatio = maxEyeDist > 0 ? (minEyeDist / maxEyeDist) : 0.0
-
-                // Also inspect Vision's estimated yaw if available
-                var visionYawDeg = 0.0
-                if let yaw = face.yaw {
-                    visionYawDeg = abs(yaw.doubleValue * 180.0 / .pi)
-                }
-
-                // Direct front criteria:
-                // - Head upright: roll <= 12°
-                // - Face not turned: symmetryRatio >= 0.58
-                // - Vision yaw <= 14°
-                let isRollOK = (rollDeg <= self.maxRollAngleDegrees)
-                let isSymmetryOK = (symmetryRatio >= self.minEyeNoseSymmetry)
-                let isYawOK = (visionYawDeg <= self.maxYawAngleDegrees)
-                let isPoseDirect = isRollOK && isSymmetryOK && isYawOK
-
-                var specificGuidance: String? = nil
-                if isDistanceTooFar {
-                    specificGuidance = "Move closer to fit the oval guide"
-                } else if isDistanceTooClose {
-                    specificGuidance = "Move slightly further back"
-                } else if !isCenteredX {
-                    // Mirrored front camera: diffX < 0 means face is left on screen, needs to move right
-                    specificGuidance = (diffX < 0) ? "Move face slightly right" : "Move face slightly left"
-                } else if !isCenteredY {
-                    // Vision origin is bottom: diffY < 0 means face is too low on screen, needs to move up
-                    specificGuidance = (diffY < 0) ? "Move face higher in the oval" : "Move face lower in the oval"
-                } else if !isRollOK {
-                    specificGuidance = "Keep your head upright"
-                } else if !isSymmetryOK || !isYawOK {
-                    specificGuidance = "Face camera directly — front view only"
-                }
-
-                let quality = face.faceCaptureQuality ?? 0.5
-
-                let eval = VisionFaceEvaluation(
-                    isFaceDetected: true,
-                    isFaceCentered: isCentered,
-                    isHeadPoseDirect: isPoseDirect,
-                    rollDegrees: rollDeg,
-                    yawDegrees: max(visionYawDeg, (1.0 - symmetryRatio) * 45.0),
-                    quality: quality,
-                    poseSpecificGuidance: specificGuidance
-                )
-
-                continuation.resume(returning: eval)
-            }
-
-            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
-            do {
-                try handler.perform([landmarksRequest])
-            } catch {
-                continuation.resume(returning: VisionFaceEvaluation())
-            }
+    private static func calculateLuminanceFromCGImage(_ cgImage: CGImage) -> Double {
+        let w = min(64, cgImage.width)
+        let h = min(64, cgImage.height)
+        guard w > 0, h > 0 else { return 0.5 }
+        var raw = [UInt8](repeating: 0, count: w * h * 4)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        guard let ctx = CGContext(
+            data: &raw,
+            width: w,
+            height: h,
+            bitsPerComponent: 8,
+            bytesPerRow: w * 4,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        ) else { return 0.5 }
+        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var sum = 0.0
+        let total = w * h
+        for i in 0..<total {
+            let r = Double(raw[i * 4])
+            let g = Double(raw[i * 4 + 1])
+            let b = Double(raw[i * 4 + 2])
+            sum += (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
         }
+        return sum / Double(total)
     }
+
+    #if canImport(UIKit)
+    private static func normalizedCGImage(from image: UIImage) -> CGImage? {
+        if image.imageOrientation == .up, let cg = image.cgImage {
+            return cg
+        }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
+        let rendered = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+        }
+        return rendered.cgImage
+    }
+    #endif
 
     private func averagePoint(of points: [CGPoint]) -> CGPoint {
+        Self.average(of: points)
+    }
+
+    private static func average(of points: [CGPoint]) -> CGPoint {
         guard !points.isEmpty else { return .zero }
         let sumX = points.reduce(CGFloat.zero) { $0 + $1.x }
         let sumY = points.reduce(CGFloat.zero) { $0 + $1.y }

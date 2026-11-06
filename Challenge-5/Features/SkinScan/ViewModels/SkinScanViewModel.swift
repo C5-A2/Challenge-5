@@ -50,18 +50,22 @@ public final class SkinScanViewModel {
 
     /// Real-time normalized luminance level (0.0 to 1.0) computed by `LightingAnalyzer`.
     public var luminanceLevel: Double = 0.5
+    public var lightingStatus: LightingStatus = .optimal
     public var isFaceInFrame: Bool = false
     public var isHeadPoseDirect: Bool = false
+    public var isFaceUnobstructed: Bool = false
+    public var isBareFaceDetected: Bool = true
+    public var obstructionReason: String? = nil
     public var dynamicGuidanceText: String = "Position face within the oval guide"
 
-    /// Indicates whether lighting is sufficient for color undertone detection.
+    /// Indicates whether lighting is bright natural daylight without uneven shadows (C5-123).
     public var isLightingAdequate: Bool {
-        luminanceLevel >= 0.20 && luminanceLevel <= 0.90
+        luminanceLevel >= 0.36 && luminanceLevel <= 0.88 && lightingStatus == .optimal
     }
 
-    /// True when face is centered, directly facing camera, and lighting is optimal.
+    /// True when face is centered, directly facing camera at eye level, unobstructed (no glasses/mask/hair), bare face, and brightly lit (C5-123).
     public var isReadyForOptimalCapture: Bool {
-        isFaceInFrame && isHeadPoseDirect && isLightingAdequate
+        isFaceInFrame && isHeadPoseDirect && isFaceUnobstructed && isBareFaceDetected && isLightingAdequate
     }
 
     /// Status message displayed near the camera lighting indicator.
@@ -72,8 +76,10 @@ public final class SkinScanViewModel {
     public var lightingStatusColor: Color {
         if isReadyForOptimalCapture {
             return Color(hex: "#34C759") // Green
+        } else if obstructionReason != nil {
+            return Color(hex: "#FF3B30") // Red when obstructed by glasses/mask/hair/makeup
         } else {
-            return Color(hex: "#FF9500") // Orange
+            return Color(hex: "#FF9500") // Orange when adjusting position/angle/lighting
         }
     }
 
@@ -82,6 +88,8 @@ public final class SkinScanViewModel {
     public var isBareFaceConfirmed: Bool = false
     public var isLightingConfirmed: Bool = false
     public var isDirectAngleConfirmed: Bool = false
+    public var isPhotoValidating: Bool = false
+    public var reviewValidationMessage: String? = nil
     public var isShowingDiscardDialog: Bool = false
 
     /// All 3 checklist criteria must be met before proceeding to analysis.
@@ -145,11 +153,15 @@ public final class SkinScanViewModel {
         isFlashEnabled.toggle()
     }
 
-    /// Update real-time vision & lighting results streaming from LightingAnalyzer.
+    /// Update real-time vision & lighting results streaming from LightingAnalyzer (C5-83 & C5-123).
     public func applyRealTimeAnalysis(_ result: RealTimeFaceAnalysisResult) {
         self.luminanceLevel = result.luminance
+        self.lightingStatus = result.lightingStatus
         self.isFaceInFrame = result.isFaceDetected && result.isFaceCentered
         self.isHeadPoseDirect = result.isHeadPoseDirect
+        self.isFaceUnobstructed = result.isFaceUnobstructed
+        self.isBareFaceDetected = result.isBareFace
+        self.obstructionReason = result.obstructionReason
         self.dynamicGuidanceText = result.guidanceText
     }
 
@@ -157,11 +169,32 @@ public final class SkinScanViewModel {
     public func setCapturedPhoto(_ image: UIImage) {
         self.capturedFaceImage = image
         self.capturedFaceData = image.jpegData(compressionQuality: 0.85)
-        // Auto-confirm criteria based on the real-time detection at the moment of capture
-        self.isLightingConfirmed = isLightingAdequate
-        self.isDirectAngleConfirmed = isHeadPoseDirect && isFaceInFrame
-        self.isBareFaceConfirmed = isReadyForOptimalCapture || (isLightingAdequate && isHeadPoseDirect)
+        self.isPhotoValidating = true
+        self.reviewValidationMessage = nil
         self.currentStep = .review
+
+        Task { [image] in
+            let analyzer = LightingAnalyzer()
+            let check = await analyzer.analyzeStaticImage(image)
+            await MainActor.run {
+                self.isPhotoValidating = false
+                self.isLightingConfirmed = (check.lightingStatus == .optimal && check.luminance >= 0.36 && check.luminance <= 0.88)
+                self.isDirectAngleConfirmed = (check.isFaceDetected && check.isHeadPoseDirect)
+                self.isBareFaceConfirmed = (check.isFaceDetected && check.isFaceUnobstructed && check.isBareFace)
+
+                if !check.isFaceDetected {
+                    self.reviewValidationMessage = "No clear face detected in the photo. Please retake."
+                } else if let obs = check.obstructionReason {
+                    self.reviewValidationMessage = obs
+                } else if !self.isDirectAngleConfirmed {
+                    self.reviewValidationMessage = check.guidanceText
+                } else if !self.isLightingConfirmed {
+                    self.reviewValidationMessage = check.lightingStatus.statusText
+                } else {
+                    self.reviewValidationMessage = "Face verified: Unobstructed, bare face, direct angle & bright light ✅"
+                }
+            }
+        }
     }
     #endif
 

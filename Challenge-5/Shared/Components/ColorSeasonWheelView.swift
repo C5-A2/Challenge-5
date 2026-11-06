@@ -73,12 +73,13 @@ public struct ColorSeasonWheelView: View {
     
     // MARK: - Body
     public var body: some View {
+        let innerDiameter = wheelDiameter * 0.74
         ZStack {
-            // Segmented circular pie / color wheel
+            // Segmented circular pie / color wheel (20 wedges, index 0 centered at 12 o'clock)
             ForEach(0..<activeColors.count, id: \.self) { index in
-                let sliceAngle = 360.0 / Double(activeColors.count)
-                let startAngle = Angle.degrees(Double(index) * sliceAngle - 90)
-                let endAngle = Angle.degrees(Double(index + 1) * sliceAngle - 90)
+                let sliceAngle = 360.0 / Double(max(1, activeColors.count))
+                let startAngle = Angle.degrees(Double(index) * sliceAngle - 90.0 - (sliceAngle / 2.0))
+                let endAngle = Angle.degrees(Double(index + 1) * sliceAngle - 90.0 - (sliceAngle / 2.0))
                 
                 Path { path in
                     let center = CGPoint(x: wheelDiameter / 2, y: wheelDiameter / 2)
@@ -93,54 +94,35 @@ public struct ColorSeasonWheelView: View {
                     path.closeSubpath()
                 }
                 .fill(activeColors[index])
-                .overlay(
-                    Path { path in
-                        let center = CGPoint(x: wheelDiameter / 2, y: wheelDiameter / 2)
-                        path.move(to: center)
-                        path.addArc(
-                            center: center,
-                            radius: wheelDiameter / 2,
-                            startAngle: startAngle,
-                            endAngle: endAngle,
-                            clockwise: false
-                        )
-                        path.closeSubpath()
-                    }
-                    .stroke(Color.white.opacity(0.85), lineWidth: 1.5)
-                )
             }
             .clipShape(Circle())
-            .shadow(color: .black.opacity(0.10), radius: 8, y: 4)
+            .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
             
             // Outer thin ring
             Circle()
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                .stroke(Color.black.opacity(0.05), lineWidth: 1)
                 .frame(width: wheelDiameter, height: wheelDiameter)
             
             // Inner center cutout (face portrait or season badge)
             Circle()
                 .fill(AppColors.cardBackground)
-                .frame(width: wheelDiameter * 0.58, height: wheelDiameter * 0.58)
+                .frame(width: innerDiameter, height: innerDiameter)
                 .overlay {
-                    centerContent
+                    centerContent(diameter: innerDiameter)
                 }
-                .overlay(
-                    Circle()
-                        .stroke(Color.white, lineWidth: 3.5)
-                        .shadow(color: .black.opacity(0.10), radius: 3)
-                )
+                .clipShape(Circle())
         }
         .frame(width: wheelDiameter, height: wheelDiameter)
     }
 
     @ViewBuilder
-    private var centerContent: some View {
+    private func centerContent(diameter: CGFloat) -> some View {
         #if canImport(UIKit)
         if let faceImage = faceImage {
             Image(uiImage: faceImage)
                 .resizable()
                 .scaledToFill()
-                .frame(width: wheelDiameter * 0.58, height: wheelDiameter * 0.58)
+                .frame(width: diameter, height: diameter)
                 .clipShape(Circle())
         } else {
             defaultCenterBadge
