@@ -303,35 +303,27 @@ struct OutfitPromptBuilder: Sendable {
     ///   - lookIndex: The 0-based index of the look to generate (0–4).
     ///   - previousLooks: Summaries of already-generated looks injected into the system prompt
     ///     so the model avoids repeating garment names, colors, and silhouettes.
-    ///   - analyzedImageStyle: Style descriptors extracted from user reference photos via Vision-Language Model.
-    ///   - targetReferenceDescription: Specific 1-by-1 reference text for this particular look.
-    ///   - targetReferenceIndex: 1-based index of the reference photo being targeted.
+    ///   - analyzedImageStyle: Combined style descriptions extracted from all user reference photos (Ref 1–3) via Vision-Language Model, shared across every look.
     public func buildFormattedPrompt(
         occasion: OccasionItem,
         profile: UserProfile?,
         lookIndex: Int = 0,
         previousLooks: [GeneratedLookSummary] = [],
-        analyzedImageStyle: String? = nil,
-        targetReferenceDescription: String? = nil,
-        targetReferenceIndex: Int? = nil
+        analyzedImageStyle: String? = nil
     ) -> String {
         let system = buildSingleLookSystemPrompt(
             occasion: occasion,
             profile: profile,
             lookIndex: lookIndex,
             previousLooks: previousLooks,
-            analyzedImageStyle: analyzedImageStyle,
-            targetReferenceDescription: targetReferenceDescription,
-            targetReferenceIndex: targetReferenceIndex
+            analyzedImageStyle: analyzedImageStyle
         )
         let user = buildSingleLookUserPrompt(
             occasion: occasion,
             profile: profile,
             lookIndex: lookIndex,
             previousLooks: previousLooks,
-            analyzedImageStyle: analyzedImageStyle,
-            targetReferenceDescription: targetReferenceDescription,
-            targetReferenceIndex: targetReferenceIndex
+            analyzedImageStyle: analyzedImageStyle
         )
 
         // Qwen 2.5 uses ChatML tokens (<|im_start|> ... <|im_end|>)
@@ -384,9 +376,7 @@ struct OutfitPromptBuilder: Sendable {
         profile: UserProfile?,
         lookIndex: Int,
         previousLooks: [GeneratedLookSummary],
-        analyzedImageStyle: String? = nil,
-        targetReferenceDescription: String? = nil,
-        targetReferenceIndex: Int? = nil
+        analyzedImageStyle: String? = nil
     ) -> String {
         var rules: [String] = []
 
@@ -434,36 +424,21 @@ struct OutfitPromptBuilder: Sendable {
             rules.append("STYLE VISION (reflect in garments):\n\(visionsDetails)")
         }
 
-        // Reference images: Injects target reference 1-by-1 or overall visual context
-        if let targetRef = targetReferenceDescription, !targetRef.isEmpty {
-            let refNum = targetReferenceIndex != nil ? "REFERENCE PHOTO \(targetReferenceIndex!)" : "REFERENCE PHOTO"
+        // Reference images: Injects ALL scanned reference descriptions (Ref 1–3) into every look
+        if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
             rules.append("""
             ======================================================================
-            PRIMARY INSPIRATION: USER \(refNum)
+            USER REFERENCE PHOTOS (ALL REFERENCES APPLIED TO THIS LOOK)
             ======================================================================
-            This look must be directly styled and inspired by the user's \(refNum.lowercased()):
-            \"\(targetRef)\"
-
-            CRITICAL STYLING INSTRUCTIONS FOR THIS LOOK:
-            1. Cut & Silhouette: Recreate or closely echo the garment cuts, proportions, and layering dynamic from this reference photo.
-            2. Fabric & Texture: Prioritize the tactile fabrics, textures, and material finishes from this reference photo.
-            3. Palette Harmony: Select colors strictly from the user's seasonal Color Palette that harmonize with this reference photo's color mood and contrast.
-            4. Body Shape Fit: Adapt the silhouette to flatter the user's specific body shape rules.
-            """)
-        } else if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
-            rules.append("""
-            ======================================================================
-            USER REFERENCE PHOTO VISUAL CONTEXT (VLM EMBEDDED ATTRIBUTES)
-            ======================================================================
-            The user provided reference images that demonstrate their visual taste and intended outfit mood.
-            The Vision-Language Model has extracted the following attributes from the reference photos:
+            The user provided reference photo(s) defining their desired styling mood, silhouettes, and fabrics.
+            The Vision-Language Model extracted the following styling descriptions across ALL attached reference photos:
             \(analyzedStyle)
 
-            CRITICAL INSTRUCTIONS FOR REFERENCE IMAGE INTEGRATION:
-            1. Silhouette & Drape: Actively reflect the cuts, outerwear structure, and bottom proportions from the reference context.
-            2. Fabric & Texture: Prioritize the extracted fabrics, weaves, and material finishes from the reference context.
-            3. Layering & Styling: Replicate the layering dynamics and styling cues from the reference context.
-            4. Palette Harmony: Select colors strictly from the user's Color Palette that harmonize with the reference image's color mood and contrast level.
+            CRITICAL INSTRUCTIONS FOR SYNTHESIZING ALL REFERENCES INTO THIS LOOK:
+            1. Unified Inspiration: Draw inspiration from ALL reference descriptions above together (blending their cuts, proportions, layering dynamics, and aesthetic vibe into a cohesive outfit).
+            2. Fabric & Pattern: Incorporate tactile fabrics, weaves, motifs, and textures highlighted across the reference photos.
+            3. Palette Harmony: Select colors strictly from the user's seasonal Color Palette that harmonize with the color mood and contrast of the reference photos.
+            4. Body Shape Fit: Adapt the silhouettes so they flatter the user's specific body shape rules.
             """)
         } else {
             let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
@@ -560,9 +535,7 @@ struct OutfitPromptBuilder: Sendable {
         profile: UserProfile?,
         lookIndex: Int,
         previousLooks: [GeneratedLookSummary] = [],
-        analyzedImageStyle: String? = nil,
-        targetReferenceDescription: String? = nil,
-        targetReferenceIndex: Int? = nil
+        analyzedImageStyle: String? = nil
     ) -> String {
         var lines: [String] = ["Generate look \(lookIndex + 1) for: \(occasion.title)"]
 
@@ -578,18 +551,11 @@ struct OutfitPromptBuilder: Sendable {
         }
 
         let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
-        if let targetRef = targetReferenceDescription, !targetRef.isEmpty {
-            let refNum = targetReferenceIndex ?? (lookIndex + 1)
+        if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
             lines.append("""
-            PRIMARY INSPIRATION (Reference Photo \(refNum)):
-            \"\(targetRef)\"
-            -> Directly translate this reference photo's cuts, silhouette, and aesthetic vibe into look \(lookIndex + 1).
-            """)
-        } else if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
-            lines.append("""
-            Reference images visual context:
+            User Reference Photos (ALL references apply to Look \(lookIndex + 1)):
             \(analyzedStyle)
-            -> Synthesize these silhouettes, fabrics, and aesthetic cues directly into look \(lookIndex + 1).
+            -> Synthesize the silhouettes, fabrics, patterns, and styling cues across ALL reference photos above into Look \(lookIndex + 1).
             """)
         } else if hasReferenceImages {
             let count = occasion.referenceImagesData.isEmpty ? 1 : occasion.referenceImagesData.count

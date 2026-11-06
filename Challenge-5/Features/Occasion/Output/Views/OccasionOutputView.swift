@@ -325,7 +325,7 @@ struct OccasionOutputView: View {
                             Image(systemName: "sparkles")
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(AppColors.primaryBlue)
-                            Text("VLM OUTPUT → MAIN LLM INPUT")
+                            Text("VLM OUTPUT (ALL REFS → ALL LOOKS)")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(AppColors.primaryBlue)
                         }
@@ -334,7 +334,7 @@ struct OccasionOutputView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 ForEach(Array(viewModel.vlmDebugDescriptions.enumerated()), id: \.offset) { idx, desc in
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text("Ref \(idx + 1) → Look \(idx + 1)")
+                                        Text("Reference \(idx + 1)")
                                             .font(.system(size: 10.5, weight: .semibold))
                                             .foregroundStyle(AppColors.espressoTitle)
                                         Text(desc)
@@ -385,7 +385,7 @@ struct OccasionOutputView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppColors.primaryBlue)
 
-                    Text("VLM OUTPUT DEBUG (\(viewModel.vlmDebugDescriptions.count) REF\(viewModel.vlmDebugDescriptions.count == 1 ? "" : "S"))")
+                    Text("VLM OUTPUT DEBUG (\(viewModel.vlmDebugDescriptions.count) REF\(viewModel.vlmDebugDescriptions.count == 1 ? "" : "S") → ALL LOOKS)")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(AppColors.primaryBlue)
 
@@ -418,23 +418,10 @@ struct OccasionOutputView: View {
                     ScrollView(.vertical, showsIndicators: true) {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(Array(viewModel.vlmDebugDescriptions.enumerated()), id: \.offset) { idx, desc in
-                                let isCurrentTarget = viewModel.selectedLookIndex == idx
                                 VStack(alignment: .leading, spacing: 3) {
-                                    HStack(spacing: 6) {
-                                        Text("Ref \(idx + 1) → Look \(idx + 1)")
-                                            .font(.system(size: 11, weight: .bold))
-                                            .foregroundStyle(isCurrentTarget ? AppColors.primaryBlue : AppColors.espressoTitle)
-
-                                        if isCurrentTarget {
-                                            Text("ACTIVE LOOK")
-                                                .font(.system(size: 9, weight: .bold))
-                                                .foregroundStyle(.white)
-                                                .padding(.horizontal, 5)
-                                                .padding(.vertical, 1.5)
-                                                .background(AppColors.primaryBlue)
-                                                .clipShape(Capsule())
-                                        }
-                                    }
+                                    Text("Reference \(idx + 1)")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(AppColors.primaryBlue)
 
                                     Text(desc)
                                         .font(.system(size: 11.5))
@@ -446,7 +433,7 @@ struct OccasionOutputView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(isCurrentTarget ? AppColors.primaryBlue.opacity(0.08) : Color.black.opacity(0.025))
+                                        .fill(AppColors.primaryBlue.opacity(0.06))
                                 )
                             }
                         }

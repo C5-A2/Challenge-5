@@ -154,15 +154,15 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
             ReferenceImageStyleAnalyzer.shared.saveDescriptions(referenceDescriptions, forOccasionID: occasion.id)
 
-            print("\n====== [VLM DEBUG OUTPUT (\(occasion.title))] ======")
+            print("\n====== [VLM DEBUG OUTPUT (\(occasion.title)) — ALL REFS → ALL LOOKS] ======")
             if referenceDescriptions.isEmpty {
                 print("   (No VLM text descriptions returned)")
             } else {
                 for (i, desc) in referenceDescriptions.enumerated() {
-                    print("   Ref \(i + 1) -> Look \(i + 1): \(desc)")
+                    print("   Ref \(i + 1): \(desc)")
                 }
             }
-            print("====================================================\n")
+            print("=========================================================================\n")
         } else {
             referenceDescriptions = []
             ReferenceImageStyleAnalyzer.shared.saveDescriptions([], forOccasionID: occasion.id)
@@ -170,7 +170,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
         let analyzedImageStyle = ReferenceImageStyleAnalyzer.formatCombinedStyle(from: referenceDescriptions)
 
-        // 3. Stage 2: Main LLM Sequential generation — one LLM call = one look, fed by VLM descriptions.
+        // 3. Stage 2: Main LLM Sequential generation — one LLM call = one look, fed by ALL VLM reference descriptions (Ref 1–3).
         //    After each look is parsed, its garment summary is appended to the next call's
         //    system prompt so the model aims for variety across looks.
         let totalLooks = 5
@@ -185,31 +185,24 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         for lookIndex in 0..<totalLooks {
             let temperature = temperatures[lookIndex]
 
-            // Map reference images 1-by-1 to looks:
-            // Look 0 uses Ref 1, Look 1 uses Ref 2, Look 2 uses Ref 3.
-            let targetRefDesc: String? = lookIndex < referenceDescriptions.count
-                ? referenceDescriptions[lookIndex]
-                : nil
-            let targetRefIndex: Int? = targetRefDesc != nil ? (lookIndex + 1) : nil
-
-            let refStatusSuffix = targetRefIndex != nil ? " (using Reference \(targetRefIndex!))" : ""
+            let refStatusSuffix = !referenceDescriptions.isEmpty
+                ? " (using Ref 1\(referenceDescriptions.count > 1 ? "–\(referenceDescriptions.count)" : ""))"
+                : ""
             onStageChange?(
                 "Curating Your Looks",
                 "Generating Look \(lookIndex + 1) of \(totalLooks)\(refStatusSuffix) tailored to \(occasion.title)...",
                 referenceDescriptions
             )
 
-            print("🔧 [OutfitGenerationPipeline] Building prompt for look \(lookIndex)/\(totalLooks - 1) (temp: \(temperature), target: \(targetRefIndex != nil ? "Ref \(targetRefIndex!)" : "overall aesthetic"))…")
+            print("🔧 [OutfitGenerationPipeline] Building prompt for look \(lookIndex)/\(totalLooks - 1) (temp: \(temperature), refs: \(referenceDescriptions.isEmpty ? "none" : "all \(referenceDescriptions.count) refs"))…")
 
-            // Build a single-look prompt, injecting 1-by-1 reference inspiration and past look summaries.
+            // Build a single-look prompt, injecting ALL reference descriptions (Ref 1–3) and past look summaries.
             let prompt = promptBuilder.buildFormattedPrompt(
                 occasion: occasion,
                 profile: profile,
                 lookIndex: lookIndex,
                 previousLooks: previousSummaries,
-                analyzedImageStyle: analyzedImageStyle,
-                targetReferenceDescription: targetRefDesc,
-                targetReferenceIndex: targetRefIndex
+                analyzedImageStyle: analyzedImageStyle
             )
             print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) prompt built (\(prompt.count) chars). Running \(LLMResource.activeModelFilename)…")
 
@@ -286,22 +279,15 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         // 3. Extract summaries of all previous looks generated for this occasion (e.g. 5 previous looks or more)
         let previousSummaries = existingLooks.map { GeneratedLookSummary(from: $0) }
 
-        let targetRefDesc: String? = lookIndex < referenceDescriptions.count
-            ? referenceDescriptions[lookIndex]
-            : nil
-        let targetRefIndex: Int? = targetRefDesc != nil ? (lookIndex + 1) : nil
+        print("🔧 [OutfitGenerationPipeline] Generating single look \(lookIndex) (temperature: \(temperature), refs: \(referenceDescriptions.isEmpty ? "none" : "all \(referenceDescriptions.count) refs"))…")
 
-        print("🔧 [OutfitGenerationPipeline] Generating single look \(lookIndex) (temperature: \(temperature), target: \(targetRefIndex != nil ? "Ref \(targetRefIndex!)" : "overall aesthetic"))…")
-
-        // 4. Build single-look prompt injecting target reference (1-by-1) and general visual cues
+        // 4. Build single-look prompt injecting ALL reference descriptions (Ref 1–3)
         let prompt = promptBuilder.buildFormattedPrompt(
             occasion: occasion,
             profile: profile,
             lookIndex: lookIndex,
             previousLooks: previousSummaries,
-            analyzedImageStyle: analyzedImageStyle,
-            targetReferenceDescription: targetRefDesc,
-            targetReferenceIndex: targetRefIndex
+            analyzedImageStyle: analyzedImageStyle
         )
 
         // 5. Run LLM generation with temperature
