@@ -31,7 +31,8 @@ struct OutfitPromptBuilder: Sendable {
     /// Dynamically assembles the system prompt, appending directives and rules only for fields the user filled.
     public func buildSystemPrompt(
         occasion: OccasionItem,
-        profile: UserProfile?
+        profile: UserProfile?,
+        analyzedImageStyle: String? = nil
     ) -> String {
         var directives: [String] = []
         var rulesets: [String] = []
@@ -103,9 +104,20 @@ struct OutfitPromptBuilder: Sendable {
             """)
         }
 
-        // 6. User Preference Reference Images (if attached by user)
+        // 6. User Preference Reference Images (VLM Embedded Context)
         let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
-        if hasReferenceImages {
+        if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
+            directives.append("6. USER REFERENCE IMAGES (VLM EMBEDDED): Deeply reflect the extracted silhouettes, fabric textures, and styling cues while adhering to body and color rules.")
+            rulesets.append("""
+            ======================================================================
+            USER PREFERENCE REFERENCE IMAGES (VLM EMBEDDED CONTEXT)
+            ======================================================================
+            The Vision-Language Model extracted the following visual attributes from the user's reference images:
+            \(analyzedStyle)
+
+            Tailor the garments, cuts, layering, and fabric textures across all 5 looks to incorporate this aesthetic direction.
+            """)
+        } else if hasReferenceImages {
             let count = occasion.referenceImagesData.isEmpty ? (occasion.referenceImageData != nil ? 1 : 0) : occasion.referenceImagesData.count
             directives.append("6. USER PREFERENCE REFERENCE IMAGES: Subtly adjust the outfit styling (aesthetic vibe, layering style, textures, and mood) to incorporate the user's personal visual preferences while adhering to body and color rules.")
             rulesets.append("""
@@ -227,7 +239,8 @@ struct OutfitPromptBuilder: Sendable {
     /// Assembles the user prompt specifying only the user-filled details (excluding date).
     public func buildUserPrompt(
         occasion: OccasionItem,
-        profile: UserProfile?
+        profile: UserProfile?,
+        analyzedImageStyle: String? = nil
     ) -> String {
         var lines: [String] = []
 
@@ -250,9 +263,14 @@ struct OutfitPromptBuilder: Sendable {
             lines.append("- Style Vision (MUST be reflected): \(visionNames)")
         }
 
-        // Append Reference Images if attached
+        // Append Reference Images with VLM visual context if available
         let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
-        if hasReferenceImages {
+        if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
+            lines.append("""
+            - User Reference Images (VLM Embedded Context):
+            \(analyzedStyle)
+            """)
+        } else if hasReferenceImages {
             let count = occasion.referenceImagesData.isEmpty ? (occasion.referenceImageData != nil ? 1 : 0) : occasion.referenceImagesData.count
             lines.append("- User Reference Images: \(count) attached (subtly reflect user aesthetic preference)")
         }
@@ -285,7 +303,7 @@ struct OutfitPromptBuilder: Sendable {
     ///   - lookIndex: The 0-based index of the look to generate (0–4).
     ///   - previousLooks: Summaries of already-generated looks injected into the system prompt
     ///     so the model avoids repeating garment names, colors, and silhouettes.
-    ///   - analyzedImageStyle: Style descriptors extracted from user reference photos via Apple Vision.
+    ///   - analyzedImageStyle: Combined style descriptions extracted from all user reference photos (Ref 1–3) via Vision-Language Model, shared across every look.
     public func buildFormattedPrompt(
         occasion: OccasionItem,
         profile: UserProfile?,
@@ -303,7 +321,9 @@ struct OutfitPromptBuilder: Sendable {
         let user = buildSingleLookUserPrompt(
             occasion: occasion,
             profile: profile,
-            lookIndex: lookIndex
+            lookIndex: lookIndex,
+            previousLooks: previousLooks,
+            analyzedImageStyle: analyzedImageStyle
         )
 
         // Qwen 2.5 uses ChatML tokens (<|im_start|> ... <|im_end|>)
@@ -404,9 +424,22 @@ struct OutfitPromptBuilder: Sendable {
             rules.append("STYLE VISION (reflect in garments):\n\(visionsDetails)")
         }
 
-        // Reference images (Approach 1: Injects Apple Vision analyzed descriptors)
+        // Reference images: Injects ONE recapped paragraph summarising all scanned references (Ref 1–3) into every look
         if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
-            rules.append("USER REFERENCE PHOTO AESTHETIC (analyzed via on-device Vision): \(analyzedStyle). Incorporate these visual aesthetic cues, textures, and vibes into the outfit.")
+            rules.append("""
+            ======================================================================
+            PRIMARY INSPIRATION: USER REFERENCE PHOTOS (RECAP OF ALL REFERENCES)
+            ======================================================================
+            This look must be directly styled and inspired by the user's reference photos:
+            "\(analyzedStyle)"
+
+            CRITICAL STYLING INSTRUCTIONS FOR THIS LOOK:
+            1. Cut & Silhouette: Recreate or closely echo the garment cuts, proportions, and layering dynamic from the references.
+            2. Pattern: ONLY if the reference text above explicitly names a surface pattern or motif, keep that exact pattern word inside the garment "name" (pattern word + garment type). If the reference text names no pattern, use plain solid garments and do NOT invent or add any pattern.
+            3. Fabric: "material" stays the real fabric only (e.g. Cotton Poplin, Silk, Linen) — never put the pattern word in "material".
+            4. Palette Harmony: Select colors strictly from the user's seasonal Color Palette that harmonize with the references' color mood and contrast.
+            5. Body Shape Fit: Adapt only the cut/proportions to the user's body shape rules; keep the reference garment types and patterns.
+            """)
         } else {
             let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
             if hasReferenceImages {
@@ -418,10 +451,16 @@ struct OutfitPromptBuilder: Sendable {
         // Previously generated looks
         if !previousLooks.isEmpty {
             let prev = previousLooks.enumerated().map { i, s in
-                let g = s.garments.map { "\($0.category): \($0.name) (\($0.colorName))" }.joined(separator: ", ")
-                return "Look \(i): \(g)"
+                let g = s.garments.map { "[\($0.category)] \($0.name) (\($0.colorName), \($0.material))" }.joined(separator: " + ")
+                return "- Look \(i + 1): \(g)"
             }.joined(separator: "\n")
-            rules.append("PREVIOUS LOOKS (aim for variety — different silhouettes/colors where possible):\n\(prev)")
+            rules.append("""
+            PAST RECOMMENDATIONS ALREADY GIVEN FOR THIS OCCASION:
+            \(prev)
+
+            CRITICAL REQUIREMENT: NO SIMILAR OUTPUT ALLOWED
+            You are strictly forbidden from generating any outfit that is similar or identical to any of the \(previousLooks.count) previous looks above. Even if the JSON order (urutan), category order, or phrasing is changed, the actual garments, silhouettes, materials, and colors must be completely different. Propose a brand-new distinct outfit.
+            """)
         }
 
         let rulesBlock = rules.isEmpty ? "" : rules.joined(separator: "\n\n") + "\n\n"
@@ -440,7 +479,7 @@ struct OutfitPromptBuilder: Sendable {
         OUTPUT FORMAT: Return ONLY valid JSON, no markdown, no conversational text.
         IMPORTANT: Put all 3 garments inside ONE single "garments" array. Do NOT repeat the "garments" key.
         Allowed garment fields: "category", "name", "material", "colorName", "hexColor", "rationale" (6 fields only).
-        "name" must contain ONLY the garment item type without color adjectives (e.g. "Blouse", "Tailored Blazer", "Pleated Trousers"). Colors belong exclusively in "colorName".
+        "name" is the garment item type (plus a surface pattern word only if the reference text names one), without color adjectives, e.g. "Tailored Blazer", "Pleated Trousers". Colors belong exclusively in "colorName"; "material" is the fabric only.
         "colorName" and "hexColor" must be copied verbatim from the palette — do not invent colors.
         Keep rationales extremely concise:
         - "fitRationale": 1 short sentence.
@@ -494,9 +533,11 @@ struct OutfitPromptBuilder: Sendable {
     public func buildSingleLookUserPrompt(
         occasion: OccasionItem,
         profile: UserProfile?,
-        lookIndex: Int
+        lookIndex: Int,
+        previousLooks: [GeneratedLookSummary] = [],
+        analyzedImageStyle: String? = nil
     ) -> String {
-        var lines: [String] = ["Generate look \(lookIndex) for: \(occasion.title)"]
+        var lines: [String] = ["Generate look \(lookIndex + 1) for: \(occasion.title)"]
 
         let cleanDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         if !cleanDresscode.isEmpty { lines.append("Dresscode: \(cleanDresscode)") }
@@ -510,7 +551,13 @@ struct OutfitPromptBuilder: Sendable {
         }
 
         let hasReferenceImages = !occasion.referenceImagesData.isEmpty || occasion.referenceImageData != nil
-        if hasReferenceImages {
+        if let analyzedStyle = analyzedImageStyle, !analyzedStyle.isEmpty {
+            lines.append("""
+            PRIMARY INSPIRATION (User Reference Photos recap):
+            "\(analyzedStyle)"
+            -> Directly translate these references' cuts, silhouette, patterns (only those explicitly named above) and aesthetic vibe into look \(lookIndex + 1).
+            """)
+        } else if hasReferenceImages {
             let count = occasion.referenceImagesData.isEmpty ? 1 : occasion.referenceImagesData.count
             lines.append("Reference images: \(count) attached")
         }
@@ -518,6 +565,22 @@ struct OutfitPromptBuilder: Sendable {
         if let body = profile?.bodyType   { lines.append("Body type: \(body.displayName)") }
         if let torso = profile?.torsoBalance { lines.append("Torso: \(torso.rawValue)") }
         if let season = profile?.colorSeason  { lines.append("Color season: \(season.rawValue)") }
+
+        if !previousLooks.isEmpty {
+            let prevList = previousLooks.enumerated().map { i, s in
+                let items = s.garments.map { "\($0.name) in \($0.colorName)" }.joined(separator: ", ")
+                return "  • Look \(i + 1): \(items)"
+            }.joined(separator: "\n")
+
+            lines.append("""
+
+            PAST RECOMMENDATIONS ALREADY GIVEN (DO NOT REUSE):
+            \(prevList)
+
+            STRICT INSTRUCTION - NO SIMILAR OUTPUT ALLOWED:
+            You are strictly forbidden from generating similar output. Even if the JSON order (urutan) or category arrangement is different, the actual garments, silhouettes, and colors must be completely different from all previous looks listed above. Generate a completely fresh and distinct outfit for look \(lookIndex + 1).
+            """)
+        }
 
         return lines.joined(separator: "\n")
     }

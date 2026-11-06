@@ -152,8 +152,18 @@ struct OccasionsHomeView: View {
         .sheet(item: $viewModel.editingOccasion) { occasion in
             OccasionFormSheet(
                 viewModel: OccasionInputViewModel(from: occasion),
+                initialMode: .view,
                 onSave: { updatedDetail in
                     viewModel.updateOccasion(occasion, with: updatedDetail, in: modelContext)
+                    viewModel.editingOccasion = nil
+                    viewModel.selectedOccasion = occasion
+                },
+                onDelete: {
+                    viewModel.deleteOccasion(occasion, in: modelContext)
+                    viewModel.editingOccasion = nil
+                },
+                onDismiss: {
+                    viewModel.editingOccasion = nil
                 }
             )
         }

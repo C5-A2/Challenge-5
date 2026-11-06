@@ -44,7 +44,7 @@ struct AvatarStageView: View {
     
     private var carouselTrack: some View {
         ZStack {
-            ForEach(0..<viewModel.looks.count, id: \.self) { index in
+            ForEach(0..<viewModel.totalCarouselCount, id: \.self) { index in
                 cardItem(for: index)
             }
         }
@@ -68,7 +68,9 @@ struct AvatarStageView: View {
             let xOffset = relativeIndex * cardSpacing
             
             ZStack(alignment: .center) {
-                if index < viewModel.looks.count,
+                if viewModel.isLookLoading(at: index) {
+                    loadingRingCard(for: index, width: width, height: height, isCenter: isCenter)
+                } else if index < viewModel.looks.count,
                    let data = viewModel.looks[index].lookImageData,
                    !OccasionOutputViewModel.isPlaceholderData(data, lookIndex: viewModel.looks[index].lookIndex),
                    let uiImage = UIImage(data: data) {
@@ -101,6 +103,37 @@ struct AvatarStageView: View {
                 }
             }
         }
+    }
+    
+    @ViewBuilder
+    private func loadingRingCard(for index: Int, width: CGFloat, height: CGFloat, isCenter: Bool) -> some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .stroke(AppColors.espressoTitle.opacity(0.12), lineWidth: 3.5)
+                    .frame(width: isCenter ? 54 : 36, height: isCenter ? 54 : 36)
+                
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: AppColors.espressoTitle))
+                    .scaleEffect(isCenter ? 1.3 : 0.85)
+            }
+            
+            if isCenter {
+                VStack(spacing: 4) {
+                    Text("Curating Look \(index + 1)...")
+                        .font(AppTypography.sfProSemiboldExtended(size: 14))
+                        .foregroundStyle(AppColors.espressoTitle)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("Exploring silhouettes")
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(AppColors.mutedCaption)
+                }
+                .padding(.horizontal, 10)
+                .transition(.opacity)
+            }
+        }
+        .frame(width: width, height: height, alignment: .center)
     }
     
     // MARK: - Image Playground Placeholder View (Cardless)
@@ -186,7 +219,7 @@ struct AvatarStageView: View {
                 
                 if viewModel.selectedLookIndex == 0 && translation > 0 {
                     dragOffset = translation * 0.25
-                } else if viewModel.selectedLookIndex == viewModel.looks.count - 1 && translation < 0 {
+                } else if viewModel.selectedLookIndex == viewModel.totalCarouselCount - 1 && translation < 0 {
                     dragOffset = translation * 0.25
                 } else {
                     dragOffset = translation
@@ -196,7 +229,7 @@ struct AvatarStageView: View {
                 let threshold: CGFloat = 40
                 let translation = value.translation.width
                 
-                if translation < -threshold && viewModel.selectedLookIndex < viewModel.looks.count - 1 {
+                if translation < -threshold && viewModel.selectedLookIndex < viewModel.totalCarouselCount - 1 {
                     viewModel.goToNextLook()
                 } else if translation > threshold && viewModel.selectedLookIndex > 0 {
                     viewModel.goToPreviousLook()
@@ -234,27 +267,31 @@ struct AvatarStageView: View {
                 )
                 .frame(width: 200, height: 30)
             
-            if viewModel.looks.count > 1 {
-                HStack(spacing: 6) {
-                    ForEach(0..<viewModel.looks.count, id: \.self) { index in
-                        Circle()
-                            .fill(
-                                index == viewModel.selectedLookIndex
-                                    ? Color.white
-                                    : Color.white.opacity(0.45)
-                            )
-                            .frame(
-                                width: index == viewModel.selectedLookIndex ? 7.5 : 5,
-                                height: index == viewModel.selectedLookIndex ? 7.5 : 5
-                            )
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.black.opacity(0.18), lineWidth: 0.5)
-                            )
-                            .onTapGesture {
-                                viewModel.selectLook(at: index)
-                            }
-                    }
+            HStack(spacing: 6) {
+                ForEach(0..<viewModel.totalCarouselCount, id: \.self) { index in
+                    let isSelected = index == viewModel.selectedLookIndex
+                    let isLookLoading = viewModel.isLookLoading(at: index)
+                    
+                    Circle()
+                        .fill(
+                            isSelected
+                                ? Color.white
+                                : (isLookLoading ? AppColors.espressoTitle.opacity(0.25) : Color.white.opacity(0.45))
+                        )
+                        .frame(
+                            width: isSelected ? 7.5 : 5,
+                            height: isSelected ? 7.5 : 5
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    isLookLoading ? AppColors.espressoTitle.opacity(0.55) : Color.black.opacity(0.18),
+                                    lineWidth: isLookLoading ? 0.8 : 0.5
+                                )
+                        )
+                        .onTapGesture {
+                            viewModel.selectLook(at: index)
+                        }
                 }
             }
         }
