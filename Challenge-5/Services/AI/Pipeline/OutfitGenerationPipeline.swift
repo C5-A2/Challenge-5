@@ -66,7 +66,7 @@ protocol OutfitGenerationPipelineProtocol {
 ///
 /// **Strategy:** one LLM call per look. Each look has its own creative direction
 /// (`OutfitArchetype`: reference match, personality, body shape, surprise me, look more),
-/// its own pieces (`OutfitStructure`: outer + top + bottom, top + bottom, dress, dress + outer),
+/// its own pieces (`OutfitStructure`: separates or a dress, with an outer layer only when the model decides it fits),
 /// and its own sampling temperature. Earlier looks are passed to the next prompt so the
 /// looks differ in style and pieces, not only in color.
 ///
@@ -87,6 +87,11 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
     /// Number of looks in one generation.
     private static let lookCount = 5
+    /// One look is generated at most this many times when it repeats an earlier look or can't be parsed.
+    private static let maximumAttemptsPerLook = 3
+    /// Each new attempt gets this much more temperature, so it moves away from the repeated look.
+    private static let retryTemperatureStep: Float = 0.15
+    private static let maximumRetryTemperature: Float = 1.1
     /// Token limit for one look's JSON. One look is a few hundred tokens; the limit leaves room
     /// for the prompt inside the 4,096-token context.
     private static let maximumTokensPerLook = 1536
@@ -234,6 +239,10 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
     // MARK: - One Look
 
     /// Builds the prompt for one look (direction from its index), runs the model and parses the result.
+    ///
+    /// A look that repeats an earlier one (`repeatedLookIndex(of:in:)`) or can't be parsed is generated
+    /// again at a higher temperature, up to `maximumAttemptsPerLook` times. After the last attempt a
+    /// repeated look is kept (better than no look), but a parse failure is thrown.
     private func generateLook(
         for occasion: OccasionItem,
         profile: UserProfile,
@@ -243,39 +252,109 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         minimumTemperature: Float?
     ) async throws -> OutfitLook {
         let archetype = OutfitArchetype(lookIndex: lookIndex)
-        let structure = archetype.structure(referenceStructure: referenceAnalysis?.suggestedStructure)
-        let temperature = max(archetype.temperature, minimumTemperature ?? 0)
-
-        let prompt = promptBuilder.buildFormattedPrompt(
-            occasion: occasion,
-            profile: profile,
-            lookIndex: lookIndex,
-            structure: structure,
-            previousLooks: previousLooks,
-            referenceAnalysis: referenceAnalysis
+        let structure = archetype.structure(
+            referenceStructure: referenceAnalysis?.suggestedStructure,
+            dresscodeStructure: OutfitStructure(dresscode: occasion.dresscode)
         )
-        print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) \(archetype) / \(structure.rawValue) (temp \(temperature)). Prompt \(prompt.count) chars. Running \(LLMResource.activeModelFilename)…")
+        let baseTemperature = max(archetype.temperature, minimumTemperature ?? 0)
 
-        let rawOutput = try await LLMEngine.shared.generate(
-            prompt: prompt,
-            maxTokens: Self.maximumTokensPerLook,
-            temperature: temperature,
-            topP: archetype.topP
-        )
-        print("✅ [OutfitGenerationPipeline] Look \(lookIndex) raw output (\(rawOutput.count) chars):\n\(rawOutput)")
+        // Rejected repeats are added to the "previous looks" list, so the next attempt avoids them too.
+        var avoidedLooks = previousLooks
+        var lastRepeatedLook: OutfitLook?
 
-        let parsedLooks = try parseLooks(
-            from: rawOutput.trimmingCharacters(in: .whitespacesAndNewlines),
-            colorSeason: profile.colorSeason,
-            structure: structure,
-            allowsOffPaletteAccent: archetype.allowsOffPaletteAccent
-        )
-        guard let parsedLook = parsedLooks.first else {
-            throw LLMError.invalidOutput("LLM returned 0 looks for look index \(lookIndex).")
+        for attempt in 0..<Self.maximumAttemptsPerLook {
+            let temperature = min(baseTemperature + Float(attempt) * Self.retryTemperatureStep, Self.maximumRetryTemperature)
+            let prompt = promptBuilder.buildFormattedPrompt(
+                occasion: occasion,
+                profile: profile,
+                lookIndex: lookIndex,
+                structure: structure,
+                previousLooks: avoidedLooks,
+                referenceAnalysis: referenceAnalysis
+            )
+            print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) \(archetype) / \(structure.rawValue) (temp \(temperature), attempt \(attempt + 1)/\(Self.maximumAttemptsPerLook)). Prompt \(prompt.count) chars. Running \(LLMResource.activeModelFilename)…")
+
+            let rawOutput = try await LLMEngine.shared.generate(
+                prompt: prompt,
+                maxTokens: Self.maximumTokensPerLook,
+                temperature: temperature,
+                topP: archetype.topP
+            )
+            print("✅ [OutfitGenerationPipeline] Look \(lookIndex) raw output (\(rawOutput.count) chars):\n\(rawOutput)")
+
+            let parsedLook: OutfitLook
+            do {
+                let parsedLooks = try parseLooks(
+                    from: rawOutput.trimmingCharacters(in: .whitespacesAndNewlines),
+                    colorSeason: profile.colorSeason,
+                    structure: structure,
+                    allowsOffPaletteAccent: archetype.allowsOffPaletteAccent
+                )
+                guard let first = parsedLooks.first else {
+                    throw LLMError.invalidOutput("LLM returned 0 looks for look index \(lookIndex).")
+                }
+                parsedLook = first
+            } catch {
+                print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) attempt \(attempt + 1) could not be parsed: \(error.localizedDescription)")
+                if attempt == Self.maximumAttemptsPerLook - 1 {
+                    if let lastRepeatedLook { return lastRepeatedLook }
+                    throw error
+                }
+                continue
+            }
+            // Enforce the intended index regardless of what the model output.
+            parsedLook.lookIndex = lookIndex
+
+            guard let repeatedIndex = Self.repeatedLookIndex(of: parsedLook, in: avoidedLooks) else {
+                return parsedLook
+            }
+            print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) repeats look \(repeatedIndex + 1). Generating it again.")
+            lastRepeatedLook = parsedLook
+            avoidedLooks.append(GeneratedLookSummary(from: parsedLook))
         }
-        // Enforce the intended index regardless of what the model output.
-        parsedLook.lookIndex = lookIndex
-        return parsedLook
+
+        // Every attempt repeated an earlier look: keep the last one rather than failing the whole set.
+        guard let lastRepeatedLook else {
+            throw LLMError.invalidOutput("Could not generate look index \(lookIndex).")
+        }
+        return lastRepeatedLook
+    }
+
+    // MARK: - Repeat Check
+
+    /// The index of the earlier look that `look` repeats, or `nil` when it's new.
+    ///
+    /// A look repeats an earlier one when a garment has the same category and name as one there,
+    /// or when every garment matches one there in category and color (the same outfit, renamed).
+    private static func repeatedLookIndex(of look: OutfitLook, in previousLooks: [GeneratedLookSummary]) -> Int? {
+        let garments = look.garments.map {
+            (category: $0.category.rawValue, name: normalizedGarmentText($0.name), color: normalizedGarmentText($0.colorName))
+        }
+        guard !garments.isEmpty else { return nil }
+
+        for previous in previousLooks {
+            let previousGarments = previous.garments.map {
+                (category: $0.category, name: normalizedGarmentText($0.name), color: normalizedGarmentText($0.colorName))
+            }
+            let repeatsGarment = garments.contains { garment in
+                previousGarments.contains { $0.category == garment.category && $0.name == garment.name }
+            }
+            let repeatsOutfit = garments.count == previousGarments.count && garments.allSatisfy { garment in
+                previousGarments.contains { $0.category == garment.category && $0.color == garment.color }
+            }
+            if repeatsGarment || repeatsOutfit {
+                return previous.lookIndex
+            }
+        }
+        return nil
+    }
+
+    /// Lowercased words only, so "High-Waisted Trousers" and "high waisted trousers" compare equal.
+    private static func normalizedGarmentText(_ text: String) -> String {
+        text.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 
     // MARK: - Reference Photos (VLM)
@@ -648,7 +727,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             outfit.removeAll { $0.category == .top || $0.category == .bottom }
         }
         if let structure {
-            let requested = outfit.filter { structure.categories.contains($0.category) }
+            let requested = outfit.filter { structure.allowedCategories.contains($0.category) }
             if !requested.isEmpty {
                 outfit = requested
             }

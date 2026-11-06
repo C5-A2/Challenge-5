@@ -68,8 +68,8 @@ nonisolated enum GarmentCategory: String, Codable, CaseIterable, Identifiable, S
     /// Words in an AI category label (or garment name) that point to each category.
     /// Dress is checked first, so "Shirt Dress" or "Coat Dress" is read as a dress.
     private static let generatedLabelKeywords: [(category: GarmentCategory, keywords: [String])] = [
-        (.dress, ["dress", "jumpsuit", "gown", "romper", "playsuit", "one-piece"]),
-        (.outer, ["outer", "jacket", "coat", "blazer", "cardigan", "bomber", "parka", "trench"]),
+        (.dress, ["dress", "jumpsuit", "gown", "romper", "playsuit", "one-piece", "swimsuit", "monokini"]),
+        (.outer, ["outer", "jacket", "coat", "blazer", "cardigan", "bomber", "parka", "trench", "cover-up", "kimono"]),
         (.bottom, ["bottom", "pants", "trousers", "jeans", "skirt", "shorts", "chinos", "culottes", "leggings"]),
         (.top, ["top", "inner", "shirt", "blouse", "tee", "polo", "knit", "sweater", "tank", "camisole", "turtleneck"])
     ]

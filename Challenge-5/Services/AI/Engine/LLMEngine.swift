@@ -63,6 +63,9 @@ public actor LLMEngine {
     private var context: OpaquePointer?
     #endif
     private var isBackendInitialized = false
+    /// Loading the text model is retried this many times in total (memory may still be held by the VLM).
+    private static let maximumModelLoadAttempts = 3
+    private static let modelLoadRetryDelay: TimeInterval = 1.0
     private var isGenerating = false
     
     // Active model filename (prefers Qwen 2.5 3B, falls back to Llama 3.2 1B)
@@ -184,7 +187,17 @@ public actor LLMEngine {
         var modelParams = llama_model_default_params()
         modelParams.n_gpu_layers = 99 // Metal GPU acceleration on physical iPhone
         
-        guard let loadedModel = llama_model_load_from_file(path, modelParams) else {
+        // Right after the VLM reference scan, iOS may not have handed the VLM's ~2.7 GB back yet,
+        // so the first load can fail. Wait briefly and try again before giving up.
+        var loadedModel = llama_model_load_from_file(path, modelParams)
+        var attempt = 1
+        while loadedModel == nil && attempt < Self.maximumModelLoadAttempts {
+            print("⚠️ [LLMEngine] Model load attempt \(attempt) failed. Retrying in \(Self.modelLoadRetryDelay)s…")
+            Thread.sleep(forTimeInterval: Self.modelLoadRetryDelay)
+            attempt += 1
+            loadedModel = llama_model_load_from_file(path, modelParams)
+        }
+        guard let loadedModel else {
             throw LLMEngineError.modelInitFailed
         }
         self.model = loadedModel
