@@ -62,8 +62,7 @@ struct OccasionOutputView: View {
     
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            AppColors.canvasBackground
-                .ignoresSafeArea()
+            studioStageBackground
             
             VStack(spacing: 0) {
                 navigationHeader
@@ -78,7 +77,8 @@ struct OccasionOutputView: View {
                     },
                     isProcessingPlayground: isProcessingPlayground
                 )
-                    .frame(maxHeight: .infinity)
+                
+                Spacer(minLength: 4)
                 
                 OnThisOutfitSection(
                     garments: viewModel.currentGarments,
@@ -92,7 +92,6 @@ struct OccasionOutputView: View {
                         }
                     }
                 )
-                .offset(y: -36)
                 .padding(.bottom, 2)
                 
                 OccasionOutputBottomBar(
@@ -103,14 +102,12 @@ struct OccasionOutputView: View {
                     isBookmarkDisabled: viewModel.isCurrentLookLoading,
                     onBookmarkTap: {
                         viewModel.toggleBookmark()
-                    },
-                    onPlaygroundTap: {
-                        triggerPlaygroundGeneration()
                     }
                 )
-                .offset(y: -24)
                 .padding(.bottom, 12)
             }
+            .frame(maxWidth: .infinity)
+            .clipped()
             
             if !viewModel.isLoading && !isProcessingPlayground && viewModel.hasReferencePhotos {
                 vlmDebugOverlay
@@ -193,9 +190,12 @@ struct OccasionOutputView: View {
                 Task {
                     let transparentPng = await OutfitAttributeMapper.removeBackground(from: uiImage) ?? uiImage.pngData()
                     await MainActor.run {
-                        if let transparentPng {
+                        if let transparentPng, let look = viewModel.currentLook {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                viewModel.currentLook?.lookImageData = transparentPng
+                                viewModel.updateLookImage(transparentPng, for: look)
+                            }
+                            Task {
+                                await viewModel.loadCurrentGarmentCrops()
                             }
                         }
                         self.isProcessingPlayground = false
@@ -264,10 +264,9 @@ struct OccasionOutputView: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(1)
                 
-                Text("\(viewModel.occasion.dayText) \(viewModel.occasion.monthText.capitalized)")
-                    .font(AppTypography.sfProSemiboldExtended(size: 16))
+                Text(viewModel.occasion.formattedDateString)
+                    .font(AppTypography.bodyRegular)
                     .foregroundStyle(AppColors.espressoTitle)
-                    .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 2)
@@ -280,7 +279,28 @@ struct OccasionOutputView: View {
            let uiImage = UIImage(data: frontData) {
             return Image(uiImage: uiImage)
         }
-        return Image("mock_result_1")
+        return Image("user_profile_avatar")
+    }
+    
+    // MARK: - Studio Stage Background (Asset Spotlight)
+    
+    private var studioStageBackground: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .top) {
+                Color.white
+                
+                Image("spotlight")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geo.size.width, height: 590, alignment: .top)
+                    .offset(y: -120)
+                    .clipped()
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            .clipped()
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
     
     // MARK: - Loading Overlay
@@ -534,7 +554,10 @@ struct OccasionOutputView: View {
                 await MainActor.run {
                     if let transparentPng {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            look.lookImageData = transparentPng
+                            viewModel.updateLookImage(transparentPng, for: look)
+                        }
+                        Task {
+                            await viewModel.loadCurrentGarmentCrops()
                         }
                     }
                     self.isProcessingPlayground = false

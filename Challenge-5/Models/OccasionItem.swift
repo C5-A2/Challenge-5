@@ -61,6 +61,10 @@ final class OccasionItem {
         date.formatted(date: .abbreviated, time: .omitted)
     }
     
+    var dateFormatted: String {
+        formattedDateString
+    }
+    
     // MARK: - Initializers
     
     init(

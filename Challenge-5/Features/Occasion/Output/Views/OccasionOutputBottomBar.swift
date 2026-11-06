@@ -14,7 +14,6 @@ struct OccasionOutputBottomBar: View {
     var isBookmarked: Bool = false
     var isBookmarkDisabled: Bool = false
     var onBookmarkTap: (() -> Void)? = nil
-    var onPlaygroundTap: (() -> Void)? = nil
     
     init(
         onInfoTap: (() -> Void)? = nil,
@@ -27,7 +26,6 @@ struct OccasionOutputBottomBar: View {
         self.isBookmarked = isBookmarked
         self.isBookmarkDisabled = isBookmarkDisabled
         self.onBookmarkTap = onBookmarkTap
-        self.onPlaygroundTap = onPlaygroundTap
     }
     
     var body: some View {
@@ -35,14 +33,9 @@ struct OccasionOutputBottomBar: View {
             CircularIconButton(systemName: "books.vertical") {
                 onInfoTap?()
             }
-            .accessibilityLabel("Look Details")
+            .accessibilityLabel("Look Details and Rationale")
             
             Spacer()
-            
-            CircularIconButton(systemName: "wand.and.stars") {
-                onPlaygroundTap?()
-            }
-            .accessibilityLabel("Visualize Look with Image Playground")
             
             CircularIconButton(
                 systemName: isBookmarked ? "bookmark.fill" : "bookmark",
