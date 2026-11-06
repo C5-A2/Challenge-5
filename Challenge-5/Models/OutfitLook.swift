@@ -25,6 +25,9 @@ final class OutfitLook {
     /// Image of the user wearing this look, shown on the result stage.
     /// The store flow crops garments from this image for visual search.
     @Attribute(.externalStorage) var lookImageData: Data?
+    
+    /// Timestamp when the visual look image was last generated/styled.
+    var imageGeneratedAt: Date?
 
     @Relationship(deleteRule: .cascade, inverse: \GarmentItem.outfitLook)
     var garments: [GarmentItem] = []
@@ -38,11 +41,13 @@ final class OutfitLook {
         lookIndex: Int,
         fitRationale: String = "",
         isBookmarked: Bool = false,
-        lookImageData: Data? = nil
+        lookImageData: Data? = nil,
+        imageGeneratedAt: Date? = nil
     ) {
         self.lookIndex = lookIndex
         self.fitRationale = fitRationale
         self.isBookmarked = isBookmarked
         self.lookImageData = lookImageData
+        self.imageGeneratedAt = imageGeneratedAt
     }
 }

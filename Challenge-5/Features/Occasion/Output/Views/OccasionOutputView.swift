@@ -62,8 +62,7 @@ struct OccasionOutputView: View {
     
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            AppColors.canvasBackground
-                .ignoresSafeArea()
+            studioStageBackground
             
             VStack(spacing: 0) {
                 navigationHeader
@@ -78,7 +77,8 @@ struct OccasionOutputView: View {
                     },
                     isProcessingPlayground: isProcessingPlayground
                 )
-                    .frame(maxHeight: .infinity)
+                
+                Spacer(minLength: 4)
                 
                 OnThisOutfitSection(
                     garments: viewModel.currentGarments,
@@ -92,7 +92,6 @@ struct OccasionOutputView: View {
                         }
                     }
                 )
-                .offset(y: -36)
                 .padding(.bottom, 2)
                 
                 OccasionOutputBottomBar(
@@ -103,14 +102,12 @@ struct OccasionOutputView: View {
                     isBookmarkDisabled: viewModel.isCurrentLookLoading,
                     onBookmarkTap: {
                         viewModel.toggleBookmark()
-                    },
-                    onPlaygroundTap: {
-                        triggerPlaygroundGeneration()
                     }
                 )
-                .offset(y: -24)
                 .padding(.bottom, 12)
             }
+            .frame(maxWidth: .infinity)
+            .clipped()
             
             if !viewModel.isLoading && !isProcessingPlayground && viewModel.hasReferencePhotos {
                 vlmDebugOverlay
@@ -193,9 +190,12 @@ struct OccasionOutputView: View {
                 Task {
                     let transparentPng = await OutfitAttributeMapper.removeBackground(from: uiImage) ?? uiImage.pngData()
                     await MainActor.run {
-                        if let transparentPng {
+                        if let transparentPng, let look = viewModel.currentLook {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                viewModel.currentLook?.lookImageData = transparentPng
+                                viewModel.updateLookImage(transparentPng, for: look)
+                            }
+                            Task {
+                                await viewModel.loadCurrentGarmentCrops()
                             }
                         }
                         self.isProcessingPlayground = false
@@ -264,10 +264,9 @@ struct OccasionOutputView: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(1)
                 
-                Text("\(viewModel.occasion.dayText) \(viewModel.occasion.monthText.capitalized)")
-                    .font(AppTypography.sfProSemiboldExtended(size: 16))
+                Text(viewModel.occasion.formattedDateString)
+                    .font(AppTypography.bodyRegular)
                     .foregroundStyle(AppColors.espressoTitle)
-                    .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 2)
@@ -279,6 +278,143 @@ struct OccasionOutputView: View {
         if let frontData = activeProfile?.frontBodyPhotoData,
            let uiImage = UIImage(data: frontData) {
             return Image(uiImage: uiImage)
+        }
+        return Image("user_profile_avatar")
+    }
+    
+    // MARK: - Studio Stage Background (Asset Spotlight)
+    
+    private var studioStageBackground: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .top) {
+                Color.white
+                
+                Image("spotlight")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geo.size.width, height: 590, alignment: .top)
+                    .offset(y: -120)
+                    .clipped()
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            .clipped()
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            .clipped()
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+    
+    private var liquidGlassMenu: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isShowingMoreMenu = false
+                }
+                isShowingEditSheet = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.espressoTitle)
+                        .frame(width: 20)
+                    
+                    Text("Edit")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.espressoTitle)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            
+            Divider()
+                .background(Color.white.opacity(0.35))
+                .padding(.horizontal, 12)
+            
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isShowingMoreMenu = false
+                }
+                isShowingProfileSheet = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.espressoTitle)
+                        .frame(width: 20)
+                    
+                    Text("Profile")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.espressoTitle)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            
+            Divider()
+                .background(Color.white.opacity(0.35))
+                .padding(.horizontal, 12)
+            
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isShowingMoreMenu = false
+                }
+                let activeProfile = userProfiles.first ?? UserProfile.mockSample
+                viewModel.regenerateLooks(profile: activeProfile)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.espressoTitle)
+                        .frame(width: 20)
+                    
+                    Text("Regenerate")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.espressoTitle)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            
+            Divider()
+                .background(Color.white.opacity(0.35))
+                .padding(.horizontal, 12)
+            
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isShowingMoreMenu = false
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color(hex: "#FF3B30"))
+                        .frame(width: 20)
+                    
+                    Text("Delete")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color(hex: "#FF3B30"))
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+>>>>>>> 41805ee (polishing UI in occasion output + list, adding occasion name char limit)
         }
         return Image("mock_result_1")
     }
@@ -534,7 +670,10 @@ struct OccasionOutputView: View {
                 await MainActor.run {
                     if let transparentPng {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            look.lookImageData = transparentPng
+                            viewModel.updateLookImage(transparentPng, for: look)
+                        }
+                        Task {
+                            await viewModel.loadCurrentGarmentCrops()
                         }
                     }
                     self.isProcessingPlayground = false

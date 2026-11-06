@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct AvatarStageView: View {
     
@@ -29,14 +30,17 @@ struct AvatarStageView: View {
     
     
     var body: some View {
-        VStack(spacing: 0) {
-
+        VStack(spacing: 8) {
             carouselTrack
-                .frame(height: 420)
+                .frame(height: 330)
             
-            groundShadowAndPagination
-                .offset(y: -60)
+            if viewModel.looks.count > 1 {
+                nativePageControlDots
+                    .padding(.top, 4)
+            }
         }
+        .frame(maxWidth: .infinity)
+        .clipped()
         .contentShape(Rectangle())
         .gesture(dragGesture)
     }
@@ -62,9 +66,10 @@ struct AvatarStageView: View {
             
             let width: CGFloat = 110 + centerFactor * (190 - 110)
             let height: CGFloat = 245 + centerFactor * (455 - 245)
-            let opacity = abs(relativeIndex) <= 1.0
-                ? 0.90 + centerFactor * 0.10
-                : max(0, 0.90 - (abs(relativeIndex) - 1.0) * 1.5)
+            let opacity: CGFloat = abs(relativeIndex) <= 1.0
+                ? 1.0
+                : max(0, 1.0 - (abs(relativeIndex) - 1.0) * 1.5)
+            let saturation: Double = isCenter ? 1.0 : 0.65
             let xOffset = relativeIndex * cardSpacing
             
             ZStack(alignment: .center) {
@@ -77,14 +82,16 @@ struct AvatarStageView: View {
                     Image(uiImage: uiImage)
                         .resizable()
                         .scaledToFit()
+                        .saturation(saturation)
                         .frame(width: width, height: height)
                         .shadow(
-                            color: Color.black.opacity(isCenter ? 0.08 : 0.03),
-                            radius: isCenter ? 8 : 3,
-                            y: isCenter ? 4 : 2
+                            color: Color.black.opacity(isCenter ? 0.08 : 0.02),
+                            radius: isCenter ? 8 : 2,
+                            y: isCenter ? 4 : 1
                         )
                 } else {
                     playgroundPlaceholderView(for: index, isCenter: isCenter, width: width, height: height)
+                        .saturation(saturation)
                         .frame(width: width, height: height)
                 }
             }
@@ -141,15 +148,16 @@ struct AvatarStageView: View {
     @ViewBuilder
     private func playgroundPlaceholderView(for index: Int, isCenter: Bool, width: CGFloat, height: CGFloat) -> some View {
         ZStack(alignment: .center) {
-            // Icon Orang (Avatar Silhouette)
+            // Icon Orang (Avatar Silhouette) - dibuat proporsional dan pas di atas podium
             Image(systemName: "figure.stand")
                 .resizable()
                 .scaledToFit()
-                .foregroundStyle(AppColors.espressoTitle.opacity(isCenter ? 0.20 : 0.08))
-                .frame(height: height * 0.78)
+                .foregroundStyle(AppColors.espressoTitle.opacity(isCenter ? 0.16 : 0.06))
+                .frame(height: height * 0.54)
+                .offset(y: 4)
             
             if isCenter {
-                VStack(spacing: 14) {
+                VStack(spacing: 12) {
                     // Logo Image Playground Default
                     ZStack {
                         Circle()
@@ -164,10 +172,10 @@ struct AvatarStageView: View {
                                     endPoint: .bottomTrailing
                                 )
                             )
-                            .frame(width: 54, height: 54)
+                            .frame(width: 46, height: 46)
                         
                         Image(systemName: "apple.image.playground")
-                            .font(.system(size: 26, weight: .semibold))
+                            .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [
@@ -180,30 +188,30 @@ struct AvatarStageView: View {
                                 )
                             )
                     }
-                    .shadow(color: Color.black.opacity(0.10), radius: 8, y: 3)
+                    .shadow(color: Color.black.opacity(0.10), radius: 6, y: 2)
                     
                     // Tombol Generate
                     Button {
                         onPlaygroundTap?()
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 5) {
                             Image(systemName: "wand.and.stars")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.system(size: 11, weight: .bold))
                             Text("Generate Look")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 9)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
                         .background(
                             Capsule()
                                 .fill(AppColors.espressoTitle)
-                                .shadow(color: .black.opacity(0.22), radius: 8, y: 3)
+                                .shadow(color: .black.opacity(0.20), radius: 6, y: 2)
                         )
                         .foregroundStyle(.white)
                     }
                     .buttonStyle(.plain)
                 }
-                .offset(y: 8)
+                .offset(y: 6)
             }
         }
     }
@@ -252,48 +260,65 @@ struct AvatarStageView: View {
         }
     }
     
+    // MARK: - Native Apple PageControl Dots
     
-    private var groundShadowAndPagination: some View {
-        ZStack {
-
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [Color.black.opacity(0.20), Color.black.opacity(0.04), Color.clear],
-                        center: .center,
-                        startRadius: 10,
-                        endRadius: 95
-                    )
-                )
-                .frame(width: 200, height: 30)
-            
-            HStack(spacing: 6) {
-                ForEach(0..<viewModel.totalCarouselCount, id: \.self) { index in
-                    let isSelected = index == viewModel.selectedLookIndex
-                    let isLookLoading = viewModel.isLookLoading(at: index)
-                    
-                    Circle()
-                        .fill(
-                            isSelected
-                                ? Color.white
-                                : (isLookLoading ? AppColors.espressoTitle.opacity(0.25) : Color.white.opacity(0.45))
-                        )
-                        .frame(
-                            width: isSelected ? 7.5 : 5,
-                            height: isSelected ? 7.5 : 5
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    isLookLoading ? AppColors.espressoTitle.opacity(0.55) : Color.black.opacity(0.18),
-                                    lineWidth: isLookLoading ? 0.8 : 0.5
-                                )
-                        )
-                        .onTapGesture {
-                            viewModel.selectLook(at: index)
-                        }
+    private var nativePageControlDots: some View {
+        NativePageControl(
+            numberOfPages: viewModel.looks.count,
+            currentPage: Binding(
+                get: { viewModel.selectedLookIndex },
+                set: { newIndex in
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        viewModel.selectLook(at: newIndex)
+                    }
                 }
-            }
+            )
+        )
+        .frame(height: 20)
+    }
+                }
+            )
+        )
+        .frame(height: 20)
+    }
+}
+
+// MARK: - Native UIPageControl Wrapper
+
+private struct NativePageControl: UIViewRepresentable {
+    var numberOfPages: Int
+    @Binding var currentPage: Int
+    
+    func makeUIView(context: Context) -> UIPageControl {
+        let control = UIPageControl()
+        control.numberOfPages = numberOfPages
+        control.currentPage = currentPage
+        control.pageIndicatorTintColor = UIColor(white: 0.0, alpha: 0.22)
+        control.currentPageIndicatorTintColor = UIColor(white: 0.1, alpha: 0.90)
+        control.backgroundStyle = .minimal
+        control.allowsContinuousInteraction = false
+        control.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
+        return control
+    }
+    
+    func updateUIView(_ uiView: UIPageControl, context: Context) {
+        uiView.numberOfPages = numberOfPages
+        uiView.currentPage = currentPage
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject {
+        var parent: NativePageControl
+        
+        init(_ parent: NativePageControl) {
+            self.parent = parent
+        }
+        
+        @objc func valueChanged(_ sender: UIPageControl) {
+            parent.currentPage = sender.currentPage
         }
     }
 }

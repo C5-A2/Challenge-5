@@ -228,21 +228,12 @@ struct OccasionsHomeView: View {
     /// Top header bar with history and profile circular buttons and large "Occasions" title.
     private var headerBar: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Top Row: Circular Icon Buttons at Top Right
+            // Top Row: Circular Icon Button at Top Right
             HStack(spacing: 12) {
                 Spacer()
                 
-                // History Button (Opens OccasionsHistoryView)
-                CircularIconButton(systemName: "clock.arrow.circlepath") {
-                    if let onHistoryTap {
-                        onHistoryTap()
-                    } else {
-                        viewModel.isShowingHistorySheet = true
-                    }
-                }
-                
-                // Profile Button (Opens ProfileHubView)
-                CircularIconButton(systemName: "person.crop.circle") {
+                // Profile Button (Opens ProfileHubView with Reusable Liquid Glass Button)
+                LiquidGlassCircularButton.profile {
                     if let onProfileTap {
                         onProfileTap()
                     } else {
@@ -298,7 +289,7 @@ struct OccasionsHomeView: View {
             } label: {
                 HStack(spacing: 6) {
                     Text("Past Occasion")
-                        .font(AppTypography.sectionHeader)
+                        .font(AppTypography.sectionHeaderStandard)
                         .foregroundStyle(AppColors.espressoTitle)
                     
                     Image(systemName: "chevron.down")
