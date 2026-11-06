@@ -21,6 +21,8 @@ final class GarmentCropProvider {
     private let cropCache: GarmentCropCache
     /// Decoded look images by `OutfitLook.id`, so a look image is decoded once for all its garments.
     private var lookImagesByLookID: [UUID: CGImage] = [:]
+    /// The image data each decoded look image came from, to notice when a look gets a new image.
+    private var lookImageDataByLookID: [UUID: Data] = [:]
 
     // MARK: - Initializer
 
@@ -34,6 +36,9 @@ final class GarmentCropProvider {
     // MARK: - Cropping
 
     func crop(for garment: GarmentItem) async throws -> GarmentCrop {
+        if let look = garment.outfitLook {
+            discardCropsIfLookImageChanged(for: look)
+        }
         if let cachedCrop = cropCache.crop(forGarmentID: garment.id) {
             return cachedCrop
         }
@@ -59,14 +64,27 @@ final class GarmentCropProvider {
     // MARK: - Look Image
 
     /// The decoded look image, cached by look so it's decoded only once.
+    /// Only the look's own image is used (no mock placeholder): a look without a generated
+    /// image can't be cropped, so its cards keep the placeholder icon.
     func lookImage(for look: OutfitLook) throws -> CGImage {
+        discardCropsIfLookImageChanged(for: look)
         if let decodedImage = lookImagesByLookID[look.id] {
             return decodedImage
         }
-        let data = look.lookImageData ?? OccasionOutputViewModel.makePlaceholderLookImageData(for: look.lookIndex)
-        guard let data else { throw StoreError.lookImageUnavailable }
+        guard let data = look.lookImageData else { throw StoreError.lookImageUnavailable }
         guard let decodedImage = LookImageDecoder.makeImage(from: data) else { throw StoreError.lookImageDecodingFailed }
         lookImagesByLookID[look.id] = decodedImage
+        lookImageDataByLookID[look.id] = data
         return decodedImage
+    }
+
+    /// When the look image changed since it was decoded (Image Playground generated a new one),
+    /// the decoded image and the garments' crops are dropped, so new crops come from the new image.
+    private func discardCropsIfLookImageChanged(for look: OutfitLook) {
+        guard let decodedFromData = lookImageDataByLookID[look.id],
+              decodedFromData != look.lookImageData else { return }
+        lookImagesByLookID[look.id] = nil
+        lookImageDataByLookID[look.id] = nil
+        cropCache.removeCrops(forGarmentIDs: look.garments.map(\.id))
     }
 }

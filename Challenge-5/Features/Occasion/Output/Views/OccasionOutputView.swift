@@ -187,7 +187,7 @@ struct OccasionOutputView: View {
         .outfitPlaygroundSheet(
             isPresented: $isShowingPlayground,
             package: playgroundPackage,
-            sourceImage: Image("mock_result_1"),
+            sourceImage: playgroundSourceImage,
             onGenerated: { resultCG in
                 let uiImage = UIImage(cgImage: resultCG)
                 isProcessingPlayground = true
@@ -220,12 +220,22 @@ struct OccasionOutputView: View {
         .onChange(of: viewModel.selectedLookIndex) { _, _ in
             updatePlaygroundPackage()
         }
-        .task(id: viewModel.currentLook?.id) {
+        // Re-crop when the look changes or gets a new image (Image Playground).
+        .task(id: "\(viewModel.currentLook?.id.uuidString ?? "")-\(viewModel.currentLook?.lookImageData?.count ?? 0)") {
             // Crop the garments of the look on screen for the "On this outfit" thumbnails.
             await viewModel.loadCurrentGarmentCrops()
         }
     }
     
+    
+    /// The person Image Playground dresses: the user's own front body photo from the profile scan.
+    /// Without one, Image Playground creates the person from the text only (no mock photo, which
+    /// made every result look like `mock_result_1`).
+    private var playgroundSourceImage: Image? {
+        guard let photoData = userProfiles.first?.frontBodyPhotoData,
+              let photo = UIImage(data: photoData) else { return nil }
+        return Image(uiImage: photo)
+    }
     
     private var navigationHeader: some View {
         VStack(spacing: 8) {

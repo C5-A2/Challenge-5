@@ -47,14 +47,27 @@ public struct LLMResource: Sendable {
         return nil
     }
 
+    /// A real GGUF model is hundreds of MB. A file this small is a Git LFS pointer
+    /// (the model wasn't downloaded with `git lfs pull`), which llama.cpp can't load.
+    private static let minimumModelFileBytes: Int64 = 1_000_000
+
+    /// Whether the file is a downloaded model and not a Git LFS pointer.
+    public static func isUsableModelFile(atPath path: String) -> Bool {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: path)
+        let size = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
+        return size >= minimumModelFileBytes
+    }
+
     private static func candidateURL(for name: String) -> URL? {
         // 1. Try App Bundle (when running in target with Resources folder reference)
-        if let bundleURL = Bundle.main.url(forResource: name, withExtension: modelExtension) {
+        if let bundleURL = Bundle.main.url(forResource: name, withExtension: modelExtension),
+           isUsableModelFile(atPath: bundleURL.path) {
             return bundleURL
         }
 
         // 2. Try App Bundle subdirectory Resources/
-        if let subpathURL = Bundle.main.url(forResource: name, withExtension: modelExtension, subdirectory: "Resources") {
+        if let subpathURL = Bundle.main.url(forResource: name, withExtension: modelExtension, subdirectory: "Resources"),
+           isUsableModelFile(atPath: subpathURL.path) {
             return subpathURL
         }
 
@@ -65,7 +78,7 @@ public struct LLMResource: Sendable {
         ]
 
         for path in candidatePaths {
-            if FileManager.default.fileExists(atPath: path) {
+            if FileManager.default.fileExists(atPath: path), isUsableModelFile(atPath: path) {
                 return URL(fileURLWithPath: path)
             }
         }

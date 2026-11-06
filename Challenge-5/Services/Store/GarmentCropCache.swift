@@ -28,4 +28,11 @@ final class GarmentCropCache {
     func store(_ crop: GarmentCrop, forGarmentID garmentID: UUID) {
         cropsByGarmentID[garmentID] = crop
     }
+
+    /// Drops crops made from an older look image (for example before Image Playground replaced it).
+    func removeCrops(forGarmentIDs garmentIDs: [UUID]) {
+        for garmentID in garmentIDs {
+            cropsByGarmentID[garmentID] = nil
+        }
+    }
 }

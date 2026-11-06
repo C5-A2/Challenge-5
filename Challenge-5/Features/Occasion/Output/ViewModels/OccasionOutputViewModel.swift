@@ -201,6 +201,8 @@ final class OccasionOutputViewModel {
             print("\n❌ [OccasionOutputViewModel] LLM inference failed (\(LLMResource.activeModelFilename)): \(errorMsg)\n")
             withAnimation {
                 self.errorMessage = errorMsg
+                // Show the error, so mock placeholders aren't mistaken for generated looks.
+                self.isShowingErrorAlert = true
                 self.isLoading = false
             }
         }
@@ -235,6 +237,9 @@ final class OccasionOutputViewModel {
     /// Stores the bookmark through `SavedLookStoring`. Reverts it if saving fails.
     private func setCurrentLookSaved(_ isSaved: Bool) {
         guard let currentLook else { return }
+        // Mock placeholders shown while the AI is still generating are never saved,
+        // otherwise they'd be stored as the occasion's looks and the AI would never run for it.
+        guard !isUsingMockPlaceholders else { return }
         guard let savedLookStorage else {
             // Occasion isn't stored (previews): keep the bookmark in memory only.
             currentLook.isBookmarked = isSaved
@@ -253,7 +258,7 @@ final class OccasionOutputViewModel {
     /// Adds looks that aren't stored yet (for example mock looks) to the occasion,
     /// so a saved look keeps its occasion and stays after this screen closes.
     private func attachLooksToOccasion() {
-        guard occasion.modelContext != nil else { return }
+        guard occasion.modelContext != nil, !isUsingMockPlaceholders else { return }
         let storedLookIDs = Set(occasion.generatedLooks.map(\.id))
         for look in looks where !storedLookIDs.contains(look.id) {
             occasion.generatedLooks.append(look)
@@ -270,11 +275,23 @@ final class OccasionOutputViewModel {
     
     /// Crops every garment of the current look for the "On this outfit" thumbnails.
     /// Uses the same crops (and cache) as the "Where to Buy" sheet.
+    /// Without a generated image (no Image Playground image yet) nothing is cropped,
+    /// so the cards show placeholders instead of crops of a mock image.
     func loadCurrentGarmentCrops() async {
         guard let look = currentLook else { return }
         prepareLookForCropping(look)
+        for garment in look.garments {
+            garmentCropImages[garment.id] = nil
+        }
+        guard hasGeneratedImage(look) else { return }
         let crops = await GarmentCropProvider.shared.crops(for: look.garments)
         garmentCropImages.merge(crops.mapValues(\.image)) { _, newImage in newImage }
+    }
+
+    /// Whether the look has its own image (not empty, not the mock placeholder).
+    func hasGeneratedImage(_ look: OutfitLook) -> Bool {
+        guard let data = look.lookImageData else { return false }
+        return !OccasionOutputViewModel.isPlaceholderData(data, lookIndex: look.lookIndex)
     }
     
     /// The store crops a garment from its look image, so it needs the garment linked to the look.

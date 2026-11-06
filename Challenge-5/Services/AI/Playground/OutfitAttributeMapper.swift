@@ -212,6 +212,7 @@ enum OutfitAttributeMapper {
         case .top: return "Refined collar tailored cut"
         case .outer: return "Structured shoulder taper"
         case .bottom: return "Straight-leg balance cut"
+        case .dress: return "Defined-waist one-piece silhouette"
         }
     }
     

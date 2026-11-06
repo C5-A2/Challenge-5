@@ -49,26 +49,28 @@ nonisolated enum OutfitStructure: String, Sendable, CaseIterable {
 
 /// The creative direction of each of the 5 looks, so they differ in style, not only in color.
 ///
+/// The occasion, the Indonesian setting (tropical climate, local wardrobe), body shape and personality
+/// (style vision + the user's taste) guide every look as a baseline; each direction adds its own focus:
 /// - Look 1 `referenceMatch`: recreates the user's reference photos (or a signature look without them).
-/// - Look 2 `personality`: shows the user's personality with one distinctive element.
-/// - Look 3 `bodyShape`: the most flattering look, built strictly on the body shape rules.
+/// - Look 2 `localTouch`: one Indonesian element (batik, tenun, kebaya...) styled in a modern way.
+/// - Look 3 `colorStory`: color-led: a deliberate tonal, monochrome or color-blocked palette story.
 /// - Look 4 `surpriseMe`: a bold style direction the user wouldn't pick herself.
 /// - Look 5 `lookMore`: the style vision ("I want to look more...") pushed to the maximum.
 ///
 /// Looks generated later ("generate more") cycle through the same 5 directions.
 nonisolated enum OutfitArchetype: Int, Sendable, CaseIterable {
     case referenceMatch
-    case personality
-    case bodyShape
+    case localTouch
+    case colorStory
     case surpriseMe
     case lookMore
 
     // MARK: - Sampling Values
 
-    /// Grounded looks (reference, body shape) stay low; creative looks go higher.
+    /// Grounded looks (reference, local touch) stay lower; creative looks go higher.
     private static let referenceMatchTemperature: Float = 0.35
-    private static let personalityTemperature: Float = 0.65
-    private static let bodyShapeTemperature: Float = 0.40
+    private static let localTouchTemperature: Float = 0.55
+    private static let colorStoryTemperature: Float = 0.60
     private static let surpriseMeTemperature: Float = 0.90
     private static let lookMoreTemperature: Float = 0.70
     private static let groundedTopP: Float = 0.90
@@ -88,8 +90,8 @@ nonisolated enum OutfitArchetype: Int, Sendable, CaseIterable {
     func title(hasReference: Bool, hasVision: Bool) -> String {
         switch self {
         case .referenceMatch: hasReference ? "Reference Match" : "Signature Look"
-        case .personality: "Personality"
-        case .bodyShape: "Body Shape"
+        case .localTouch: "Local Touch"
+        case .colorStory: "Color Story"
         case .surpriseMe: "Surprise Me"
         case .lookMore: hasVision ? "Look More" : "Statement Look"
         }
@@ -98,8 +100,8 @@ nonisolated enum OutfitArchetype: Int, Sendable, CaseIterable {
     var temperature: Float {
         switch self {
         case .referenceMatch: Self.referenceMatchTemperature
-        case .personality: Self.personalityTemperature
-        case .bodyShape: Self.bodyShapeTemperature
+        case .localTouch: Self.localTouchTemperature
+        case .colorStory: Self.colorStoryTemperature
         case .surpriseMe: Self.surpriseMeTemperature
         case .lookMore: Self.lookMoreTemperature
         }
@@ -107,8 +109,8 @@ nonisolated enum OutfitArchetype: Int, Sendable, CaseIterable {
 
     var topP: Float {
         switch self {
-        case .referenceMatch, .bodyShape: Self.groundedTopP
-        case .personality, .surpriseMe, .lookMore: Self.creativeTopP
+        case .referenceMatch, .localTouch: Self.groundedTopP
+        case .colorStory, .surpriseMe, .lookMore: Self.creativeTopP
         }
     }
 
@@ -123,9 +125,9 @@ nonisolated enum OutfitArchetype: Int, Sendable, CaseIterable {
         switch self {
         case .referenceMatch:
             return referenceStructure ?? .outerTopBottom
-        case .personality:
+        case .localTouch:
             return .topBottom
-        case .bodyShape:
+        case .colorStory:
             return .outerTopBottom
         case .surpriseMe:
             return referenceStructure?.hasDress == true ? .topBottom : .dress

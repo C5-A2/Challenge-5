@@ -85,8 +85,9 @@ public actor LLMEngine {
             targets = LLMResource.supportedModelFilenames.map { "\($0).gguf" }
         }
 
+        // Skip Git LFS pointers (model not downloaded), so the next model in the list is used.
         for target in targets {
-            if let path = checkCandidatePaths(filename: target) {
+            if let path = checkCandidatePaths(filename: target), LLMResource.isUsableModelFile(atPath: path) {
                 return path
             }
         }

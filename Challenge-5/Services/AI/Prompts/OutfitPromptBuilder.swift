@@ -362,11 +362,9 @@ struct OutfitPromptBuilder: Sendable {
             """
         ]
 
-        // Occasion and dresscode apply to every look.
-        let cleanDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !cleanDresscode.isEmpty {
-            sections.append("DRESSCODE: \(cleanDresscode). Every piece must suit this level of formality.")
-        }
+        // The occasion, its dresscode and the Indonesian setting apply to every look.
+        sections.append(occasionSection(for: occasion))
+        sections.append(Self.indonesiaSetting)
         if let note = occasion.customNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
             sections.append("USER NOTE: \(note)")
         }
@@ -419,19 +417,45 @@ struct OutfitPromptBuilder: Sendable {
     - Every garment in this look must name a different kind of detail, and must not reuse a detail from the previous looks.
     """
 
+    // MARK: - Occasion & Setting
+
+    /// Every look is for this occasion: the direction changes the style, never the event it's for.
+    private func occasionSection(for occasion: OccasionItem) -> String {
+        var lines = [
+            "OCCASION (every look is for this event): '\(occasion.title)'.",
+            "Think about where it happens, the time of day and what she will do there (standing, sitting, walking, dancing), and choose pieces that feel right and comfortable for it."
+        ]
+        let cleanDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanDresscode.isEmpty {
+            lines.append("Dresscode: \(cleanDresscode). Every piece must suit this level of formality.")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// The user lives in Indonesia: tropical weather and what women there usually wear.
+    /// Without this, the model defaults to Western cold-weather pieces (wool coats, heavy knits).
+    private static let indonesiaSetting = """
+    SETTING: Indonesia, tropical (hot and humid all year, often rainy).
+    - Dress her the way Indonesian women dress for this kind of event, not for a cold Western climate.
+    - Prefer breathable fabrics (cotton, linen, rayon, viscose, light crepe, chiffon; satin or brocade for evening).
+    - Outer layers stay light (linen blazer, thin cardigan, kimono-style outer, shirt worn open). No wool coats, cashmere, puffer jackets or thick knits.
+    - Local pieces such as kebaya, batik, kulot or rok plisket are welcome whenever they suit the look.
+    """
+
     // MARK: - Look Direction
 
     /// What this look is for. This is the main difference between the 5 looks.
+    /// Body shape and personality are not directions: they guide every look (see the sections below).
     private func archetypeBrief(_ archetype: OutfitArchetype, occasion: OccasionItem, hasReference: Bool) -> String {
         switch archetype {
         case .referenceMatch:
             return hasReference
                 ? "Recreate the outfit in the user's reference photos as closely as possible: the same kind of pieces, layering, silhouette and color story. Change only what the dresscode or the color palette requires."
                 : "Create the user's signature outfit for this occasion: timeless, well-cut pieces she would happily wear again."
-        case .personality:
-            return "Show the user's personality, not only the dresscode. Build the outfit around ONE distinctive element (an interesting texture, a print, an unexpected color pairing or an unusual cut) so it feels personal and memorable, while staying easy to wear."
-        case .bodyShape:
-            return "Make the most flattering outfit for the user's body. Every cut, neckline, length and rise must follow the body rules below; flattering comes before trendy."
+        case .localTouch:
+            return "Bring in ONE Indonesian element in a modern way: a batik, tenun, songket, lurik or ikat piece, or a modern kebaya or kurung-inspired silhouette. Style it so it feels current and personal, not like a costume, and right for the occasion and dresscode."
+        case .colorStory:
+            return "Let color lead this outfit. Build one deliberate color story from her palette: tonal (shades of one color), monochrome, or two to three colors blocked with intention. Put her most flattering color closest to her face. The pieces can be simple; the colors make the look."
         case .surpriseMe:
             return "Surprise the user: choose a style direction she probably would not pick herself and that is clearly different from the previous looks (another aesthetic, silhouette or color mood). Make it bold and fashion-forward, but still right for the dresscode and never costume-like."
         case .lookMore:
@@ -446,7 +470,8 @@ struct OutfitPromptBuilder: Sendable {
 
     // MARK: - Context Sections
 
-    /// The reference photos: the full description for look 1, a short taste hint for the personality look.
+    /// The reference photos: the full description for look 1, a light taste hint for the others
+    /// (except the surprise look, which should go somewhere new).
     private func referenceSection(for archetype: OutfitArchetype, analysis: ReferenceStyleAnalysis?, hasReference: Bool) -> String? {
         guard hasReference else { return nil }
         switch archetype {
@@ -459,19 +484,18 @@ struct OutfitPromptBuilder: Sendable {
             \(analysis.promptDescription)
             For each piece, use the "closest palette color" given in its description.
             """
-        case .personality:
+        case .localTouch, .colorStory, .lookMore:
             guard let analysis else { return nil }
-            return "USER'S TASTE (from her reference photos, use as a light hint only):\n\(analysis.promptDescription)"
-        case .bodyShape, .surpriseMe, .lookMore:
+            return "USER'S TASTE (from her reference photos, a light hint, don't copy):\n\(analysis.promptDescription)"
+        case .surpriseMe:
             return nil
         }
     }
 
-    /// The style vision: in full for "Look More", as a mood for the other looks.
+    /// Personality: the style vision guides every look as a mood, and leads the "Look More" look.
     private func visionSection(for archetype: OutfitArchetype, occasion: OccasionItem) -> String? {
         guard !occasion.visions.isEmpty else { return nil }
-        switch archetype {
-        case .lookMore:
+        if archetype == .lookMore {
             let details = occasion.visions.map { vision in
                 """
                 - \(vision.adjective)
@@ -482,15 +506,13 @@ struct OutfitPromptBuilder: Sendable {
                 """
             }.joined(separator: "\n")
             return "STYLE VISION (main source for this look):\n\(details)"
-        case .personality:
-            let moods = occasion.visions.map { "\($0.adjective): \($0.patternsAndDetails)" }.joined(separator: "\n- ")
-            return "MOOD (from the user's style vision):\n- \(moods)"
-        case .referenceMatch, .bodyShape, .surpriseMe:
-            return "MOOD: \(occasion.visions.map(\.adjective).joined(separator: ", "))."
         }
+        let moods = occasion.visions.map { "\($0.adjective): \($0.visionDescription)" }.joined(separator: "\n- ")
+        return "PERSONALITY (keep this feeling in the outfit, without letting it override the look direction):\n- \(moods)"
     }
 
-    /// Body rules: all of them for the body shape look, a short flattering guide for the others.
+    /// Body shape guides every look with moderate weight: flattering cuts are preferred,
+    /// but the look direction decides the overall style.
     private func bodySection(for archetype: OutfitArchetype, profile: UserProfile?, structure: OutfitStructure) -> String? {
         let bodyType = profile?.bodyType
         let torsoBalance = profile?.torsoBalance
@@ -499,42 +521,32 @@ struct OutfitPromptBuilder: Sendable {
         var lines: [String] = []
         if let bodyType {
             let garments = bodyType.suitableGarments
-            if archetype == .bodyShape {
-                lines.append("Necklines: \(garments.necklines)")
-                lines.append("Sleeves: \(garments.sleeves)")
-                if structure.hasDress {
-                    lines.append("Dresses & jumpsuits: \(garments.skirtsAndDresses) \(garments.shortsAndJumpsuits)")
-                } else {
-                    lines.append("Tops & outer: \(garments.topsAndJackets)")
-                    lines.append("Bottoms: \(garments.bottoms) \(garments.skirtsAndDresses)")
-                }
+            lines.append("Necklines: \(garments.necklines)")
+            if structure.hasDress {
+                lines.append("Dresses & jumpsuits: \(garments.skirtsAndDresses)")
             } else {
-                lines.append("Flattering necklines: \(garments.necklines)")
-                if structure.hasDress {
-                    lines.append("Flattering dresses: \(garments.skirtsAndDresses)")
-                }
+                lines.append("Tops & outer: \(garments.topsAndJackets)")
+                lines.append("Bottoms: \(garments.bottoms)")
             }
         }
         if let torsoBalance {
             let garments = torsoBalance.suitableGarments
-            if archetype == .bodyShape {
+            if structure.hasDress {
+                lines.append("Waist & length: \(garments.bottom)")
+            } else {
                 lines.append("Top length: \(garments.top)")
-                lines.append("Bottom rise & length: \(garments.bottom)")
-            } else if !structure.hasDress {
                 lines.append("Bottom rise: \(garments.bottom)")
             }
         }
-
         guard !lines.isEmpty else { return nil }
 
         let bodyName = [bodyType?.displayName, torsoBalance?.rawValue].compactMap { $0 }.joined(separator: ", ")
-        let heading = archetype == .bodyShape
-            ? "BODY RULES (\(bodyName), follow strictly):"
-            : "KEEP IT FLATTERING (\(bodyName), light guide):"
-        return heading + "\n" + lines.map { "- \($0)" }.joined(separator: "\n")
+        return "BODY GUIDE (\(bodyName); prefer these cuts where they fit the look direction, they are guidance, not strict rules):\n"
+            + lines.map { "- \($0)" }.joined(separator: "\n")
     }
 
-    /// The seasonal palette. The surprise look may add one accent outside it.
+    /// The seasonal palette. The color story look builds a deliberate palette;
+    /// the surprise look may add one accent outside it.
     private func colorSection(for archetype: OutfitArchetype, profile: UserProfile?, occasion: OccasionItem) -> String? {
         guard let colorSeason = profile?.colorSeason else { return nil }
         let palette = colorSeason.palette.map { "\($0.name) (\($0.hex))" }.joined(separator: ", ")
@@ -543,6 +555,8 @@ struct OutfitPromptBuilder: Sendable {
         switch archetype {
         case .surpriseMe:
             rule = "Use palette colors, copied exactly. You MAY add ONE accent color outside the palette if it makes the surprise work; give it a clear name and a valid hex."
+        case .colorStory:
+            rule = "Use ONLY palette colors, copied exactly. Choose them as one planned story (tonal, monochrome or intentional color-blocking), not random picks."
         case .lookMore where !occasion.visions.isEmpty:
             let visionColors = occasion.visions.map(\.colors).joined(separator: " ")
             rule = "Use ONLY palette colors, copied exactly. Pick the palette colors closest to the vision's colors: \(visionColors)"
