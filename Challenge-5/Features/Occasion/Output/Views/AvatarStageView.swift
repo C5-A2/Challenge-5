@@ -276,11 +276,6 @@ struct AvatarStageView: View {
         )
         .frame(height: 20)
     }
-                }
-            )
-        )
-        .frame(height: 20)
-    }
 }
 
 // MARK: - Native UIPageControl Wrapper
