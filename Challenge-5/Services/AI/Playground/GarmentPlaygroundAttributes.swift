@@ -21,6 +21,7 @@ struct GarmentPlaygroundAttributes: Codable, Sendable, Identifiable, Hashable {
     let fabricMaterial: String              // e.g. "French Terry Cotton"
     let fitSilhouette: String               // e.g. "Structured slim fit with tapered waist"
     let stylingDetails: String?             // e.g. "Open quarter placket with clean collar"
+    let playgroundPrompt: String?           // Clean AI visual prompt from LLM
     
     // MARK: - Initializer
     
@@ -33,7 +34,8 @@ struct GarmentPlaygroundAttributes: Codable, Sendable, Identifiable, Hashable {
         colorName: String,
         fabricMaterial: String,
         fitSilhouette: String? = nil,
-        stylingDetails: String? = nil
+        stylingDetails: String? = nil,
+        playgroundPrompt: String? = nil
     ) {
         self.id = id
         self.category = category
@@ -44,6 +46,7 @@ struct GarmentPlaygroundAttributes: Codable, Sendable, Identifiable, Hashable {
         self.fabricMaterial = fabricMaterial
         self.fitSilhouette = fitSilhouette ?? "Tailored fit"
         self.stylingDetails = stylingDetails
+        self.playgroundPrompt = playgroundPrompt
     }
 }
 
@@ -519,7 +522,57 @@ extension OutfitPlaygroundPackage {
         }
     }
     
+    /// Sanitizes an LLM-provided direct `playgroundPrompt`, acting as a minimal safety seatbelt:
+    /// strips guardrail-triggering words (e.g. sheer, naked, waist) and enforces full-length outer sleeves.
+    private static func sanitizeDirectPlaygroundPrompt(
+        _ prompt: String,
+        category: GarmentCategory,
+        hasOuter: Bool
+    ) -> String {
+        let rawLower = prompt.lowercased()
+        let words = rawLower.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+        
+        let filteredWords = words.filter { word in
+            !unsafeColorDescriptors.contains(word) &&
+            word != "sheer" && word != "translucent" && word != "transparent" && word != "mesh" &&
+            word != "waist" && word != "cutout" && word != "slit" && word != "sexy" && word != "naked"
+        }
+        var cleaned = filteredWords.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.isEmpty {
+            cleaned = prompt
+        }
+        
+        if category == .outer {
+            // Strip sleeve-shortening words and ensure long sleeves
+            cleaned = cleaned
+                .replacingOccurrences(of: "short-sleeve", with: "")
+                .replacingOccurrences(of: "short sleeve", with: "")
+                .replacingOccurrences(of: "sleeveless", with: "")
+                .replacingOccurrences(of: "cropped", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cleaned.localizedCaseInsensitiveContains("long-sleeve") && !cleaned.localizedCaseInsensitiveContains("long sleeve") && !cleaned.localizedCaseInsensitiveContains("vest") {
+                cleaned = "long-sleeve \(cleaned)"
+            }
+        } else if hasOuter && (category == .top || category == .dress) {
+            // Under an outer layer, remove conflicting sleeve descriptors
+            cleaned = cleaned
+                .replacingOccurrences(of: "sleeveless", with: "")
+                .replacingOccurrences(of: "spaghetti-strap", with: "")
+                .replacingOccurrences(of: "camisole", with: "top")
+                .replacingOccurrences(of: "tank top", with: "top")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        return cleaned
+    }
+    
     private static func buildSafePhrase(for garment: GarmentPlaygroundAttributes, hasOuter: Bool) -> String {
+        // 1. If LLM directly provided a playgroundPrompt, use it with minimal safety seatbelt!
+        if let direct = garment.playgroundPrompt?.trimmingCharacters(in: .whitespacesAndNewlines), !direct.isEmpty {
+            return sanitizeDirectPlaygroundPrompt(direct, category: garment.category, hasOuter: hasOuter)
+        }
+        
+        // 2. Fallback to automated attribute assembly
         let color = safePlaygroundColorName(colorName: garment.colorName, hex: garment.colorHex)
         let material = safePlaygroundMaterial(from: garment.fabricMaterial)
         let description = safePlaygroundGarmentDescription(for: garment, hasOuter: hasOuter)

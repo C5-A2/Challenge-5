@@ -414,7 +414,7 @@ struct OutfitPromptBuilder: Sendable {
         \(Self.garmentNamingRule)
 
         OUTPUT FORMAT: Return ONLY valid JSON, no markdown, no extra text.
-        Put every garment inside ONE "garments" array. Garment fields: "category", "name", "material", "colorName", "hexColor", "rationale".
+        Put every garment inside ONE "garments" array. Garment fields: "category", "name", "material", "colorName", "hexColor", "rationale", "playgroundPrompt".
         "fitRationale": 1 short sentence on why the outfit works. "rationale": under 10 words per garment.
         \(outputSchema(lookIndex: lookIndex, title: title, structure: structure))
         """
@@ -430,11 +430,12 @@ struct OutfitPromptBuilder: Sendable {
     /// (style visions, body rules) repeats "tailored" and "structured" a lot, and small models copy them.
     /// No concrete example names are given, because the model tends to copy examples too.
     private static let garmentNamingRule = """
-    GARMENT NAMES:
+    GARMENT NAMES & VISUAL PROMPTS:
     - Write each "name" as a short phrase: the cut or detail, then the garment type (no "+" sign). The cut or detail is the neckline, collar, sleeve, closure, waist or silhouette that makes the piece specific.
     - Do NOT put color words in the name; the color belongs only in "colorName".
     - Do NOT use vague words such as "tailored", "structured", "elegant", "classic", "chic", "sophisticated", "modern" or "refined" in the name. Describe the cut that creates that effect instead.
     - Every garment in this look must name a different kind of detail, and must not reuse a detail from the previous looks.
+    - "playgroundPrompt": A clean 3-5 word phrase for image generation: "[color] [fabric] [clothing noun]" (e.g. "warm ivory embroidered blouse", "charcoal wool coat", "navy straight trousers"). Never use "sheer", "translucent", "revealing", or body-part words. For Outer layers, always specify "long-sleeve".
     """
 
     // MARK: - Occasion & Setting
@@ -664,7 +665,7 @@ struct OutfitPromptBuilder: Sendable {
     private func outputSchema(lookIndex: Int, title: String, structure: OutfitStructure) -> String {
         let garments = structure.categories.map { category in
             """
-                  {"category": "\(category.rawValue)", "name": "<detail> <garment type>", "material": "<fabric>", "colorName": "<color name>", "hexColor": "<#RRGGBB>", "rationale": "<under 10 words>"}
+                  {"category": "\(category.rawValue)", "name": "<detail> <garment type>", "material": "<fabric>", "colorName": "<color name>", "hexColor": "<#RRGGBB>", "rationale": "<under 10 words>", "playgroundPrompt": "<color> <fabric> <garment noun>"}
             """
         }.joined(separator: ",\n")
         return """
