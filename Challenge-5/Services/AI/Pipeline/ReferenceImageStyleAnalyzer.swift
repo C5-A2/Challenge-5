@@ -73,11 +73,11 @@ public struct ReferenceImageStyleProfile: Sendable, Codable, Equatable {
 }
 
 /// Analyzes user reference photos to extract detailed fashion styling descriptions
-/// using the on-device Qwen 2.5 VL 3B Vision-Language Model exclusively.
+/// using the on-device LFM3-VL-2B Vision-Language Model exclusively.
 ///
 /// Features:
 /// - Post-submit 1-by-1 image scanning: Runs in the loading state right after form submission before main LLM generation.
-/// - Safe VRAM handoff: Releases any resident text LLM weights before loading VLM, and unloads VLM (~2.6 GB) immediately after scanning.
+/// - Safe VRAM handoff: Releases any resident text LLM weights before loading VLM, and unloads VLM (~1.2 GB) immediately after scanning.
 /// - Debug persistence: Stores extracted VLM descriptions per occasion so `OccasionOutputView` can display them for developer inspection.
 public final class ReferenceImageStyleAnalyzer: Sendable {
 

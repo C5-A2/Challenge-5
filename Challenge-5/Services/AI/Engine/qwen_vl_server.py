@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 [DEPRECATED FOR PRODUCTION]
-Qwen2.5-VL-3B-Instruct Local Inference & HTTP Bridge Server
+LFM3-VL-2B Local Inference & HTTP Bridge Server
 
-NOTE: Challenge-5 now runs Qwen 2.5 VL 3B 100% natively on-device in Swift via VLMEngine.swift
+NOTE: Challenge-5 runs LFM3-VL-2B 100% natively on-device in Swift via VLMEngine.swift
 using llama.cpp mtmd and Metal GPU acceleration on physical iOS devices and TestFlight.
 This script is preserved for optional standalone offline Python scripting/benchmarking only.
 
@@ -48,7 +48,7 @@ def extract_style_from_image(image_paths_or_images):
         from mlx_vlm.prompt_utils import apply_chat_template
         from mlx_vlm.utils import load_config
         
-        model_name = "mlx-community/Qwen2.5-VL-3B-Instruct-4bit"
+        model_name = "LiquidAI/LFM3-VL-2B-MLX-6bit"
         print(f"Loading {model_name} via MLX...")
         model, processor = load(model_name)
         config = load_config(model_name)

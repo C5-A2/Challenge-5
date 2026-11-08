@@ -7,11 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		6FA000030000000000000001 /* LlamaSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 6FA000020000000000000001 /* LlamaSwift */; };
+		6FB000030000000000000001 /* LlamaSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 6FB000020000000000000001 /* LlamaSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* Challenge-5.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Challenge-5.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		6FB000040000000000000001 /* LlamaSwift */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = LlamaSwift; path = Packages/LlamaSwift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -26,7 +27,7 @@
 		000000000000000130000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
-				6FA000030000000000000001 /* LlamaSwift in Frameworks */,
+				6FB000030000000000000001 /* LlamaSwift in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -35,6 +36,7 @@
 		000000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
+				6FB000040000000000000001 /* LlamaSwift */,
 				000000000000000000000010 /* Challenge-5 */,
 				000000000000000000000020 /* Products */,
 			);
@@ -66,7 +68,7 @@
 			);
 			name = "Challenge-5";
 			packageProductDependencies = (
-				6FA000020000000000000001 /* LlamaSwift */,
+				6FB000020000000000000001 /* LlamaSwift */,
 			);
 			productName = MyApp;
 			productReference = 000000000000000000000120 /* Challenge-5.app */;
@@ -97,7 +99,7 @@
 			mainGroup = 000000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				6FA000010000000000000001 /* XCRemoteSwiftPackageReference "llama.swift" */,
+				6FB000010000000000000001 /* XCLocalSwiftPackageReference "Packages/LlamaSwift" */,
 			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = 000000000000000000000020 /* Products */;
@@ -376,21 +378,17 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		6FA000010000000000000001 /* XCRemoteSwiftPackageReference "llama.swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/mattt/llama.swift.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.9999.0;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		6FB000010000000000000001 /* XCLocalSwiftPackageReference "Packages/LlamaSwift" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LlamaSwift;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		6FA000020000000000000001 /* LlamaSwift */ = {
+		6FB000020000000000000001 /* LlamaSwift */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 6FA000010000000000000001 /* XCRemoteSwiftPackageReference "llama.swift" */;
+			package = 6FB000010000000000000001 /* XCLocalSwiftPackageReference "Packages/LlamaSwift" */;
 			productName = LlamaSwift;
 		};
 /* End XCSwiftPackageProductDependency section */

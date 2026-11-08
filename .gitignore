@@ -74,4 +74,5 @@ fastlane/test_output
 
 # Large AI Model Binaries (GGUF is tracked via Git LFS in .gitattributes)
 *.bin
+Challenge-5/Resources/Qwen3-4B-Instruct-Q4_K_M.gguf
 

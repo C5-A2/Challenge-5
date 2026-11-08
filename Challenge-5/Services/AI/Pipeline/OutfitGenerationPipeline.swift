@@ -66,7 +66,7 @@ protocol OutfitGenerationPipelineProtocol {
 ///
 /// **Strategy:** one LLM call per look. Each look has its own creative direction
 /// (`OutfitArchetype`: reference match, personality, body shape, surprise me, look more),
-/// its own pieces (`OutfitStructure`: outer + top + bottom, top + bottom, dress, dress + outer),
+/// a piece count chosen by the model (weather and place decide, see `OutfitPromptBuilder`),
 /// and its own sampling temperature. Earlier looks are passed to the next prompt so the
 /// looks differ in style and pieces, not only in color.
 ///
@@ -127,11 +127,12 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             }
         }
 
-        // 2. Stage 1: describe the reference photos with the VLM (1 by 1, then the VLM is unloaded).
+        // 2. Stage 1: describe the reference photos with LFM3-VL-2B (1 by 1, then the VLM is unloaded)
+        //    and inject the extracted descriptions directly into the main system prompt.
         let referenceDescriptions = await scanReferencePhotos(of: occasion, onStageChange: onStageChange)
         let referenceAnalysis = ReferenceStyleAnalysis(
             descriptions: referenceDescriptions,
-            recap: await recapReferenceStyle(referenceDescriptions, occasionID: occasion.id)
+            recap: nil
         )
 
         // 3. Stage 2: one LLM call per look. Each look has its own direction, pieces and temperature,
@@ -198,7 +199,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
         let referenceAnalysis = ReferenceStyleAnalysis(
             descriptions: referenceDescriptions,
-            recap: await recapReferenceStyle(referenceDescriptions, occasionID: occasion.id)
+            recap: nil
         )
         let previousSummaries = existingLooks.map { GeneratedLookSummary(from: $0) }
 
@@ -243,18 +244,16 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         minimumTemperature: Float?
     ) async throws -> OutfitLook {
         let archetype = OutfitArchetype(lookIndex: lookIndex)
-        let structure = archetype.structure(referenceStructure: referenceAnalysis?.suggestedStructure)
         let temperature = max(archetype.temperature, minimumTemperature ?? 0)
 
         let prompt = promptBuilder.buildFormattedPrompt(
             occasion: occasion,
             profile: profile,
             lookIndex: lookIndex,
-            structure: structure,
             previousLooks: previousLooks,
             referenceAnalysis: referenceAnalysis
         )
-        print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) \(archetype) / \(structure.rawValue) (temp \(temperature)). Prompt \(prompt.count) chars. Running \(LLMResource.activeModelFilename)…")
+        print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) \(archetype) (temp \(temperature)). Prompt \(prompt.count) chars. Running \(LLMResource.activeModelFilename)…")
 
         let rawOutput = try await LLMEngine.shared.generate(
             prompt: prompt,
@@ -267,7 +266,6 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let parsedLooks = try parseLooks(
             from: rawOutput.trimmingCharacters(in: .whitespacesAndNewlines),
             colorSeason: profile.colorSeason,
-            structure: structure,
             allowsOffPaletteAccent: archetype.allowsOffPaletteAccent
         )
         guard let parsedLook = parsedLooks.first else {
@@ -301,7 +299,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let totalRefs = allImageData.count
         onStageChange?(
             "Analyzing References",
-            "Scanning 1 of \(totalRefs) reference photo\(totalRefs == 1 ? "" : "s") with Qwen 2.5 VL...",
+            "Scanning 1 of \(totalRefs) reference photo\(totalRefs == 1 ? "" : "s") with LFM3-VL-2B...",
             []
         )
         let descriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(
@@ -310,13 +308,13 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             if completed < total {
                 onStageChange?(
                     "Analyzing References",
-                    "Scanning \(completed + 1) of \(total) reference photos with Qwen 2.5 VL...",
+                    "Scanning \(completed + 1) of \(total) reference photos with LFM3-VL-2B...",
                     descriptionsSoFar
                 )
             } else {
                 onStageChange?(
                     "Analyzing References",
-                    "Scanned \(total) reference photo\(total == 1 ? "" : "s"). Preparing main LLM recommendation...",
+                    "Scanned \(total) reference photo\(total == 1 ? "" : "s") with LFM3-VL-2B. Preparing main LLM recommendation...",
                     descriptionsSoFar
                 )
             }
@@ -333,41 +331,6 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
         print("=========================================================================\n")
         return descriptions
-    }
-
-    /// Condenses all per-photo VLM descriptions (Ref 1–3) into ONE short paragraph so the per-look prompt stays small.
-    /// A single description is used as-is. The recap is cached per occasion until descriptions change.
-    private func recapReferenceStyle(_ descriptions: [String], occasionID: UUID) async -> String? {
-        let cleaned = descriptions.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        guard !cleaned.isEmpty else { return nil }
-        if cleaned.count == 1 { return cleaned[0] }
-        if let cached = ReferenceImageStyleAnalyzer.shared.savedRecap(forOccasionID: occasionID) { return cached }
-
-        let numbered = cleaned.enumerated().map { "Photo \($0.offset + 1): \($0.element)" }.joined(separator: "\n")
-        let system = """
-        You condense outfit descriptions into one paragraph.
-        Merge the photo descriptions below into ONE paragraph of 3 to 4 sentences.
-        Keep every concrete garment name, cut, fabric, surface pattern and main color exactly as written. Only mention a pattern if a photo description states it. Do not invent anything. No lists, no JSON.
-        """
-        let prompt: String
-        if LLMResource.isQwenActive {
-            prompt = "<|im_start|>system\n\(system)<|im_end|>\n<|im_start|>user\n\(numbered)<|im_end|>\n<|im_start|>assistant\n"
-        } else {
-            prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n\(system)<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n\(numbered)<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-        }
-
-        do {
-            let raw = try await LLMEngine.shared.generate(prompt: prompt, maxTokens: 220, temperature: 0.2)
-            let recap = raw.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !recap.isEmpty {
-                print("📝 [OutfitGenerationPipeline] Reference recap (\(cleaned.count) → 1 paragraph): \(recap)")
-                ReferenceImageStyleAnalyzer.shared.saveRecap(recap, forOccasionID: occasionID)
-                return recap
-            }
-        } catch {
-            print("⚠️ [OutfitGenerationPipeline] Reference recap failed: \(error.localizedDescription). Using joined descriptions.")
-        }
-        return cleaned.joined(separator: " ")
     }
 
     /// Synchronous generation for seamless instant UI transitions upon form submit.
@@ -417,11 +380,20 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let options = ParseOptions(colorSeason: colorSeason, structure: structure, allowsOffPaletteAccent: allowsOffPaletteAccent)
         var cleanJSON = jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Strip markdown code fences the model may have wrapped the JSON in
+        // Strip any <think>...</think> reasoning block (Qwen 3) and markdown code fences
+        if let thinkRegex = try? NSRegularExpression(pattern: "<think>[\\s\\S]*?</think>", options: []) {
+            let range = NSRange(cleanJSON.startIndex..<cleanJSON.endIndex, in: cleanJSON)
+            cleanJSON = thinkRegex.stringByReplacingMatches(in: cleanJSON, options: [], range: range, withTemplate: "")
+        }
         cleanJSON = cleanJSON
+            .replacingOccurrences(of: "<think>", with: "")
+            .replacingOccurrences(of: "</think>", with: "")
             .replacingOccurrences(of: "```json", with: "")
             .replacingOccurrences(of: "```", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Restore hex keys the model dropped (`"colorName":"Fog","#CEC5B2"`) before any decode attempt
+        cleanJSON = repairMissingHexKey(cleanJSON)
 
         // 1. Try to decode the cleaned string directly as-is (happy path)
         if let looks = try? decodeLooks(from: cleanJSON, options: options), !looks.isEmpty {
@@ -527,6 +499,16 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             idx = text.index(after: idx)
         }
         return nil
+    }
+
+    /// Small models sometimes emit a bare hex value after `colorName` with no key:
+    /// `"colorName":"Fog","#CEC5B2"` -> `"colorName":"Fog","hexColor":"#CEC5B2"`.
+    private func repairMissingHexKey(_ text: String) -> String {
+        let pattern = "(,\\s*)\"(#?[0-9A-Fa-f]{6,8})\"(\\s*[,}])"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.stringByReplacingMatches(in: text, options: [], range: range,
+                                              withTemplate: "$1\"hexColor\":\"$2\"$3")
     }
 
     /// Fixes common small-LLM JSON malformations (e.g. repeated `"garments":[` keys per item).

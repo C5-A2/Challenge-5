@@ -52,7 +52,7 @@ public enum VLMEngineError: Error, LocalizedError {
     }
 }
 
-/// Actor managing thread-safe on-device Vision-Language Model inference using Qwen 2.5 VL 3B and mmproj via llama.cpp `mtmd`.
+/// Actor managing thread-safe on-device Vision-Language Model inference using LFM3-VL-2B and mmproj via llama.cpp `mtmd`.
 ///
 /// Features:
 /// - 100% On-Device execution on iOS physical devices and TestFlight (no external server or LAN bridge needed).
@@ -130,7 +130,7 @@ public actor VLMEngine {
         }
         self.mtmdCtx = loadedMtmd
 
-        print("👁️ [VLMEngine] Successfully loaded Qwen 2.5 VL 3B and vision projector into Metal GPU.")
+        print("👁️ [VLMEngine] Successfully loaded LFM3-VL-2B and vision projector into Metal GPU.")
         #endif
     }
 
@@ -201,9 +201,9 @@ public actor VLMEngine {
         }
 
         // 1. Ingest image data buffer into mtmd bitmap
-        let bitmap: OpaquePointer? = data.withUnsafeBytes { rawPtr in
+        let bitmap: OpaquePointer? = data.withUnsafeBytes { (rawPtr) -> OpaquePointer? in
             guard let baseAddr = rawPtr.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return nil }
-            let wrapper = mtmd_helper_bitmap_init_from_buf(mtmdCtx, baseAddr, data.count, false)
+            let wrapper = mtmd_helper_bitmap_init_from_buf(mtmdCtx, baseAddr, data.count, false, mtmd_helper_init_opt_default())
             return wrapper.bitmap
         }
 
@@ -216,21 +216,23 @@ public actor VLMEngine {
 
         // 2. Free-form natural language styling prompt (NO JSON)
         let systemPrompt = """
-        You are an expert fashion stylist and visual analyst with deep knowledge of global, Asian, and Indonesian fashion aesthetics.
-        Describe ONLY the clothing and outfit worn by the person in this photo in clear, concise natural English (2 to 4 sentences).
+        You are a fashion visual analyst. Describe ONLY the clothing and outfit worn by the person in this photo in clear, concise natural English (2 to 4 sentences).
+        Describe exactly what is visible. Do not guess, and do not add anything you cannot see.
         Highlight:
-        - Specific garment pieces and cut names (e.g. crop top, halter top, camisole, blazer, suit jacket, cardigan, button-down shirt, wide-leg trousers, pleated skirt, tiered ruffle skirt, maxi skirt, batik blouse, kebaya, denim shorts).
+        - Garment pieces and cut names (e.g. crop top, camisole, blazer, cardigan, button-down shirt, wide-leg trousers, pleated skirt, maxi skirt, denim shorts, dress).
         - Fit and silhouette (e.g. relaxed, tailored, oversized, fitted, cropped).
-        - Fabrics and materials (e.g. linen, silk, denim, cotton poplin, lace, knitwear, chiffon, batik).
-        - Surface patterns (e.g. traditional Indonesian batik motif, floral, pinstripe, solid).
+        - Fabrics and materials (e.g. linen, silk, denim, cotton poplin, lace, knitwear, chiffon).
+        - Surface pattern: name a pattern ONLY if you clearly see it (e.g. floral, stripes, checks, polka dots). If the garment is one plain color, write "solid, no pattern".
         - Prominent garment colors (ignore the room background and walls).
         - Overall aesthetic vibe.
+
+        Culture rule: name a traditional textile or garment (batik, tenun, songket, kebaya) ONLY when the photo clearly shows its typical motifs or cut. A plain or floral garment is NOT batik. Never assume a style from the person's background or location.
 
         Be direct, factual, and descriptive. Do NOT output JSON. Write natural fluent sentences.
         """
 
         let userPrompt = "<__media__>\nDescribe the outfit and clothing style in this image."
-        let fullPrompt = "<|im_start|>system\n\(systemPrompt)<|im_end|>\n<|im_start|>user\n\(userPrompt)<|im_end|>\n<|im_start|>assistant\n"
+        let fullPrompt = "<|im_start|>system\n\(systemPrompt)<|im_end|>\n<|im_start|>user\n\(userPrompt)<|im_end|>\n<|im_start|>assistant\n<think></think>"
 
         // 3. Multimodal Tokenization
         let outputChunks = mtmd_input_chunks_init()
@@ -240,7 +242,7 @@ public actor VLMEngine {
 
         var bitmaps: [OpaquePointer?] = [validBitmap]
         let tokRes = fullPrompt.withCString { cStr in
-            var inpText = mtmd_input_text(text: cStr, text_len: strlen(cStr), add_special: false, parse_special: true)
+            var inpText = mtmd_input_text(text: cStr, text_len: strlen(cStr), add_special: true, parse_special: true)
             return mtmd_tokenize(mtmdCtx, outputChunks, &inpText, &bitmaps, 1)
         }
 
@@ -255,18 +257,22 @@ public actor VLMEngine {
             throw VLMEngineError.evaluationFailed(evalRes)
         }
 
-        // 5. Sampler Chain setup
+        // 5. Sampler Chain setup (LFM3-VL-2B recommended: temp 0.1, top_k 50, repeat_penalty 1.1)
+        let vocab = llama_model_get_vocab(model)
+        let eosToken = llama_vocab_eos(vocab)
+        let nVocab = llama_vocab_n_tokens(vocab)
+
         var samplerParams = llama_sampler_chain_default_params()
         let sampler = llama_sampler_chain_init(samplerParams)
         defer {
             llama_sampler_free(sampler)
         }
-        llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.2))
+        llama_sampler_chain_add(sampler, llama_sampler_init_top_k(50))
+        llama_sampler_chain_add(sampler, llama_sampler_init_penalties(nVocab, 64, 1.1, 0.0, 0.0))
+        llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.1))
         llama_sampler_chain_add(sampler, llama_sampler_init_dist(42))
 
         var outputText = ""
-        let vocab = llama_model_get_vocab(model)
-        let eosToken = llama_vocab_eos(vocab)
 
         var batch = llama_batch_init(512, 0, 1)
         defer {
@@ -305,7 +311,15 @@ public actor VLMEngine {
             curPos += 1
         }
 
-        let cleanText = outputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        var cleanText = outputText
+        if let thinkRegex = try? NSRegularExpression(pattern: "<think>[\\s\\S]*?</think>", options: []) {
+            let range = NSRange(cleanText.startIndex..<cleanText.endIndex, in: cleanText)
+            cleanText = thinkRegex.stringByReplacingMatches(in: cleanText, options: [], range: range, withTemplate: "")
+        }
+        cleanText = cleanText
+            .replacingOccurrences(of: "<think>", with: "")
+            .replacingOccurrences(of: "</think>", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         return cleanText
         #endif
     }

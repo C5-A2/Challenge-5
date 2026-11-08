@@ -10,7 +10,7 @@ import Foundation
 /// Constructs system and user prompts for the 5-look outfit generation pipeline.
 ///
 /// The pipeline generates one look per call with `buildFormattedPrompt(...)`. Each look has its own
-/// creative direction (`OutfitArchetype`) and pieces (`OutfitStructure`), see `OutfitArchetype.swift`.
+/// creative direction (`OutfitArchetype`) (the model picks the pieces), see `OutfitArchetype.swift`.
 /// `buildSystemPrompt` / `buildUserPrompt` (all 5 looks in one prompt) are kept for the profile form preview.
 ///
 /// Uses conditional `if` branching to only include rules and directives for data fields the user has actually filled:
@@ -303,14 +303,12 @@ struct OutfitPromptBuilder: Sendable {
     ///
     /// - Parameters:
     ///   - lookIndex: The 0-based index of the look. It picks the look's `OutfitArchetype` (creative direction).
-    ///   - structure: The pieces of this look (outer + top + bottom, top + bottom, dress, dress + outer).
     ///   - previousLooks: Looks already generated, so this one differs in style, pieces and colors.
     ///   - referenceAnalysis: What the user's reference photos show, described by the on-device VLM (Qwen 2.5 VL).
     func buildFormattedPrompt(
         occasion: OccasionItem,
         profile: UserProfile?,
         lookIndex: Int,
-        structure: OutfitStructure,
         previousLooks: [GeneratedLookSummary] = [],
         referenceAnalysis: ReferenceStyleAnalysis? = nil
     ) -> String {
@@ -318,7 +316,6 @@ struct OutfitPromptBuilder: Sendable {
             occasion: occasion,
             profile: profile,
             lookIndex: lookIndex,
-            structure: structure,
             previousLooks: previousLooks,
             referenceAnalysis: referenceAnalysis
         )
@@ -361,7 +358,6 @@ struct OutfitPromptBuilder: Sendable {
         occasion: OccasionItem,
         profile: UserProfile?,
         lookIndex: Int,
-        structure: OutfitStructure,
         previousLooks: [GeneratedLookSummary],
         referenceAnalysis: ReferenceStyleAnalysis? = nil
     ) -> String {
@@ -375,14 +371,18 @@ struct OutfitPromptBuilder: Sendable {
             \(archetypeBrief(archetype, occasion: occasion, hasReference: hasReference))
             """,
             """
-            OUTFIT PIECES: \(structure.promptDescription)
-            The "garments" array must contain exactly \(structure.categories.count) item(s), with these categories in this order: \(structure.categories.map { "\"\($0.rawValue)\"" }.joined(separator: ", ")).
+            OUTFIT PIECES:
+            - Default to 1 piece ("Dress" alone — dress, sundress, or jumpsuit) or 2 pieces ("Top" + "Bottom") for hot, outdoor, beach, daytime, or casual occasions.
+            - DO NOT include an "Outer" for beach, pool, outdoor daytime, tropical resort, or hot casual events — it is too hot!
+            - Add a 3rd piece ("Outer") ONLY when the event is in a cold air-conditioned indoor venue, requires formal/office outerwear, or is at night, AND previous looks haven't already overused outers.
+            - Allowed categories in "garments": "Top", "Bottom", "Dress", "Outer". Use "Dress" alone without "Top" or "Bottom". Use each category at most once.
             """
         ]
 
         // The occasion, its dresscode and the Indonesian setting apply to every look.
         sections.append(occasionSection(for: occasion))
         sections.append(Self.indonesiaSetting)
+        sections.append(Self.currentTrends)
         if let note = occasion.customNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
             sections.append("USER NOTE: \(note)")
         }
@@ -393,7 +393,7 @@ struct OutfitPromptBuilder: Sendable {
         if let visionSection = visionSection(for: archetype, occasion: occasion) {
             sections.append(visionSection)
         }
-        if let bodySection = bodySection(for: archetype, profile: profile, structure: structure) {
+        if let bodySection = bodySection(for: archetype, profile: profile) {
             sections.append(bodySection)
         }
         if let colorSection = colorSection(for: archetype, profile: profile, occasion: occasion) {
@@ -413,11 +413,11 @@ struct OutfitPromptBuilder: Sendable {
 
         OUTPUT FORMAT: Return ONLY valid JSON, no markdown, no extra text.
         Put every garment inside ONE "garments" array. Garment fields: "category", "name", "material", "colorName", "hexColor", "rationale".
-        "fitRationale": 1 short sentence on why the outfit works. "rationale": under 10 words per garment.
-        \(outputSchema(lookIndex: lookIndex, title: title, structure: structure))
+        "fitRationale": 1 to 2 short sentences on why the whole outfit works for the occasion, place and her. "rationale": 1 to 2 short sentences per garment (about 15 to 30 words) on why this piece suits the occasion, the weather or her body and colors.
+        \(outputSchema(lookIndex: lookIndex, title: title))
         """
 
-        print("[OutfitPromptBuilder] Look \(lookIndex) (\(title), \(structure.rawValue)) system prompt (\(systemPrompt.count) chars) for: \"\(occasion.title)\"")
+        print("[OutfitPromptBuilder] Look \(lookIndex) (\(title)) system prompt (\(systemPrompt.count) chars) for: \"\(occasion.title)\"")
 
         return systemPrompt
     }
@@ -443,6 +443,8 @@ struct OutfitPromptBuilder: Sendable {
             "OCCASION (every look is for this event): '\(occasion.title)'.",
             "Think about where it happens, the time of day and what she will do there (standing, sitting, walking, dancing), and choose pieces that feel right and comfortable for it."
         ]
+        lines.append("Date: \(occasion.date.formatted(date: .complete, time: .omitted)). Use the month to judge the weather in Indonesia (roughly October to April is the rainy season: humid, sudden rain; May to September is drier and still hot).")
+        lines.append("Location: work out where this event takes place from the title and note (indoor with air conditioning like a mall, office, restaurant or hall; outdoors; beach or hill; on the road). Dress for that place: strong air conditioning allows a light layer, outdoors and beaches need the lightest, most breathable and easy-to-move-in pieces, rain risk means no delicate fabric that stains or sticks to the skin.")
         let cleanDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         if !cleanDresscode.isEmpty {
             lines.append("Dresscode: \(cleanDresscode). Every piece must suit this level of formality.")
@@ -456,8 +458,22 @@ struct OutfitPromptBuilder: Sendable {
     SETTING: Indonesia, tropical (hot and humid all year, often rainy).
     - Dress her the way Indonesian women dress for this kind of event, not for a cold Western climate.
     - Prefer breathable fabrics (cotton, linen, rayon, viscose, light crepe, chiffon; satin or brocade for evening).
-    - Outer layers stay light (linen blazer, thin cardigan, kimono-style outer, shirt worn open). No wool coats, cashmere, puffer jackets or thick knits.
-    - Local pieces such as kebaya, batik, kulot or rok plisket are welcome whenever they suit the look.
+    - Outer layers stay light (linen blazer, thin cardigan, shirt worn open). No wool coats, cashmere, puffer jackets or thick knits. Thick outer only for special ocasions like in ballroom or going to mountain.
+    """
+
+    /// A fixed, hand-written trend brief. The on-device model has no knowledge of current fashion
+    /// and no web access, so the trends are given here. Update it every season.
+    /// Silhouettes and details only: it names no exact garments, so the model does not copy them.
+    private static let currentTrends = """
+    FASHION DIRECTION (2026, make it look current, not classic or dated):
+    - Silhouette: relaxed and fluid. Wide-leg, barrel or straight trousers, bias-cut or drop-waist skirts, slightly oversized or cropped tailoring, longer layered lengths. Avoid skinny, tight, stiff or matronly cuts and shoulder pads.
+    - Details: asymmetric necklines or hems, sheer or lace layers worn over a plain base, soft draping, bows, one deliberate statement detail per outfit. Keep the rest simple.
+    - Texture: crinkled, washed, textured or sheer fabrics and subtle sheen instead of flat, plain cloth.
+    - Colour mood (always inside her palette): rich neutrals like chocolate, mocha, burgundy and olive, soft tones like butter yellow, sage and powder blue, and one tonal or contrast accent.
+    - Availability: only pieces a city shopper in Indonesia (Jakarta, Bandung, Surabaya) can buy today in malls, local fashion brands, high-street chains or online marketplaces. No couture, no hard-to-find items.
+    - Cropped tops, short or fitted pieces and bare arms are fine for casual, party, date or work-casual occasions. Cover up (longer, looser, sleeved) only when the occasion or dresscode is religious, formal or traditional.
+    - Local pieces (batik, tenun, kebaya) are optional: use them only when the occasion or look direction calls for them, in a modern cut.
+    - The look should feel like something from a current fashion editorial or street-style post, not a department-store basic.
     """
 
     // MARK: - Look Direction
@@ -488,27 +504,23 @@ struct OutfitPromptBuilder: Sendable {
 
     // MARK: - Context Sections
 
-    /// The reference photos: the full description for look 1, a light taste hint for the others
-    /// (except the surprise look, which should go somewhere new).
+    /// Injects the reference photo descriptions extracted by LFM3-VL-2B directly into the main system prompt.
     private func referenceSection(for archetype: OutfitArchetype, analysis: ReferenceStyleAnalysis?, hasReference: Bool) -> String? {
-        guard hasReference else { return nil }
+        guard hasReference, let analysis else { return nil }
         switch archetype {
         case .referenceMatch:
-            guard let analysis else {
-                return "REFERENCE PHOTOS: attached, but the vision model could not describe them. Follow the style vision and dresscode."
-            }
             return """
-            REFERENCE PHOTOS (described by the on-device vision model, follow closely):
+            REFERENCE PHOTOS (extracted by LFM3-VL-2B, follow closely):
             "\(analysis.promptDescription)"
             - Keep the garment types, cuts, layering and silhouette described above.
             - Keep a surface pattern ONLY if the text names one: put that pattern word in the garment "name", never in "material".
             - Use the palette colors closest to the colors described.
             """
-        case .localTouch, .colorStory, .lookMore:
-            guard let analysis else { return nil }
-            return "USER'S TASTE (from her reference photos, a light hint, don't copy):\n\(analysis.promptDescription)"
-        case .surpriseMe:
-            return nil
+        case .localTouch, .colorStory, .lookMore, .surpriseMe:
+            return """
+            USER REFERENCE PHOTOS (extracted by LFM3-VL-2B):
+            \(analysis.promptDescription)
+            """
         }
     }
 
@@ -533,7 +545,7 @@ struct OutfitPromptBuilder: Sendable {
 
     /// Body shape guides every look with moderate weight: flattering cuts are preferred,
     /// but the look direction decides the overall style.
-    private func bodySection(for archetype: OutfitArchetype, profile: UserProfile?, structure: OutfitStructure) -> String? {
+    private func bodySection(for archetype: OutfitArchetype, profile: UserProfile?) -> String? {
         let bodyType = profile?.bodyType
         let torsoBalance = profile?.torsoBalance
         guard bodyType != nil || torsoBalance != nil else { return nil }
@@ -542,21 +554,15 @@ struct OutfitPromptBuilder: Sendable {
         if let bodyType {
             let garments = bodyType.suitableGarments
             lines.append("Necklines: \(garments.necklines)")
-            if structure.hasDress {
-                lines.append("Dresses & jumpsuits: \(garments.skirtsAndDresses)")
-            } else {
-                lines.append("Tops & outer: \(garments.topsAndJackets)")
-                lines.append("Bottoms: \(garments.bottoms)")
-            }
+            lines.append("Dresses & skirts: \(garments.skirtsAndDresses)")
+            lines.append("Tops: \(garments.topsAndJackets)")
+            lines.append("Bottoms: \(garments.bottoms)")
         }
         if let torsoBalance {
             let garments = torsoBalance.suitableGarments
-            if structure.hasDress {
-                lines.append("Waist & length: \(garments.bottom)")
-            } else {
-                lines.append("Top length: \(garments.top)")
-                lines.append("Bottom rise: \(garments.bottom)")
-            }
+            lines.append("Waist & length (dress): \(garments.bottom)")
+            lines.append("Top length: \(garments.top)")
+            lines.append("Bottom rise: \(garments.bottom)")
         }
         guard !lines.isEmpty else { return nil }
 
@@ -569,7 +575,16 @@ struct OutfitPromptBuilder: Sendable {
     /// the surprise look may add one accent outside it.
     private func colorSection(for archetype: OutfitArchetype, profile: UserProfile?, occasion: OccasionItem) -> String? {
         guard let colorSeason = profile?.colorSeason else { return nil }
-        let palette = colorSeason.palette.map { "\($0.name) (\($0.hex))" }.joined(separator: ", ")
+        let swatches = colorSeason.palette
+        let neutrals = colorSeason.neutralSwatches
+        let neutralHexSet = Set(neutrals.map { $0.hex.uppercased() })
+        let seasonColors = swatches.filter { !neutralHexSet.contains($0.hex.uppercased()) }
+        func describe(_ list: [ColorSeason.ColorSwatch]) -> String {
+            list.map { "\($0.name) (\($0.hex))" }.joined(separator: ", ")
+        }
+        let palette = neutrals.isEmpty || seasonColors.isEmpty
+            ? describe(swatches)
+            : "\nNeutrals (the base — prioritize first): \(describe(neutrals))\nSeason colors (the accent): \(describe(seasonColors))"
 
         let rule: String
         switch archetype {
@@ -583,24 +598,51 @@ struct OutfitPromptBuilder: Sendable {
         default:
             rule = "Use ONLY palette colors, copied exactly (name and hex)."
         }
+        let neutralPriority: String
+        switch archetype {
+        case .colorStory:
+            neutralPriority = "NEUTRALS FIRST: a color story may be led by color, but still include at least one neutral piece so the outfit can be worn easily."
+        case .surpriseMe:
+            neutralPriority = "NEUTRALS FIRST: keep most of the outfit neutral and let the bold idea (the accent or the cut) be the surprise."
+        default:
+            neutralPriority = "NEUTRALS FIRST: build the outfit on the neutrals. Use the darkest neutral as her black, the lightest neutral as her white, and greys, creams or beiges as the base for at least half of the pieces. Add season colors as ONE accent piece or a small part of the look."
+        }
         return """
         COLORS (\(colorSeason.rawValue)): \(rule)
+        \(neutralPriority)
+        Do not dress her all in the same earthy family (for example all brown and green). Mix neutrals with one season color instead.
         Palette: \(palette)
         Avoid: \(colorSeason.colorsToAvoid)
         """
+    }
+
+    /// A swatch is neutral when it is nearly grey (low saturation): black, white, grey, cream, beige.
+    private static func isNeutral(hex: String) -> Bool {
+        let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return false }
+        let red = Double((value >> 16) & 0xFF) / 255
+        let green = Double((value >> 8) & 0xFF) / 255
+        let blue = Double(value & 0xFF) / 255
+        let highest = max(red, green, blue)
+        let lowest = min(red, green, blue)
+        guard highest > 0 else { return true }
+        let saturation = (highest - lowest) / highest
+        return saturation < 0.18 || highest < 0.2
     }
 
     /// Earlier looks, so this one is different in style and pieces, not only in color.
     private func previousLooksSection(_ previousLooks: [GeneratedLookSummary]) -> String? {
         guard !previousLooks.isEmpty else { return nil }
         let summaries = previousLooks.map { summary in
-            let garments = summary.garments.map { "\($0.category): \($0.name) (\($0.colorName))" }.joined(separator: ", ")
-            return "- Look \(summary.lookIndex + 1): \(garments)"
+            let cats = summary.garments.map(\.category).joined(separator: " + ")
+            let garments = summary.garments.map { "\($0.category): \($0.name) (\($0.material), \($0.colorName))" }.joined(separator: ", ")
+            return "- Look \(summary.lookIndex + 1) [\(cats)]: \(garments)"
         }.joined(separator: "\n")
         return """
-        PREVIOUS LOOKS (do not repeat):
+        PREVIOUS LOOKS (DO NOT REPEAT — make this look MORE CREATIVE and structurally different):
         \(summaries)
-        Do not reuse any garment name or the same main colors. This look must differ in style, not only in color.
+        - Vary the piece structure! If previous looks used Top + Bottom, try a single Dress/jumpsuit (or vice versa). If a previous look included an Outer, do NOT add an Outer here unless strictly required.
+        - Never reuse the same garment type, cut detail, fabric, or color combination from above. Push for a fresher, more unexpected silhouette and styling idea than the previous looks.
         """
     }
 
@@ -608,17 +650,16 @@ struct OutfitPromptBuilder: Sendable {
 
     /// The JSON shape for this look's structure, with neutral placeholders (no example garments,
     /// which a small model tends to copy).
-    private func outputSchema(lookIndex: Int, title: String, structure: OutfitStructure) -> String {
-        let garments = structure.categories.map { category in
-            """
-                  {"category": "\(category.rawValue)", "name": "<cut or detail + garment type>", "material": "<fabric>", "colorName": "<color name>", "hexColor": "<#RRGGBB>", "rationale": "<under 10 words>"}
-            """
-        }.joined(separator: ",\n")
+    private func outputSchema(lookIndex: Int, title: String) -> String {
+        let garments = """
+                  {"category": "<Top, Bottom, Dress, or Outer>", "name": "<cut or detail + garment type>", "material": "<fabric>", "colorName": "<color name>", "hexColor": "<#RRGGBB>", "rationale": "<1-2 short sentences>"}
+                  (1 piece if Dress, 2 pieces if Top + Bottom, or 3 only if an Outer is truly needed for cold AC/formal)
+        """
         return """
         {"looks": [{
           "lookIndex": \(lookIndex),
           "styleArchetype": "\(title)",
-          "fitRationale": "<1 short sentence>",
+          "fitRationale": "<1-2 short sentences>",
           "garments": [
         \(garments)
           ]

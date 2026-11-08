@@ -7,21 +7,20 @@
 
 import Foundation
 
-/// Locates and inspects on-device GGUF models (`qwen2.5-3b-instruct-q4_k_m.gguf` or `Llama-3.2-1B-Instruct-Q4_K_M.gguf`).
+/// Locates and inspects the on-device Qwen 3 GGUF model (`Qwen3-4B-Instruct-Q4_K_M.gguf`).
 public struct LLMResource: Sendable {
 
-    /// Prioritized list of model candidates: Qwen 2.5 3B is preferred, falling back to Llama 3.2 1B.
+    /// Supported Qwen 3 4B model filename(s).
     public static let supportedModelFilenames = [
-        "qwen2.5-3b-instruct-q4_k_m",
-        "Llama-3.2-1B-Instruct-Q4_K_M"
+        "Qwen3-4B-Instruct-Q4_K_M"
     ]
     public static let modelExtension = "gguf"
 
     /// VLM (Vision-Language Model) files for extracting detailed aesthetic keywords from reference photos.
-    public static let vlmModelFilename = "Qwen2.5-VL-3B-Instruct-Q4_K_M"
-    public static let vlmProjectorFilename = "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0"
+    public static let vlmModelFilename = "LFM3-VL-2B-Q4_K_M"
+    public static let vlmProjectorFilename = "mmproj-LFM3-VL-2B-Q8_0"
 
-    /// Checks if the Qwen 2.5 VL 3B weights and vision projector are available on disk.
+    /// Checks if the LFM3-VL-2B weights and vision projector are available on disk.
     public static var isVLMModelAvailable: Bool {
         candidateURL(for: vlmModelFilename) != nil && candidateURL(for: vlmProjectorFilename) != nil
     }
@@ -43,7 +42,7 @@ public struct LLMResource: Sendable {
                 return name
             }
         }
-        return supportedModelFilenames.first ?? "qwen2.5-3b-instruct-q4_k_m"
+        return supportedModelFilenames.first ?? "Qwen3-4B-Instruct-Q4_K_M"
     }
 
     /// Alias for backward compatibility with existing code referencing `modelFilename`.
