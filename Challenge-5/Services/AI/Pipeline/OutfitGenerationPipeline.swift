@@ -83,6 +83,20 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
     /// every garment's color, hex code, material, name, and rationale.
     public static var injectedLLMResponseJSON: String? = nil
 
+    /// Use Apple's on-device model (Foundation Models) when Apple Intelligence is available.
+    /// Set to `false` to compare with Qwen 2.5 3B / Qwen 2.5 VL through llama.cpp.
+    static var prefersFoundationModels = true
+
+    /// Whether this run uses Foundation Models; otherwise it falls back to Qwen through llama.cpp.
+    private var usesFoundationModels: Bool {
+        Self.prefersFoundationModels && FoundationModelEngine.isAvailable
+    }
+
+    /// Model name for logs and the loading overlay.
+    private var activeModelName: String {
+        usesFoundationModels ? "Apple Foundation Model" : LLMResource.activeModelFilename
+    }
+
     private let promptBuilder: OutfitPromptBuilder
 
     /// Number of looks in one generation.
@@ -122,7 +136,9 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         onStageChange: (@MainActor @Sendable (_ title: String, _ subtitle: String, _ vlmDescriptions: [String]) -> Void)?
     ) async throws -> [OutfitLook] {
         // Validate the GGUF model file is present before attempting inference.
-        try LLMResource.validateModelAvailability()
+        if !usesFoundationModels {
+            try LLMResource.validateModelAvailability()
+        }
 
         // 1. Injected JSON short-circuit (prompt testing / UI previews).
         if let injectedJSON = OutfitGenerationPipeline.injectedLLMResponseJSON, !injectedJSON.isEmpty {
@@ -179,7 +195,9 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         temperature: Float = 0.75
     ) async throws -> OutfitLook {
         // Validate the GGUF model file is present before attempting inference.
-        try LLMResource.validateModelAvailability()
+        if !usesFoundationModels {
+            try LLMResource.validateModelAvailability()
+        }
 
         // 1. Injected JSON short-circuit (prompt testing / UI previews).
         if let injectedJSON = OutfitGenerationPipeline.injectedLLMResponseJSON, !injectedJSON.isEmpty {
@@ -196,7 +214,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         if !allImageData.isEmpty && persistedDescriptions.count == allImageData.count {
             referenceDescriptions = persistedDescriptions
         } else {
-            referenceDescriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(for: allImageData)
+            referenceDescriptions = await describeReferencePhotos(allImageData, onProgress: nil)
             if !referenceDescriptions.isEmpty {
                 ReferenceImageStyleAnalyzer.shared.saveDescriptions(referenceDescriptions, forOccasionID: occasion.id)
             }
@@ -264,26 +282,21 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
         for attempt in 0..<Self.maximumAttemptsPerLook {
             let temperature = min(baseTemperature + Float(attempt) * Self.retryTemperatureStep, Self.maximumRetryTemperature)
-            let prompt = promptBuilder.buildFormattedPrompt(
-                occasion: occasion,
-                profile: profile,
-                lookIndex: lookIndex,
-                structure: structure,
-                previousLooks: avoidedLooks,
-                referenceAnalysis: referenceAnalysis
-            )
-            print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) \(archetype) / \(structure.rawValue) (temp \(temperature), attempt \(attempt + 1)/\(Self.maximumAttemptsPerLook)). Prompt \(prompt.count) chars. Running \(LLMResource.activeModelFilename)…")
-
-            let rawOutput = try await LLMEngine.shared.generate(
-                prompt: prompt,
-                maxTokens: Self.maximumTokensPerLook,
-                temperature: temperature,
-                topP: archetype.topP
-            )
-            print("✅ [OutfitGenerationPipeline] Look \(lookIndex) raw output (\(rawOutput.count) chars):\n\(rawOutput)")
+            print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) \(archetype) / \(structure.rawValue) (temp \(temperature), attempt \(attempt + 1)/\(Self.maximumAttemptsPerLook)). Running \(activeModelName)…")
 
             let parsedLook: OutfitLook
             do {
+                let rawOutput = try await runModel(
+                    for: occasion,
+                    profile: profile,
+                    lookIndex: lookIndex,
+                    structure: structure,
+                    previousLooks: avoidedLooks,
+                    referenceAnalysis: referenceAnalysis,
+                    temperature: temperature
+                )
+                print("✅ [OutfitGenerationPipeline] Look \(lookIndex) raw output (\(rawOutput.count) chars):\n\(rawOutput)")
+
                 let parsedLooks = try parseLooks(
                     from: rawOutput.trimmingCharacters(in: .whitespacesAndNewlines),
                     colorSeason: profile.colorSeason,
@@ -295,7 +308,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 }
                 parsedLook = first
             } catch {
-                print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) attempt \(attempt + 1) could not be parsed: \(error.localizedDescription)")
+                print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) attempt \(attempt + 1) failed: \(error.localizedDescription)")
                 if attempt == Self.maximumAttemptsPerLook - 1 {
                     if let lastRepeatedLook { return lastRepeatedLook }
                     throw error
@@ -318,6 +331,55 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             throw LLMError.invalidOutput("Could not generate look index \(lookIndex).")
         }
         return lastRepeatedLook
+    }
+
+    /// Runs one look on the active model and returns its output as `{"looks":[...]}` JSON text.
+    /// Foundation Models fills a guided struct; Qwen writes JSON from the prompt.
+    private func runModel(
+        for occasion: OccasionItem,
+        profile: UserProfile,
+        lookIndex: Int,
+        structure: OutfitStructure,
+        previousLooks: [GeneratedLookSummary],
+        referenceAnalysis: ReferenceStyleAnalysis?,
+        temperature: Float
+    ) async throws -> String {
+        let archetype = OutfitArchetype(lookIndex: lookIndex)
+        if usesFoundationModels {
+            let instructions = promptBuilder.buildSingleLookSystemPrompt(
+                occasion: occasion,
+                profile: profile,
+                lookIndex: lookIndex,
+                structure: structure,
+                previousLooks: previousLooks,
+                referenceAnalysis: referenceAnalysis,
+                includesJSONFormat: false
+            )
+            let prompt = promptBuilder.buildSingleLookUserPrompt(occasion: occasion, profile: profile, lookIndex: lookIndex)
+            let hasReference = !referenceImagesData(of: occasion).isEmpty
+            return try await FoundationModelEngine.generateLookJSON(
+                instructions: instructions,
+                prompt: prompt,
+                lookIndex: lookIndex,
+                styleArchetype: archetype.title(hasReference: hasReference, hasVision: !occasion.visions.isEmpty),
+                temperature: temperature
+            )
+        }
+
+        let prompt = promptBuilder.buildFormattedPrompt(
+            occasion: occasion,
+            profile: profile,
+            lookIndex: lookIndex,
+            structure: structure,
+            previousLooks: previousLooks,
+            referenceAnalysis: referenceAnalysis
+        )
+        return try await LLMEngine.shared.generate(
+            prompt: prompt,
+            maxTokens: Self.maximumTokensPerLook,
+            temperature: temperature,
+            topP: archetype.topP
+        )
     }
 
     // MARK: - Repeat Check
@@ -365,6 +427,26 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             : occasion.referenceImagesData
     }
 
+    /// Describes each reference photo: Apple's model (image input) when available, otherwise Qwen 2.5 VL.
+    /// `onProgress` gets `(completed, total, descriptions so far)`.
+    private func describeReferencePhotos(
+        _ imagesData: [Data],
+        onProgress: (@MainActor @Sendable (Int, Int, [String]) -> Void)?
+    ) async -> [String] {
+        guard usesFoundationModels else {
+            return await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(for: imagesData, onProgress: onProgress)
+        }
+        var descriptions: [String] = []
+        for (index, data) in imagesData.enumerated() {
+            if let description = await FoundationModelEngine.describeReferenceImage(data) {
+                print("✅ [OutfitGenerationPipeline] Reference Photo \(index + 1) description: \(description)")
+                descriptions.append(description)
+            }
+            onProgress?(index + 1, imagesData.count, descriptions)
+        }
+        return descriptions
+    }
+
     /// Describes each reference photo with the on-device VLM and saves the descriptions for the occasion
     /// (shown in the Output's VLM debug). Reports progress through `onStageChange`.
     private func scanReferencePhotos(
@@ -378,18 +460,17 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
 
         let totalRefs = allImageData.count
+        let visionModelName = usesFoundationModels ? "Apple Foundation Model" : "Qwen 2.5 VL"
         onStageChange?(
             "Analyzing References",
-            "Scanning 1 of \(totalRefs) reference photo\(totalRefs == 1 ? "" : "s") with Qwen 2.5 VL...",
+            "Scanning 1 of \(totalRefs) reference photo\(totalRefs == 1 ? "" : "s") with \(visionModelName)...",
             []
         )
-        let descriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(
-            for: allImageData
-        ) { completed, total, descriptionsSoFar in
+        let descriptions = await describeReferencePhotos(allImageData) { completed, total, descriptionsSoFar in
             if completed < total {
                 onStageChange?(
                     "Analyzing References",
-                    "Scanning \(completed + 1) of \(total) reference photos with Qwen 2.5 VL...",
+                    "Scanning \(completed + 1) of \(total) reference photos with \(visionModelName)...",
                     descriptionsSoFar
                 )
             } else {
@@ -428,6 +509,22 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         Merge the photo descriptions below into ONE paragraph of 3 to 4 sentences.
         Keep every concrete garment name, cut, fabric, surface pattern and main color exactly as written. Only mention a pattern if a photo description states it. Do not invent anything. No lists, no JSON.
         """
+        if usesFoundationModels {
+            do {
+                let recap = try await FoundationModelEngine.respondText(instructions: system, prompt: numbered)
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !recap.isEmpty {
+                    print("📝 [OutfitGenerationPipeline] Reference recap (\(cleaned.count) → 1 paragraph): \(recap)")
+                    ReferenceImageStyleAnalyzer.shared.saveRecap(recap, forOccasionID: occasionID)
+                    return recap
+                }
+            } catch {
+                print("⚠️ [OutfitGenerationPipeline] Reference recap failed: \(error.localizedDescription). Using joined descriptions.")
+            }
+            return cleaned.joined(separator: " ")
+        }
+
         let prompt: String
         if LLMResource.isQwenActive {
             prompt = "<|im_start|>system\n\(system)<|im_end|>\n<|im_start|>user\n\(numbered)<|im_end|>\n<|im_start|>assistant\n"
@@ -458,7 +555,9 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         profile: UserProfile
     ) throws -> [OutfitLook] {
         // Validate that LLM can be used. Throws LLMError if model is missing or unreadable.
-        try LLMResource.validateModelAvailability()
+        if !usesFoundationModels {
+            try LLMResource.validateModelAvailability()
+        }
 
         // 1. If an injected LLM response JSON is available (prompt testing), decode directly:
         if let injectedJSON = OutfitGenerationPipeline.injectedLLMResponseJSON, !injectedJSON.isEmpty {

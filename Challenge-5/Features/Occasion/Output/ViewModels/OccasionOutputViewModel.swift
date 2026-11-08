@@ -206,7 +206,7 @@ final class OccasionOutputViewModel {
         }
         if refCount > 0 {
             loadingStageTitle = "Analyzing References"
-            loadingStageSubtitle = "Scanning 1 of \(refCount) reference photo\(refCount == 1 ? "" : "s") with Qwen 2.5 VL..."
+            loadingStageSubtitle = "Scanning 1 of \(refCount) reference photo\(refCount == 1 ? "" : "s")..."
         } else {
             loadingStageTitle = "Curating Your Looks"
             loadingStageSubtitle = "Styling ensembles tailored to your silhouette and \(occasion.title)..."

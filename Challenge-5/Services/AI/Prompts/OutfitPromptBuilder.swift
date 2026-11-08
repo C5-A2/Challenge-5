@@ -363,7 +363,8 @@ struct OutfitPromptBuilder: Sendable {
         lookIndex: Int,
         structure: OutfitStructure,
         previousLooks: [GeneratedLookSummary],
-        referenceAnalysis: ReferenceStyleAnalysis? = nil
+        referenceAnalysis: ReferenceStyleAnalysis? = nil,
+        includesJSONFormat: Bool = true
     ) -> String {
         let archetype = OutfitArchetype(lookIndex: lookIndex)
         let hasReference = hasReferenceImages(occasion)
@@ -413,10 +414,7 @@ struct OutfitPromptBuilder: Sendable {
 
         \(Self.garmentNamingRule)
 
-        OUTPUT FORMAT: Return ONLY valid JSON, no markdown, no extra text.
-        Put every garment inside ONE "garments" array. Garment fields: "category", "name", "material", "colorName", "hexColor", "rationale".
-        "fitRationale": 1 short sentence on why the outfit works. "rationale": under 10 words per garment.
-        \(outputSchema(lookIndex: lookIndex, title: title, structure: structure))
+        \(includesJSONFormat ? jsonFormatSection(lookIndex: lookIndex, title: title, structure: structure) : Self.guidedOutputNote)
         """
 
         print("[OutfitPromptBuilder] Look \(lookIndex) (\(title), \(structure.rawValue)) system prompt (\(systemPrompt.count) chars) for: \"\(occasion.title)\"")
@@ -656,6 +654,24 @@ struct OutfitPromptBuilder: Sendable {
         }
         return "The \"garments\" array must contain exactly \(structure.categories.count) item(s), with these categories in this order: \(required)."
     }
+
+    // MARK: - Output Format
+
+    /// For Qwen: the JSON shape is written in the prompt and parsed afterwards.
+    private func jsonFormatSection(lookIndex: Int, title: String, structure: OutfitStructure) -> String {
+        """
+        OUTPUT FORMAT: Return ONLY valid JSON, no markdown, no extra text.
+        Put every garment inside ONE "garments" array. Garment fields: "category", "name", "material", "colorName", "hexColor", "rationale".
+        "fitRationale": 1 short sentence on why the outfit works. "rationale": under 10 words per garment.
+        \(outputSchema(lookIndex: lookIndex, title: title, structure: structure))
+        """
+    }
+
+    /// For Apple's Foundation Models: guided generation already enforces the fields,
+    /// so the prompt only reminds the model how to fill them.
+    private static let guidedOutputNote = """
+    OUTPUT: Fill every field. "colorName" and "hexColor" are copied exactly from one palette entry. "rationale" is under 10 words per garment.
+    """
 
     // MARK: - Output Schema
 
