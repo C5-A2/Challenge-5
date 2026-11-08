@@ -684,7 +684,8 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                                     material: dto.material,
                                     colorName: color.name,
                                     hexColor: color.hex,
-                                    rationale: dto.rationale
+                                    rationale: dto.rationale,
+                                    playgroundPrompt: dto.playgroundPrompt
                                 )
                                 garments.append(garment)
                             }
@@ -781,7 +782,8 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                     material: gDTO.material,
                     colorName: resolvedColor.name,
                     hexColor: resolvedColor.hex,
-                    rationale: gDTO.rationale
+                    rationale: gDTO.rationale,
+                    playgroundPrompt: gDTO.playgroundPrompt
                 )
                 garments.append(garment)
             }
@@ -1032,6 +1034,7 @@ public struct LLMOutfitGenerationResponse: Codable, Sendable {
         public let colorName: String
         public let hexColor: String
         public let rationale: String
+        public let playgroundPrompt: String?
 
         enum CodingKeys: String, CodingKey {
             case category, type, garmentType
@@ -1040,15 +1043,25 @@ public struct LLMOutfitGenerationResponse: Codable, Sendable {
             case colorName, color, color_name
             case hexColor, hex, hex_color
             case rationale, bodyFitRationale, fitRationale, reason
+            case playgroundPrompt, visualPrompt, visual_prompt, playground_prompt
         }
 
-        public init(category: String, name: String, material: String, colorName: String, hexColor: String, rationale: String) {
+        public init(
+            category: String,
+            name: String,
+            material: String,
+            colorName: String,
+            hexColor: String,
+            rationale: String,
+            playgroundPrompt: String? = nil
+        ) {
             self.category = category
             self.name = name
             self.material = material
             self.colorName = colorName
             self.hexColor = hexColor
             self.rationale = rationale
+            self.playgroundPrompt = playgroundPrompt
         }
 
         public init(from decoder: Decoder) throws {
@@ -1119,6 +1132,12 @@ public struct LLMOutfitGenerationResponse: Codable, Sendable {
             } else {
                 self.rationale = "Flattering cut tailored to your natural body line."
             }
+
+            // playgroundPrompt (optional AI-provided visual prompt)
+            self.playgroundPrompt = (try? container.decode(String.self, forKey: .playgroundPrompt))
+                ?? (try? container.decode(String.self, forKey: .visualPrompt))
+                ?? (try? container.decode(String.self, forKey: .visual_prompt))
+                ?? (try? container.decode(String.self, forKey: .playground_prompt))
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -1129,6 +1148,7 @@ public struct LLMOutfitGenerationResponse: Codable, Sendable {
             try container.encode(colorName, forKey: .colorName)
             try container.encode(hexColor, forKey: .hexColor)
             try container.encode(rationale, forKey: .rationale)
+            try container.encodeIfPresent(playgroundPrompt, forKey: .playgroundPrompt)
         }
     }
 
