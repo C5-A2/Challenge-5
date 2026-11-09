@@ -69,7 +69,9 @@ struct AvatarStageView: View {
             let opacity: CGFloat = abs(relativeIndex) <= 1.0
                 ? 1.0
                 : max(0, 1.0 - (abs(relativeIndex) - 1.0) * 1.5)
-            let saturation: Double = isCenter ? 1.0 : 0.65
+            // Color Adjust: foto kiri & kanan di-adjust saturation: -20% (0.80), brightness: -15% (-0.15)
+            let saturation: Double = isCenter ? 1.0 : 0.80
+            let brightness: Double = isCenter ? 0.0 : -0.15
             let xOffset = relativeIndex * cardSpacing
             
             ZStack(alignment: .center) {
@@ -83,6 +85,7 @@ struct AvatarStageView: View {
                         .resizable()
                         .scaledToFit()
                         .saturation(saturation)
+                        .brightness(brightness)
                         .frame(width: width, height: height)
                         .shadow(
                             color: Color.black.opacity(isCenter ? 0.08 : 0.02),
@@ -92,6 +95,7 @@ struct AvatarStageView: View {
                 } else {
                     playgroundPlaceholderView(for: index, isCenter: isCenter, width: width, height: height)
                         .saturation(saturation)
+                        .brightness(brightness)
                         .frame(width: width, height: height)
                 }
             }

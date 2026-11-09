@@ -130,10 +130,10 @@ public struct OccasionCardView: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                // Sisi Belakang (Back Layer): Linear Gradient #ECECEC (100%) -> #848484 (28%)
+                // Sisi Belakang (Back Layer): Linear Gradient #E0E0E0 (100%) -> #848484 (28%)
                 LinearGradient(
                     stops: [
-                        .init(color: Color(hex: "#ECECEC"), location: 0.0),
+                        .init(color: Color(hex: "#E0E0E0"), location: 0.0),
                         .init(color: Color(hex: "#848484").opacity(0.28), location: 1.0)
                     ],
                     startPoint: .top,
@@ -230,11 +230,11 @@ public struct OccasionCardView: View {
                     .fill(.ultraThinMaterial)
                     .opacity(0.50)
                 
-                // Sisi Depan (Front Tab): Warna tetap sama, transparansi dinaikkan (opacity diturunkan)
+                // Sisi Depan (Front Tab): Linear Gradient #F0F0F0 (73%) -> #000000 (58%)
                 LinearGradient(
                     stops: [
-                        .init(color: Color(hex: "#F0F0F0").opacity(0.48), location: 0.0),
-                        .init(color: Color(hex: "#000000").opacity(0.38), location: 1.0)
+                        .init(color: Color(hex: "#F0F0F0").opacity(0.73), location: 0.0),
+                        .init(color: Color(hex: "#000000").opacity(0.58), location: 1.0)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -249,27 +249,21 @@ public struct OccasionCardView: View {
             .frame(height: 148)
             .clipShape(folderShape)
             .overlay(
-                // Double layered stroke for luminous glass edge highlight
-                ZStack {
-                    folderShape
-                        .stroke(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: Color.white.opacity(0.95), location: 0.0),
-                                    .init(color: Color.white.opacity(0.70), location: 0.25),
-                                    .init(color: Color.white.opacity(0.20), location: 0.70),
-                                    .init(color: Color.white.opacity(0.40), location: 1.0)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 1.5
-                        )
-                    
-                    folderShape
-                        .stroke(Color.white.opacity(0.40), lineWidth: 0.5)
-                        .blur(radius: 1)
-                }
+                // Liquid glass luminous edge highlight (lengkungan dan garis atas folder bersinar)
+                folderShape
+                    .stroke(
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.white.opacity(0.95), location: 0.0),
+                                .init(color: Color.white.opacity(0.70), location: 0.20),
+                                .init(color: Color.white.opacity(0.15), location: 0.60),
+                                .init(color: Color.white.opacity(0.35), location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1.0
+                    )
             )
             
             // Content Layout: Menempel rapat ke dasar kartu folder
@@ -322,6 +316,7 @@ public struct OccasionCardView: View {
                 
                 // Circular directional action button: dinaikkan ke atas bahu kanan tab agar teks judul leluasa melebar
                 arrowButton
+                    .offset(x: 4, y: 7)
                     .padding(.bottom, 62)
             }
             .padding(.horizontal, 16)
