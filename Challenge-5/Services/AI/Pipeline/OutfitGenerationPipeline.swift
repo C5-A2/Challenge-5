@@ -651,7 +651,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
         // Find all garment-like objects: { ... "category" ... }
         var garments: [GarmentItem] = []
-        let palette = options.colorSeason?.palette ?? []
+        let palette = options.colorSeason?.allSwatches ?? []
 
         var depth = 0
         var objStart: String.Index? = nil
@@ -759,7 +759,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             throw LLMError.invalidOutput("Unable to decode looks from JSON")
         }
 
-        let palette = options.colorSeason?.palette ?? []
+        let palette = options.colorSeason?.allSwatches ?? []
         var looks: [OutfitLook] = []
         for lookDTO in lookDTOs {
             let look = OutfitLook(
@@ -826,14 +826,25 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
 
         let lowerName = rawName.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        if !lowerName.isEmpty, let match = palette.first(where: {
-            let palName = $0.name.lowercased()
-            return palName == lowerName || palName.contains(lowerName) || lowerName.contains(palName)
-        }) {
-            return (match.name, match.hex)
+        if !lowerName.isEmpty, let exactNameMatch = palette.first(where: { $0.name.lowercased() == lowerName }) {
+            return (exactNameMatch.name, exactNameMatch.hex)
         }
 
         let rawColor = rgbComponents(fromHex: cleanHex)
+        if !lowerName.isEmpty {
+            let partialMatches = palette.filter {
+                let palName = $0.name.lowercased()
+                return palName.contains(lowerName) || lowerName.contains(palName)
+            }
+            if let rawColor, let closestPartial = partialMatches.min(by: { first, second in
+                colorDistance(rawColor, rgbComponents(fromHex: first.hex)) < colorDistance(rawColor, rgbComponents(fromHex: second.hex))
+            }) {
+                return (closestPartial.name, closestPartial.hex)
+            } else if let firstPartial = partialMatches.first {
+                return (firstPartial.name, firstPartial.hex)
+            }
+        }
+
         if allowsOffPalette, rawColor != nil {
             return (rawName, "#\(cleanHex)")
         }

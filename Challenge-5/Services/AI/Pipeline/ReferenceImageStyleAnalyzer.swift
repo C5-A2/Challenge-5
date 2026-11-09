@@ -296,4 +296,242 @@ nonisolated struct ReferenceStyleAnalysis: Sendable {
         case (false, false): return .topBottom
         }
     }
+
+    // MARK: - Reference Color Matching (within Seasonal Color Rules)
+
+    /// A color mentioned in the reference photo description mapped to the user's seasonal palette.
+    struct ReferenceColorMatch: Sendable {
+        let referenceColor: String
+        let swatch: ColorSeason.ColorSwatch
+        /// `true` when the reference color is compatible with the user's `ColorSeason` rules
+        /// (either a neutral mapped to `neutralSwatches`, or a chromatic color not in `colorsToAvoid`
+        /// with a close swatch in `allSwatches`).
+        let isWithinColorRules: Bool
+    }
+
+    /// Maximum RGB distance (`0...441.67`) for a chromatic reference color to be considered
+    /// "not too far away" from the seasonal palette rules.
+    private static let maximumAllowedChromaticDistance: Double = 95.0
+
+    /// Known fashion color terms ordered from multi-word specific phrases to single words.
+    private static let knownReferenceColors: [(term: String, hex: String, isNeutral: Bool)] = [
+        // Multi-word neutrals
+        ("off-white", "#F5F2EB", true),
+        ("off white", "#F5F2EB", true),
+        ("warm white", "#F3EFE6", true),
+        ("light beige", "#E6DEC8", true),
+        ("warm beige", "#DCC9AF", true),
+        ("light grey", "#D0D2D1", true),
+        ("light gray", "#D0D2D1", true),
+        ("ash grey", "#B2B5B7", true),
+        ("ash gray", "#B2B5B7", true),
+        ("cool grey", "#A6ACB0", true),
+        ("cool gray", "#A6ACB0", true),
+        ("dark grey", "#4E5052", true),
+        ("dark gray", "#4E5052", true),
+        ("charcoal grey", "#424144", true),
+        ("charcoal gray", "#424144", true),
+        ("dark brown", "#4A342B", true),
+        ("chocolate brown", "#4E342E", true),
+        ("dark navy", "#1D2F52", true),
+        ("navy blue", "#223A64", true),
+        ("midnight blue", "#232B4A", true),
+        ("jet black", "#222225", true),
+        // Multi-word chromatic colors
+        ("baby blue", "#A4C6E5", false),
+        ("sky blue", "#8CC0DE", false),
+        ("light blue", "#A8C5DA", false),
+        ("powder blue", "#B0C4DE", false),
+        ("pastel blue", "#B5CFE0", false),
+        ("icy blue", "#CFE6F3", false),
+        ("dusty blue", "#7C98AD", false),
+        ("steel blue", "#5A7D9A", false),
+        ("slate blue", "#53687E", false),
+        ("royal blue", "#1D4E9E", false),
+        ("cobalt blue", "#134798", false),
+        ("electric blue", "#0066CC", false),
+        ("denim blue", "#4E6E8E", false),
+        ("sage green", "#9CAF88", false),
+        ("mint green", "#A6DEC4", false),
+        ("olive green", "#6B6E40", false),
+        ("moss green", "#737A4C", false),
+        ("forest green", "#254E3A", false),
+        ("emerald green", "#146B48", false),
+        ("lime green", "#89C93E", false),
+        ("neon green", "#39FF14", false),
+        ("deep burgundy", "#541E27", false),
+        ("brick red", "#A63A2E", false),
+        ("cherry red", "#B51D29", false),
+        ("dusty rose", "#BA868E", false),
+        ("dusty pink", "#C99AA2", false),
+        ("blush pink", "#E8BFC3", false),
+        ("baby pink", "#F2C9D0", false),
+        ("pastel pink", "#F4CFD6", false),
+        ("light pink", "#F2C6CE", false),
+        ("hot pink", "#E33B7E", false),
+        ("electric pink", "#F52887", false),
+        ("butter yellow", "#F6E39F", false),
+        ("pastel yellow", "#F7E8AA", false),
+        ("light yellow", "#F7E7A4", false),
+        ("mustard yellow", "#C89628", false),
+        ("golden yellow", "#E6B432", false),
+        ("burnt orange", "#C45626", false),
+        // Single-word neutrals
+        ("white", "#F2F2EE", true),
+        ("ivory", "#F3ECD8", true),
+        ("cream", "#EFE5CE", true),
+        ("vanilla", "#F3E5C8", true),
+        ("ecru", "#E6DEC8", true),
+        ("beige", "#D8CBB8", true),
+        ("oatmeal", "#CBC3B4", true),
+        ("sand", "#D6C6B2", true),
+        ("stone", "#C9C2B5", true),
+        ("khaki", "#B8A98E", true),
+        ("tan", "#C8A987", true),
+        ("camel", "#C69C6D", true),
+        ("taupe", "#9E9186", true),
+        ("grey", "#9E9E9E", true),
+        ("gray", "#9E9E9E", true),
+        ("silver", "#C8CACA", true),
+        ("charcoal", "#444245", true),
+        ("espresso", "#45332E", true),
+        ("chocolate", "#52372E", true),
+        ("coffee", "#5A3D34", true),
+        ("mocha", "#6E5246", true),
+        ("brown", "#6A4A3A", true),
+        ("navy", "#22385E", true),
+        ("black", "#262629", true),
+        // Single-word chromatic colors
+        ("burgundy", "#6B212E", false),
+        ("maroon", "#69222A", false),
+        ("wine", "#6E2332", false),
+        ("crimson", "#A81C2E", false),
+        ("scarlet", "#C92A2A", false),
+        ("red", "#BF2C34", false),
+        ("terracotta", "#C46243", false),
+        ("rust", "#B55233", false),
+        ("coral", "#EB715E", false),
+        ("peach", "#F4B499", false),
+        ("apricot", "#F2AE82", false),
+        ("salmon", "#EA8A78", false),
+        ("orange", "#E3732F", false),
+        ("tangerine", "#EC7A30", false),
+        ("copper", "#B8653B", false),
+        ("bronze", "#8E633B", false),
+        ("mustard", "#C89628", false),
+        ("marigold", "#EAA838", false),
+        ("gold", "#D1A64A", false),
+        ("amber", "#D8912E", false),
+        ("yellow", "#F0CA4D", false),
+        ("mint", "#A8DFC6", false),
+        ("sage", "#9CAF88", false),
+        ("pistachio", "#A9C98E", false),
+        ("olive", "#6E7043", false),
+        ("moss", "#757C4E", false),
+        ("emerald", "#17724D", false),
+        ("jade", "#2B8A68", false),
+        ("green", "#3B7E52", false),
+        ("teal", "#1E6F78", false),
+        ("turquoise", "#2EB5B8", false),
+        ("aqua", "#5DCAD0", false),
+        ("periwinkle", "#8FA2D4", false),
+        ("cornflower", "#6488C4", false),
+        ("chambray", "#6A89A8", false),
+        ("denim", "#4E6E8E", false),
+        ("cobalt", "#164A9A", false),
+        ("indigo", "#2D386C", false),
+        ("blue", "#34689E", false),
+        ("lavender", "#B8A4D4", false),
+        ("lilac", "#C6AED8", false),
+        ("mauve", "#A67B94", false),
+        ("plum", "#6A365A", false),
+        ("violet", "#744896", false),
+        ("purple", "#6B3F8A", false),
+        ("magenta", "#C82874", false),
+        ("fuchsia", "#CA2C78", false),
+        ("berry", "#9B2959", false),
+        ("blush", "#E6B8BE", false),
+        ("rose", "#C96A7B", false),
+        ("pink", "#E2849B", false)
+    ]
+
+    /// Extracts colors mentioned in the reference photo description and maps each to the closest
+    /// swatch in `colorSeason`, indicating whether it stays within the season's color rules.
+    func colorMatches(for colorSeason: ColorSeason) -> [ReferenceColorMatch] {
+        let lowerText = " " + promptDescription.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ") + " "
+        let avoidText = " " + colorSeason.colorsToAvoid.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ") + " "
+
+        let neutrals = colorSeason.neutralSwatches
+        let allSwatches = colorSeason.allSwatches
+        guard !allSwatches.isEmpty else { return [] }
+
+        var remainingText = lowerText
+        var matches: [(position: Int, match: ReferenceColorMatch)] = []
+
+        for entry in Self.knownReferenceColors {
+            let normalizedTerm = entry.term.lowercased()
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+            let needle = " \(normalizedTerm) "
+            guard let range = remainingText.range(of: needle),
+                  let targetRGB = Self.rgb(fromHex: entry.hex) else { continue }
+
+            let position = remainingText.distance(from: remainingText.startIndex, to: range.lowerBound)
+            // Mask matched words so "light blue" doesn't also trigger single-word "blue"
+            let mask = String(repeating: " ", count: needle.count)
+            remainingText.replaceSubrange(range, with: mask)
+
+            if entry.isNeutral, !neutrals.isEmpty {
+                // Neutral colors map to the season's curated foundation neutrals (or a closer neutral in allSwatches)
+                if let closestNeutral = neutrals.min(by: {
+                    Self.distance(targetRGB, Self.rgb(fromHex: $0.hex)) < Self.distance(targetRGB, Self.rgb(fromHex: $1.hex))
+                }) {
+                    matches.append((position, ReferenceColorMatch(
+                        referenceColor: entry.term,
+                        swatch: closestNeutral,
+                        isWithinColorRules: true
+                    )))
+                }
+            } else {
+                // Chromatic color: check whether the season explicitly avoids it and how close the nearest palette swatch is
+                let explicitlyAvoided = avoidText.contains(needle)
+                if let closestSwatch = allSwatches.min(by: {
+                    Self.distance(targetRGB, Self.rgb(fromHex: $0.hex)) < Self.distance(targetRGB, Self.rgb(fromHex: $1.hex))
+                }) {
+                    let dist = Self.distance(targetRGB, Self.rgb(fromHex: closestSwatch.hex))
+                    let withinRules = !explicitlyAvoided && dist <= Self.maximumAllowedChromaticDistance
+                    matches.append((position, ReferenceColorMatch(
+                        referenceColor: entry.term,
+                        swatch: closestSwatch,
+                        isWithinColorRules: withinRules
+                    )))
+                }
+            }
+        }
+
+        return matches
+            .sorted { $0.position < $1.position }
+            .map(\.match)
+    }
+
+    private static func rgb(fromHex hex: String) -> (r: Double, g: Double, b: Double)? {
+        let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
+        return (Double((value >> 16) & 0xFF), Double((value >> 8) & 0xFF), Double(value & 0xFF))
+    }
+
+    private static func distance(_ a: (r: Double, g: Double, b: Double), _ b: (r: Double, g: Double, b: Double)?) -> Double {
+        guard let b else { return .infinity }
+        let dr = a.r - b.r
+        let dg = a.g - b.g
+        let db = a.b - b.b
+        return (dr * dr + dg * dg + db * db).squareRoot()
+    }
 }

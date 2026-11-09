@@ -399,7 +399,7 @@ struct OutfitPromptBuilder: Sendable {
         if let bodySection = bodySection(for: archetype, profile: profile, structure: structure) {
             sections.append(bodySection)
         }
-        if let colorSection = colorSection(for: archetype, lookIndex: lookIndex, profile: profile, occasion: occasion, hasReference: hasReference) {
+        if let colorSection = colorSection(for: archetype, lookIndex: lookIndex, profile: profile, occasion: occasion, hasReference: hasReference, referenceAnalysis: referenceAnalysis) {
             sections.append(colorSection)
         }
         if let previousSection = previousLooksSection(previousLooks) {
@@ -491,7 +491,7 @@ struct OutfitPromptBuilder: Sendable {
         switch archetype {
         case .referenceMatch:
             return hasReference
-                ? "Recreate the outfit in the user's reference photos as closely as possible: the same kind of pieces, layering, silhouette and color story. Change only what the occasion, the dresscode or the color palette requires."
+                ? "Recreate the outfit in the user's reference photos as closely as possible: the same kind of pieces, layering, silhouette and color story. Use the colors from the reference photo(s) too whenever they can be matched to her seasonal palette without going too far from her color rules; if a reference color clashes with her season, fall back to her seasonal neutrals."
                 : "Create the user's signature outfit for this occasion: timeless, well-cut pieces she would happily wear again."
         case .localTouch:
             return "Bring in ONE subtle Indonesian element in a modern way: one batik, tenun, lurik or ikat piece in a contemporary cut, or a modern kebaya-inspired top. Keep every other piece simple and current, so the whole outfit feels like today's street style, not like a traditional costume, and right for the occasion and dresscode."
@@ -525,7 +525,7 @@ struct OutfitPromptBuilder: Sendable {
             "\(analysis.promptDescription)"
             - Keep the garment types, cuts, layering and silhouette described above.
             - Keep a surface pattern ONLY if the text names one: put that pattern word in the garment "name", never in "material".
-            - Use the palette colors closest to the colors described.
+            - Match the colors from the reference photo(s) for each corresponding piece if possible, selecting the closest swatches from her palette (Neutrals or Season colors) that stay within her seasonal color rules.
             """
         case .localTouch, .colorStory, .lookMore:
             guard let analysis else { return nil }
@@ -591,23 +591,32 @@ struct OutfitPromptBuilder: Sendable {
             + lines.map { "- \($0)" }.joined(separator: "\n")
     }
 
-    /// The seasonal palette. The color story look builds a deliberate palette;
-    /// the surprise look may add one accent outside it.
+    /// The seasonal palette. Neutrals are prioritized first; for the first archetype (`referenceMatch`),
+    /// colors from the reference image are also used when they stay within the seasonal color rules.
     private func colorSection(
         for archetype: OutfitArchetype,
         lookIndex: Int,
         profile: UserProfile?,
         occasion: OccasionItem,
-        hasReference: Bool
+        hasReference: Bool,
+        referenceAnalysis: ReferenceStyleAnalysis? = nil
     ) -> String? {
         guard let colorSeason = profile?.colorSeason else { return nil }
-        // Grouped by family (lead families first), so the browns at the start of autumn palettes don't dominate.
-        let palette = PaletteColorFamily.grouped(colorSeason.palette).map { group in
-            "- \(group.family.rawValue): " + group.swatches.map { "\($0.name) (\($0.hex))" }.joined(separator: ", ")
-        }.joined(separator: "\n")
+        let swatches = colorSeason.palette
+        let neutrals = colorSeason.neutralSwatches
+        let neutralHexSet = Set(neutrals.map { $0.hex.uppercased() })
+        let seasonColors = swatches.filter { !neutralHexSet.contains($0.hex.uppercased()) }
+        func describe(_ list: [ColorSeason.ColorSwatch]) -> String {
+            list.map { "\($0.name) (\($0.hex))" }.joined(separator: ", ")
+        }
+        let palette = neutrals.isEmpty || seasonColors.isEmpty
+            ? describe(swatches)
+            : "\nNeutrals (the base — prioritize first): \(describe(neutrals))\nSeason colors (the accent): \(describe(seasonColors))"
 
         let rule: String
         switch archetype {
+        case .referenceMatch where hasReference:
+            rule = "Use ONLY palette colors (from Neutrals or Season colors), copied exactly (name and hex). For this first look, prioritize matching the garment colors from the user's reference photo(s) using the closest palette swatches as long as they are not too far from her \(colorSeason.rawValue) color rules."
         case .surpriseMe:
             rule = "Use palette colors, copied exactly. You MAY add ONE accent color outside the palette if it makes the surprise work; give it a clear name and a valid hex."
         case .colorStory:
@@ -619,19 +628,43 @@ struct OutfitPromptBuilder: Sendable {
             rule = "Use ONLY palette colors, copied exactly (name and hex)."
         }
 
-        // Each look gets its own main color family, except when the reference photos or the style vision set the colors.
-        var lines = ["COLORS (\(colorSeason.rawValue)): \(rule)"]
-        let colorsComeFromReference = archetype == .referenceMatch && hasReference
-        let colorsComeFromVision = archetype == .lookMore && !occasion.visions.isEmpty
-        if !colorsComeFromReference, !colorsComeFromVision,
-           let leadFamily = PaletteColorFamily.leadFamily(forLookIndex: lookIndex, palette: colorSeason.palette) {
-            lines.append("MAIN COLOR of this look: pick it from \"\(leadFamily.rawValue)\". Browns, beiges and neutrals may only support it.")
-        } else {
-            lines.append("Do not default to browns and beiges: use them only as supporting colors unless the reference or vision is clearly brown.")
+        let neutralPriority: String
+        let mixingRule: String
+        switch archetype {
+        case .referenceMatch where hasReference:
+            let matches = referenceAnalysis?.colorMatches(for: colorSeason) ?? []
+            let validMatches = matches.filter(\.isWithinColorRules)
+            let avoidedMatches = matches.filter { !$0.isWithinColorRules }
+            var refLines: [String] = [
+                "REFERENCE COLORS + NEUTRALS: Use the colors worn in the reference photo(s) for each corresponding piece if possible, mapped to the closest swatches in her \(colorSeason.rawValue) palette and staying within her color rules (\(colorSeason.colorCombinationRules)). When a reference color is too far from her color rules or in Avoid, fall back to her Neutrals first."
+            ]
+            if !validMatches.isEmpty {
+                let mapped = validMatches.map { "\"\($0.referenceColor)\" → \($0.swatch.name) (\($0.swatch.hex))" }.joined(separator: ", ")
+                refLines.append("Closest palette matches for the reference photo colors (prioritize these): \(mapped).")
+            }
+            if !avoidedMatches.isEmpty {
+                let skipped = avoidedMatches.map { "\"\($0.referenceColor)\"" }.joined(separator: ", ")
+                refLines.append("Reference color(s) \(skipped) are too far from her \(colorSeason.rawValue) color rules — replace with a Neutral swatch from her palette instead.")
+            }
+            neutralPriority = refLines.joined(separator: "\n")
+            mixingRule = "Keep the reference outfit's color story where her color rules allow, grounded by her Neutrals."
+        case .colorStory:
+            neutralPriority = "NEUTRALS FIRST: a color story may be led by color, but still include at least one neutral piece so the outfit can be worn easily."
+            mixingRule = "Do not dress her all in the same earthy family (for example all brown and green). Mix neutrals with one season color instead."
+        case .surpriseMe:
+            neutralPriority = "NEUTRALS FIRST: keep most of the outfit neutral and let the bold idea (the accent or the cut) be the surprise."
+            mixingRule = "Do not dress her all in the same earthy family (for example all brown and green). Mix neutrals with one season color instead."
+        default:
+            neutralPriority = "NEUTRALS FIRST: build the outfit on the neutrals. Use the darkest neutral as her black, the lightest neutral as her white, and greys, creams or beiges as the base for at least half of the pieces. Add season colors as ONE accent piece or a small part of the look."
+            mixingRule = "Do not dress her all in the same earthy family (for example all brown and green). Mix neutrals with one season color instead."
         }
-        lines.append("Palette:\n\(palette)")
-        lines.append("Avoid: \(colorSeason.colorsToAvoid)")
-        return lines.joined(separator: "\n")
+        return """
+        COLORS (\(colorSeason.rawValue)): \(rule)
+        \(neutralPriority)
+        \(mixingRule)
+        Palette: \(palette)
+        Avoid: \(colorSeason.colorsToAvoid)
+        """
     }
 
     /// Earlier looks, so this one is different in style and pieces, not only in color.
