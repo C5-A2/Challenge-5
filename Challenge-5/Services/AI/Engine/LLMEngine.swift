@@ -184,28 +184,58 @@ public actor LLMEngine {
             isBackendInitialized = true
         }
         
-        var modelParams = llama_model_default_params()
-        modelParams.n_gpu_layers = 99 // Metal GPU acceleration on physical iPhone
-        
-        // Right after the VLM reference scan, iOS may not have handed the VLM's ~2.7 GB back yet,
-        // so the first load can fail. Wait briefly and try again before giving up.
-        var loadedModel = llama_model_load_from_file(path, modelParams)
-        var attempt = 1
-        while loadedModel == nil && attempt < Self.maximumModelLoadAttempts {
-            print("⚠️ [LLMEngine] Model load attempt \(attempt) failed. Retrying in \(Self.modelLoadRetryDelay)s…")
-            Thread.sleep(forTimeInterval: Self.modelLoadRetryDelay)
-            attempt += 1
-            loadedModel = llama_model_load_from_file(path, modelParams)
+        // Try candidate models in priority order; for large models (>3.5 GB), try full GPU layers (99),
+        // then partial GPU layers (20) so Metal buffer allocation doesn't exceed iOS memory limits,
+        // and finally fall back to the next smaller model on disk (e.g. LFM3-VL-2B).
+        let candidateFilenames: [String]
+        if let custom = customPath {
+            candidateFilenames = [custom]
+        } else {
+            candidateFilenames = LLMResource.supportedModelFilenames
         }
+
+        var loadedModel: OpaquePointer? = nil
+        var loadedPath: String = path
+
+        outerLoop: for candidate in candidateFilenames {
+            let candidatePath: String
+            if customPath != nil {
+                candidatePath = candidate
+            } else if let found = locateModelPath(filename: "\(candidate).gguf") {
+                candidatePath = found
+            } else {
+                continue
+            }
+
+            let fileSize = (try? FileManager.default.attributesOfItem(atPath: candidatePath)[.size] as? NSNumber)?.int64Value ?? 0
+            // Large models (> 3.5 GB like Gemma 4 E4B) try 99 layers, then 24 layers, then 0 layers before falling back.
+            let gpuLayerProfiles: [Int32] = fileSize > 3_500_000_000 ? [99, 24, 0] : [99, 0]
+
+            for gpuLayers in gpuLayerProfiles {
+                var modelParams = llama_model_default_params()
+                modelParams.n_gpu_layers = gpuLayers
+
+                print("🔄 [LLMEngine] Loading \(candidate) (n_gpu_layers=\(gpuLayers))…")
+                if let mdl = llama_model_load_from_file(candidatePath, modelParams) {
+                    loadedModel = mdl
+                    loadedPath = candidatePath
+                    if customPath == nil {
+                        LLMResource.setRuntimeActiveFilenameOverride(candidate)
+                    }
+                    break outerLoop
+                }
+                print("⚠️ [LLMEngine] Failed to load \(candidate) with n_gpu_layers=\(gpuLayers). Retrying after brief delay…")
+                Thread.sleep(forTimeInterval: 0.4)
+            }
+        }
+
         guard let loadedModel else {
             throw LLMEngineError.modelInitFailed
         }
         self.model = loadedModel
         
         var contextParams = llama_context_default_params()
-        // Optimized context window: 4,096 tokens.
-        // Provides ample headroom for single-look prompts (~1,200 tokens) + output (~500 tokens),
-        // while keeping the KV cache footprint under ~150 MB to prevent iOS Jetsam memory kills on 3B models (Qwen 2.5 3B).
+        // 4096 tokens keeps the KV cache small enough on iPhone RAM to prevent iOS Jetsam memory kills.
         contextParams.n_ctx = 4096
         contextParams.n_batch = 512
         
@@ -216,7 +246,7 @@ public actor LLMEngine {
         }
         self.context = loadedContext
         
-        print("🎯 [LLMEngine] Successfully loaded model weights from: \(path)")
+        print("🎯 [LLMEngine] Successfully loaded model weights from: \(loadedPath)")
         print("🤖 [LLMEngine] Active on-device model: \(LLMResource.activeModelFilename)")
         #endif
     }

@@ -260,6 +260,9 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         var lastRepeatedLook: OutfitLook?
 
         for attempt in 0..<Self.maximumAttemptsPerLook {
+            // Ensure the model is loaded first so any RAM-based fallback (e.g. Gemma -> LFM3) updates
+            // `LLMResource.activeModelFilename` before `buildFormattedPrompt` selects the chat template.
+            try await LLMEngine.shared.loadModelIfNeeded()
             let temperature = min(baseTemperature + Float(attempt) * Self.retryTemperatureStep, Self.maximumRetryTemperature)
             let prompt = promptBuilder.buildFormattedPrompt(
                 occasion: occasion,

@@ -325,6 +325,18 @@ struct OutfitPromptBuilder: Sendable {
             lookIndex: lookIndex
         )
 
+        // Gemma 4 chat template: <bos>, then <|turn>role ... <turn|> blocks.
+        if LLMResource.isGemmaActive {
+            return """
+            <bos><|turn>system
+            \(system)<turn|>
+            <|turn>user
+            \(user)<turn|>
+            <|turn>model
+            \(OutfitPromptBuilder.assistantPrefill)
+            """
+        }
+
         // Qwen 2.5 uses ChatML tokens (<|im_start|> ... <|im_end|>)
         if LLMResource.isQwenActive {
             // LFM chat template starts with a BOS token; Qwen has none.

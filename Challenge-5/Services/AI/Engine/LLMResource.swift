@@ -16,6 +16,22 @@ public struct LLMResource: Sendable {
     ]
     public static let modelExtension = "gguf"
 
+    /// Override set by `LLMEngine` when the primary model fails to fit in iOS RAM and falls back to a lighter model.
+    private nonisolated(unsafe) static var _runtimeActiveFilenameOverride: String?
+    private static let overrideLock = NSLock()
+
+    public static func setRuntimeActiveFilenameOverride(_ filename: String?) {
+        overrideLock.lock()
+        _runtimeActiveFilenameOverride = filename
+        overrideLock.unlock()
+    }
+
+    public static var runtimeActiveFilenameOverride: String? {
+        overrideLock.lock()
+        defer { overrideLock.unlock() }
+        return _runtimeActiveFilenameOverride
+    }
+
     /// VLM (Vision-Language Model) files for extracting detailed aesthetic keywords from reference photos.
     public static let vlmModelFilename = "LFM3-VL-2B-Q4_K_M"
     public static let vlmProjectorFilename = "mmproj-LFM3-VL-2B-Q8_0"
@@ -37,6 +53,9 @@ public struct LLMResource: Sendable {
 
     /// The name of the active model currently found on disk.
     public static var activeModelFilename: String {
+        if let override = runtimeActiveFilenameOverride, candidateURL(for: override) != nil {
+            return override
+        }
         for name in supportedModelFilenames {
             if candidateURL(for: name) != nil {
                 return name
@@ -48,6 +67,11 @@ public struct LLMResource: Sendable {
     /// Alias for backward compatibility with existing code referencing `modelFilename`.
     public static var modelFilename: String {
         activeModelFilename
+    }
+
+    /// True if the active model is Gemma 4 (uses `<|turn>` chat tokens).
+    public static var isGemmaActive: Bool {
+        activeModelFilename.lowercased().contains("gemma")
     }
 
     /// True if the active model uses ChatML tokens (Qwen and LFM both do).
