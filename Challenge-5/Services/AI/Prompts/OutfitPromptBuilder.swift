@@ -327,8 +327,10 @@ struct OutfitPromptBuilder: Sendable {
 
         // Qwen 2.5 uses ChatML tokens (<|im_start|> ... <|im_end|>)
         if LLMResource.isQwenActive {
+            // LFM chat template starts with a BOS token; Qwen has none.
+            let bos = LLMResource.activeModelFilename.lowercased().contains("lfm") ? "<|startoftext|>" : ""
             return """
-            <|im_start|>system
+            \(bos)<|im_start|>system
             \(system)<|im_end|>
             <|im_start|>user
             \(user)<|im_end|>
@@ -447,6 +449,14 @@ struct OutfitPromptBuilder: Sendable {
         ]
         lines.append("Date: \(occasion.date.formatted(date: .complete, time: .omitted)). Use the month to judge the weather in Indonesia (roughly October to April is the rainy season: humid, sudden rain; May to September is drier and still hot).")
         lines.append("Location: work out where this event takes place from the title and note (indoor with air conditioning like a mall, office, restaurant or hall; outdoors; beach or hill; on the road). Dress for that place: strong air conditioning allows a light layer, outdoors and beaches need the lightest, most breathable and easy-to-move-in pieces, rain risk means no delicate fabric that stains or sticks to the skin.")
+        lines.append("""
+        CONTEXT CHECK (apply to ANY event, even one you have never heard of). Before choosing pieces, ask yourself:
+        1. Respect: what are the customs of this place or gathering? A place of worship, a family or cultural ceremony, a funeral or a formal office calls for modest, covered, calm outfits (no revealing, tight or very short pieces). Follow the clothing norms of the religion or culture the event belongs to.
+        2. Activity: what will she physically do? Water, sand, sport, hiking, dancing, long sitting or travel each need clothes that move, dry, protect or breathe for that activity (for water or sand: shorts, swimwear or quick-dry pieces; for hiking: practical, covered layers).
+        3. Setting and weather: indoors with air conditioning, outdoors in heat, rain, mud, wind or altitude change the fabric, length and layers.
+        4. Mood: celebration, mourning, work, romance and casual time each have their own colors and level of polish.
+        Choose a different, fitting answer for each event from these questions instead of one default outfit. The occasion's needs always beat the look direction and the trend brief.
+        """)
         let cleanDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         // Known occasions get a short guide, so the model doesn't have to guess what the title means.
         let note = occasion.customNote ?? ""

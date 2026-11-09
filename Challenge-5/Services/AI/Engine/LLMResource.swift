@@ -7,12 +7,12 @@
 
 import Foundation
 
-/// Locates and inspects the on-device Qwen 3 GGUF model (`Qwen3-4B-Instruct-Q4_K_M.gguf`).
+/// Locates and inspects the on-device LFM3 GGUF model (`LFM3-VL-2B-Q4_K_M.gguf`), used for both text and vision.
 public struct LLMResource: Sendable {
 
-    /// Supported Qwen 3 4B model filename(s).
+    /// Supported text model filename(s). LFM3-VL-2B runs text-only here (no projector).
     public static let supportedModelFilenames = [
-        "Qwen3-4B-Instruct-Q4_K_M"
+        "LFM3-VL-2B-Q4_K_M"
     ]
     public static let modelExtension = "gguf"
 
@@ -42,7 +42,7 @@ public struct LLMResource: Sendable {
                 return name
             }
         }
-        return supportedModelFilenames.first ?? "Qwen3-4B-Instruct-Q4_K_M"
+        return supportedModelFilenames.first ?? "LFM3-VL-2B-Q4_K_M"
     }
 
     /// Alias for backward compatibility with existing code referencing `modelFilename`.
@@ -50,9 +50,10 @@ public struct LLMResource: Sendable {
         activeModelFilename
     }
 
-    /// True if the currently active model on disk is a Qwen variant.
+    /// True if the active model uses ChatML tokens (Qwen and LFM both do).
     public static var isQwenActive: Bool {
-        activeModelFilename.lowercased().contains("qwen")
+        let name = activeModelFilename.lowercased()
+        return name.contains("qwen") || name.contains("lfm")
     }
 
     /// Checks if a supported GGUF model file is accessible either in the App Bundle or in project Resources.

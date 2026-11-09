@@ -270,12 +270,16 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             )
             print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) \(archetype) (temp \(temperature), attempt \(attempt + 1)/\(Self.maximumAttemptsPerLook)). Prompt \(prompt.count) chars. Running \(LLMResource.activeModelFilename)…")
 
-            let rawOutput = try await LLMEngine.shared.generate(
+            var rawOutput = try await LLMEngine.shared.generate(
                 prompt: prompt,
                 maxTokens: Self.maximumTokensPerLook,
                 temperature: temperature,
                 topP: archetype.topP
             )
+            // The prompt ends with the assistant prefill, so the model's output continues after it.
+            if !rawOutput.contains("\"looks\"") {
+                rawOutput = OutfitPromptBuilder.assistantPrefill + rawOutput
+            }
             print("✅ [OutfitGenerationPipeline] Look \(lookIndex) raw output (\(rawOutput.count) chars):\n\(rawOutput)")
 
             let parsedLook: OutfitLook

@@ -47,7 +47,7 @@ public typealias LLaMAEngineError = LLMEngineError
 ///
 /// Implements subtask **C5-45**:
 /// - Sets up the `llama.cpp` Swift wrapper (`LlamaSwift`).
-/// - Loads local GGUF model weights (`Qwen3-4B-Instruct-Q4_K_M.gguf`).
+/// - Loads local GGUF model weights (`LFM3-VL-2B-Q4_K_M.gguf`).
 /// - Configures memory and token context (Metal GPU acceleration on physical devices).
 /// - Safe fallback for Simulator & Xcode Previews.
 public actor LLMEngine {
