@@ -21,6 +21,7 @@ struct GarmentPlaygroundAttributes: Codable, Sendable, Identifiable, Hashable {
     let fabricMaterial: String              // e.g. "French Terry Cotton"
     let fitSilhouette: String               // e.g. "Structured slim fit with tapered waist"
     let stylingDetails: String?             // e.g. "Open quarter placket with clean collar"
+    let playgroundPrompt: String?           // Clean AI visual prompt from LLM
     
     // MARK: - Initializer
     
@@ -33,7 +34,8 @@ struct GarmentPlaygroundAttributes: Codable, Sendable, Identifiable, Hashable {
         colorName: String,
         fabricMaterial: String,
         fitSilhouette: String? = nil,
-        stylingDetails: String? = nil
+        stylingDetails: String? = nil,
+        playgroundPrompt: String? = nil
     ) {
         self.id = id
         self.category = category
@@ -44,6 +46,7 @@ struct GarmentPlaygroundAttributes: Codable, Sendable, Identifiable, Hashable {
         self.fabricMaterial = fabricMaterial
         self.fitSilhouette = fitSilhouette ?? "Tailored fit"
         self.stylingDetails = stylingDetails
+        self.playgroundPrompt = playgroundPrompt
     }
 }
 
@@ -109,47 +112,101 @@ import ImagePlayground
 
 extension OutfitPlaygroundPackage {
     
-    private static let conflictingColorWords: Set<String> = [
-        "yellow", "red", "blue", "green", "black", "white", "pink", "brown",
-        "purple", "orange", "grey", "gray", "gold", "silver", "beige", "navy",
-        "violet", "indigo", "cyan", "magenta", "maroon", "olive", "teal", "tan"
+    // MARK: - Safety Seatbelt (Sanitizer for Image Playground)
+    
+    /// Words that trigger Apple Image Playground's sensitive content or safety filter.
+    private static let blockedWords: Set<String> = [
+        "sheer", "translucent", "transparent", "mesh", "see-through", "fishnet",
+        "revealing", "sexy", "naked", "nude", "skin", "flesh", "cutout", "cut-out",
+        "slit", "plunging", "deep-v", "low-cut", "cleavage", "waist", "swallowtail"
     ]
     
-    private static func sanitizeGarmentName(_ name: String, intendedColor: String) -> String {
-        let tokens = name.components(separatedBy: .whitespaces)
-        let filtered = tokens.filter { token in
-            let clean = token.lowercased().trimmingCharacters(in: .punctuationCharacters)
-            if conflictingColorWords.contains(clean) && !intendedColor.localizedCaseInsensitiveContains(clean) {
-                return false
-            }
-            return true
+    /// Sanitizes garment text, stripping guardrail-triggering words and ensuring proper outer sleeves.
+    private static func sanitizePrompt(_ text: String, category: GarmentCategory, hasOuter: Bool) -> String {
+        let tokens = text.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+        let cleanTokens = tokens.filter { token in
+            !blockedWords.contains(token.lowercased())
         }
-        let result = filtered.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-        return result.isEmpty ? name : result
+        var cleaned = cleanTokens.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.isEmpty {
+            cleaned = "\(category.rawValue.lowercased())"
+        }
+        
+        if category == .outer {
+            // Strip sleeve-shortening words and enforce full-length sleeves
+            cleaned = cleaned
+                .replacingOccurrences(of: "short-sleeve", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: "short sleeve", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: "sleeveless", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: "cropped", with: "", options: .caseInsensitive)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cleaned.localizedCaseInsensitiveContains("long-sleeve") &&
+               !cleaned.localizedCaseInsensitiveContains("long sleeve") &&
+               !cleaned.localizedCaseInsensitiveContains("vest") {
+                cleaned = "long-sleeve \(cleaned)"
+            }
+        } else if hasOuter && (category == .top || category == .dress) {
+            // When worn under an outer layer, remove conflicting sleeve/shoulder descriptors
+            cleaned = cleaned
+                .replacingOccurrences(of: "sleeveless", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: "spaghetti-strap", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: "camisole", with: "top", options: .caseInsensitive)
+                .replacingOccurrences(of: "tank top", with: "top", options: .caseInsensitive)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        return cleaned
+    }
+    
+    /// Builds a clean phrase for an individual garment.
+    /// Prefers the LLM's dynamic `playgroundPrompt`; falls back to basic `colorName + name`.
+    private static func buildPhrase(for garment: GarmentPlaygroundAttributes, hasOuter: Bool) -> String {
+        if let direct = garment.playgroundPrompt?.trimmingCharacters(in: .whitespacesAndNewlines), !direct.isEmpty {
+            return sanitizePrompt(direct, category: garment.category, hasOuter: hasOuter)
+        }
+        
+        // Lightweight fallback when playgroundPrompt is nil
+        let fallback = "\(garment.colorName) \(garment.name)"
+        return sanitizePrompt(fallback, category: garment.category, hasOuter: hasOuter)
     }
 
     /// Converts mapped outfit attributes into native `ImagePlaygroundConcept` tokens.
     /// Directly compatible with `.imagePlaygroundSheet(concepts:sourceImage:)`.
     @available(iOS 18.2, macOS 15.2, *)
     var playgroundConcepts: [ImagePlaygroundConcept] {
-        var garmentPhrases: [String] = []
+        let hasOuter = garments.contains { $0.category == .outer }
+        let outerGarment = garments.first { $0.category == .outer }
+        let topGarment = garments.first { $0.category == .top }
+        let dressGarment = garments.first { $0.category == .dress }
+        let bottomGarment = garments.first { $0.category == .bottom }
         
+        // When an outer layer is present, lead with the outer worn over the inner top/dress
+        if let outer = outerGarment {
+            let outerPhrase = Self.buildPhrase(for: outer, hasOuter: true)
+            var segments: [String] = []
+            
+            if let top = topGarment {
+                let topPhrase = Self.buildPhrase(for: top, hasOuter: true)
+                segments.append("\(outerPhrase) over \(topPhrase)")
+            } else if let dress = dressGarment {
+                let dressPhrase = Self.buildPhrase(for: dress, hasOuter: true)
+                segments.append("\(outerPhrase) over \(dressPhrase)")
+            } else {
+                segments.append(outerPhrase)
+            }
+            
+            if let bottom = bottomGarment {
+                let bottomPhrase = Self.buildPhrase(for: bottom, hasOuter: true)
+                segments.append("with \(bottomPhrase)")
+            }
+            
+            let combined = segments.joined(separator: ", ")
+            return [.text("Wearing \(combined)")]
+        }
+        
+        var garmentPhrases: [String] = []
         for garment in garments {
-            let color = garment.colorName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let material = garment.fabricMaterial.trimmingCharacters(in: .whitespacesAndNewlines)
-            let rawName = garment.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            let name = Self.sanitizeGarmentName(rawName, intendedColor: color)
-            
-            var parts: [String] = []
-            if !color.isEmpty && color.lowercased() != "neutral" {
-                parts.append(color)
-            }
-            if !material.isEmpty && !name.localizedCaseInsensitiveContains(material) {
-                parts.append(material)
-            }
-            parts.append(name)
-            
-            let phrase = parts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            let phrase = Self.buildPhrase(for: garment, hasOuter: hasOuter)
             if !phrase.isEmpty {
                 garmentPhrases.append(phrase)
             }

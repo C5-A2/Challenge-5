@@ -6,42 +6,99 @@
 //
 
 import SwiftUI
+import PhotosUI
+import SwiftData
 
-/// Visual guidance view presenting essential Do(s) and Don't(s)
-/// before capturing side-body photo for posture and body profile analysis (C5-87).
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// Visual preparation view before capturing side-body photo for posture and body profile analysis (C5-87).
 struct SideBodyGuideView: View {
 
     // MARK: - Dependencies
 
     @Bindable var viewModel: BodyScanViewModel
+    var showsBackButton: Bool? = nil
+    var onBack: (() -> Void)? = nil
     var onDismiss: (() -> Void)? = nil
 
-    // MARK: - Environment
+    // MARK: - State & Environment
 
+    @Query private var userProfiles: [UserProfile]
+    @State private var selectedPickerItem: PhotosPickerItem? = nil
     @Environment(\.dismiss) private var dismiss
+
+    private var hasExistingData: Bool {
+        userProfiles.first?.bodyType != nil
+    }
+
+    private var shouldShowBackButton: Bool {
+        showsBackButton ?? !hasExistingData
+    }
 
     // MARK: - Body
 
     var body: some View {
         ZStack {
-            AppColors.canvasBackground
+            Color.white
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // Top Sheet Drag Indicator
+                Capsule()
+                    .fill(Color(hex: "#D6D1CA"))
+                    .frame(width: 38, height: 5)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
+
                 headerBar
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppDimensions.sectionSpacing) {
-                        doDontSection
+                    VStack(spacing: 20) {
+                        illustrationCard
+                            .padding(.top, 16)
+
+                        Text("For the most accurate results, stand sideways (90°) in a natural upright posture with fitted clothing and arms relaxed by your side.")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(Color(hex: "#1C1C1E"))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(2.5)
+                            .padding(.horizontal, 8)
+
+                        PhotosPicker(selection: $selectedPickerItem, matching: .images) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "photo.on.rectangle.angled")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text("Choose from Gallery")
+                                    .font(.system(size: 14, weight: .semibold))
+                            }
+                            .foregroundStyle(Color(hex: "#007AFF"))
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                        }
 
                         Spacer(minLength: 16)
                     }
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-                    .padding(.top, 12)
-                    .padding(.bottom, 24)
                 }
 
                 bottomActionBar
+            }
+        }
+        .onChange(of: selectedPickerItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self) {
+                    #if canImport(UIKit)
+                    if let uiImage = UIImage(data: data) {
+                        await MainActor.run {
+                            viewModel.setSidePhoto(uiImage)
+                            selectedPickerItem = nil
+                        }
+                    }
+                    #endif
+                }
             }
         }
     }
@@ -50,135 +107,102 @@ struct SideBodyGuideView: View {
 
     private var headerBar: some View {
         HStack {
-            CircularIconButton(systemName: "xmark") {
-                if let onDismiss = onDismiss {
-                    onDismiss()
-                } else {
-                    dismiss()
+            // Left: Back (<) Button — shown only when no existing data (first time)
+            if shouldShowBackButton {
+                Button {
+                    if let onBack = onBack {
+                        onBack()
+                    } else {
+                        viewModel.currentStep = .frontReview
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(Color(hex: "#1C1C1E"))
+                        .frame(width: 44, height: 44)
+                        .background(Color(hex: "#EFEFF0"))
+                        .clipShape(Circle())
                 }
+                .buttonStyle(.plain)
+            } else {
+                Color.clear
+                    .frame(width: 44, height: 44)
             }
 
             Spacer()
 
             Text("Body Type Scan (Side)")
-                .font(AppTypography.cardHeadline)
-                .foregroundStyle(AppColors.espressoTitle)
+                .font(.system(size: 16, weight: .bold).width(.expanded))
+                .foregroundStyle(Color(hex: "#1C1C1E"))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
 
             Spacer()
 
-            // Balance circular icon button on the left
-            Color.clear
-                .frame(width: 44, height: 44)
+            // Right: Close (X) Button
+            Button {
+                if let onDismiss = onDismiss {
+                    onDismiss()
+                } else {
+                    dismiss()
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                    .frame(width: 44, height: 44)
+                    .background(Color(hex: "#EFEFF0"))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
-    }
-
-    // MARK: - Do(s) & Don't(s) Section
-
-    private var doDontSection: some View {
-        VStack(spacing: 16) {
-            // Column Headers
-            HStack {
-                Text("Do(s)")
-                    .font(AppTypography.cardHeadline)
-                    .foregroundStyle(Color(hex: "#34C759"))
-                    .frame(maxWidth: .infinity)
-
-                Text("Don't(s)")
-                    .font(AppTypography.cardHeadline)
-                    .foregroundStyle(Color(hex: "#FF3B30"))
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.bottom, 4)
-
-            // Pair 1: Stand sideways directly vs tilted angle
-            HStack(alignment: .top, spacing: 16) {
-                GuideDoDontCard(
-                    image: guideImage(named: "side_body_angle_do", fallbackSystemName: "figure.walk.arrival"),
-                    label: "Face the Camera Sideways",
-                    isDo: true
-                )
-
-                GuideDoDontCard(
-                    image: guideImage(named: "side_body_angle_dont", fallbackSystemName: "person.crop.circle.badge.exclamationmark"),
-                    label: "Tilt or Angle Your Body",
-                    isDo: false
-                )
-            }
-
-            Divider()
-                .padding(.vertical, 4)
-
-            // Pair 2: Upright side posture vs slouched/hunched posture
-            HStack(alignment: .top, spacing: 16) {
-                GuideDoDontCard(
-                    image: guideImage(named: "side_body_posture_do", fallbackSystemName: "figure.stand"),
-                    label: "Upright Pose",
-                    isDo: true
-                )
-
-                GuideDoDontCard(
-                    image: guideImage(named: "side_body_posture_dont", fallbackSystemName: "figure.fall"),
-                    label: "Relaxed Pose",
-                    isDo: false
-                )
-            }
-
-            Divider()
-                .padding(.vertical, 4)
-
-            // Pair 3: Tight clothing against contrast wall vs baggy clothing with clutter
-            HStack(alignment: .top, spacing: 16) {
-                GuideDoDontCard(
-                    image: guideImage(named: "side_body_clothing_do", fallbackSystemName: "tshirt"),
-                    label: "Tight Clothing and Infront of Contrast Colored Wall",
-                    isDo: true
-                )
-
-                GuideDoDontCard(
-                    image: guideImage(named: "side_body_clothing_dont", fallbackSystemName: "shippingbox.fill"),
-                    label: "Baggy Clothing and Infront of Objects",
-                    isDo: false
-                )
-            }
-        }
-        .padding(AppDimensions.cardInternalPadding)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius)
-                .stroke(AppColors.subtleBorder, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.04), radius: 8, y: 3)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Bottom Action Bar
 
     private var bottomActionBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-
-            PrimaryPillButton(title: "Take Picture") {
+        VStack(spacing: 12) {
+            Button {
                 viewModel.currentStep = .sideCamera
                 viewModel.startCamera()
+            } label: {
+                Text("Take Photo")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(Color.black)
+                    .clipShape(Capsule())
             }
-            .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-            .padding(.vertical, 16)
+            .buttonStyle(.plain)
         }
-        .background(AppColors.cardBackground)
+        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+        .padding(.top, 8)
+        .padding(.bottom, 20)
     }
 
-    // MARK: - Asset Helper
+    // MARK: - Center Illustration Card
 
-    private func guideImage(named assetName: String, fallbackSystemName: String) -> Image {
-        #if canImport(UIKit)
-        if UIImage(named: assetName) != nil {
-            return Image(assetName)
+    private var illustrationCard: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: .black.opacity(0.07), radius: 16, x: 0, y: 4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.black.opacity(0.04), lineWidth: 1)
+                )
+
+            Image("bodyside")
+                .renderingMode(.original)
+                .resizable()
+                .scaledToFit()
+                .padding(28)
         }
-        #endif
-        return Image(systemName: fallbackSystemName)
+        .aspectRatio(1.0, contentMode: .fit)
+        .frame(maxWidth: .infinity)
     }
 }
 

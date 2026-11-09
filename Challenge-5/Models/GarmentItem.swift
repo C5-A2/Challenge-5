@@ -24,6 +24,7 @@ final class GarmentItem {
     var colorName: String                   // e.g. "Burgundy red"
     var hexColor: String                    // e.g. "#800020"
     var rationale: String = ""              // Explains why this specific garment cut works on user's body silhouette
+    var playgroundPrompt: String? = nil     // Direct visual prompt for Apple Image Playground
 
     /// The look this garment belongs to. Lets the store flow read the look image for cropping.
     var outfitLook: OutfitLook?
@@ -36,7 +37,8 @@ final class GarmentItem {
         material: String,
         colorName: String,
         hexColor: String,
-        rationale: String = ""
+        rationale: String = "",
+        playgroundPrompt: String? = nil
     ) {
         self.category = category
         self.name = name
@@ -44,6 +46,7 @@ final class GarmentItem {
         self.colorName = colorName
         self.hexColor = hexColor
         self.rationale = rationale
+        self.playgroundPrompt = playgroundPrompt
     }
 }
 
@@ -68,8 +71,8 @@ nonisolated enum GarmentCategory: String, Codable, CaseIterable, Identifiable, S
     /// Words in an AI category label (or garment name) that point to each category.
     /// Dress is checked first, so "Shirt Dress" or "Coat Dress" is read as a dress.
     private static let generatedLabelKeywords: [(category: GarmentCategory, keywords: [String])] = [
-        (.dress, ["dress", "jumpsuit", "gown", "romper", "playsuit", "one-piece"]),
-        (.outer, ["outer", "jacket", "coat", "blazer", "cardigan", "bomber", "parka", "trench"]),
+        (.dress, ["dress", "jumpsuit", "gown", "romper", "playsuit", "one-piece", "swimsuit", "monokini"]),
+        (.outer, ["outer", "jacket", "coat", "blazer", "cardigan", "bomber", "parka", "trench", "cover-up", "kimono"]),
         (.bottom, ["bottom", "pants", "trousers", "jeans", "skirt", "shorts", "chinos", "culottes", "leggings"]),
         (.top, ["top", "inner", "shirt", "blouse", "tee", "polo", "knit", "sweater", "tank", "camisole", "turtleneck"])
     ]

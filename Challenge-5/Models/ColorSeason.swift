@@ -846,33 +846,93 @@ public enum ColorSeason: String, Codable, CaseIterable, Identifiable, Sendable {
 
     // MARK: - Color Season Wheel Palette
 
-    /// 12 chromatic hex color wedges rendered on the ColorSeasonWheelView poster.
+    /// 20 chromatic hex color wedges rendered clockwise from 12 o'clock on the ColorSeasonWheelView & ProfileSeasonRingAvatarView.
     public var wheelHexColors: [String] {
         switch self {
         case .brightSpring:
-            return ["#F2F0EB", "#FFD662", "#F2AB46", "#B93A32", "#E55982", "#DA3D58", "#CC4385", "#005A92", "#58C9D4", "#008786", "#9BB53E", "#227949"]
+            return [
+                "#F2F0EB", "#005A92", "#2E5283", "#3A5589", "#273C76",
+                "#802A50", "#B93A32", "#CC4385", "#E55982", "#F2AB46",
+                "#FFD662", "#C6E67A", "#008786", "#227949", "#1F5129",
+                "#4D4C47", "#82776B", "#CBC3B4", "#ECDDBE", "#F0EADA"
+            ]
         case .trueSpring:
-            return ["#F3E5C8", "#FAD055", "#F6C345", "#ECA349", "#EA6759", "#DD3848", "#F97272", "#99B9DD", "#4F84C4", "#1E3F66", "#199B65", "#C9E37A"]
+            return [
+                "#F3E5C8", "#C9E37A", "#9AA639", "#3FAD67", "#156D3F",
+                "#1E3F66", "#0061A3", "#4F84C4", "#99B9DD", "#F97272",
+                "#EA6759", "#F0A83B", "#FAD055", "#704F3B", "#40342B",
+                "#8F7D66", "#BEA987", "#BD9865", "#E0B589", "#F2D1A0"
+            ]
         case .lightSpring:
-            return ["#F3E5C8", "#FAD055", "#ECA349", "#E9897E", "#F97272", "#DD3848", "#99B9DD", "#4F84C4", "#70C68E", "#3FAD67", "#B3CE50", "#55C6A9"]
+            return [
+                "#F4E2C7", "#4B9E5A", "#33B1C5", "#009973", "#199B65",
+                "#3D5B58", "#19474A", "#1A528F", "#5D81BD", "#93B2E0",
+                "#F89B93", "#EA5C6B", "#E6798E", "#E55982", "#BD3950",
+                "#967C7F", "#887B75", "#696256", "#F8D397", "#E3DACB"
+            ]
         case .lightSummer:
-            return ["#E7E5D9", "#F4B0BD", "#D994A7", "#02B694", "#38AECC", "#35619E", "#967C7F", "#FF8E94", "#8FA0B0", "#7B8AA4", "#B8D8C8", "#BBC5DC"]
+            return [
+                "#F4E2C7", "#2A685D", "#179E75", "#269E9F", "#38AECC",
+                "#63DBBF", "#93B2E0", "#5D81BD", "#1A528F", "#BD3950",
+                "#E45B8F", "#F56C73", "#FF8E94", "#F4B0BD", "#967C7F",
+                "#827D77", "#6B5655", "#A99C94", "#C2BCAC", "#D7D1C1"
+            ]
         case .trueSummer:
-            return ["#DAD9CB", "#D994A7", "#7F86BD", "#39A17E", "#625955", "#8FA0B0", "#7B8AA4", "#454348", "#A08D94", "#B7ADAD", "#C6C6C6", "#292F50"]
+            return [
+                "#DAD9CB", "#CE7290", "#BA456B", "#39385F", "#625D91",
+                "#A4ACD4", "#8FA0B0", "#9EB5B3", "#81BDA4", "#3084A6",
+                "#21667D", "#226B62", "#15545C", "#4E535A", "#625955",
+                "#76636C", "#A08D94", "#B7ADAD", "#BDB7B2", "#D2C9C0"
+            ]
         case .softSummer:
-            return ["#DED6C8", "#F3C6C3", "#5C9DA3", "#8BBF9A", "#34394D", "#9A908D", "#766762", "#AEB4B2", "#696F6D", "#827E80", "#ECA1A7", "#5B585B"]
+            return [
+                "#D9DCD1", "#CEC68A", "#93414F", "#854A5D", "#E6878E",
+                "#C98095", "#F3C6C3", "#A9ADC2", "#777CA6", "#34394D",
+                "#315548", "#8BBF9A", "#5C9DA3", "#426B74", "#696F6D",
+                "#5B585B", "#3F3D3D", "#766762", "#9A908D", "#BDB3AB"
+            ]
         case .softAutumn:
-            return ["#F0ECD7", "#E59B90", "#ACAD8A", "#507DA7", "#865E4D", "#C3BEAC", "#B9B69A", "#827D63", "#969777", "#9D736D", "#936152", "#55574A"]
+            return [
+                "#F0ECD7", "#F9C1C5", "#E59B90", "#D96F79", "#BE6263",
+                "#762A3A", "#3D5B58", "#417D6D", "#8DC3B6", "#507DA7",
+                "#254655", "#573432", "#865E4D", "#9D736D", "#827D63",
+                "#969777", "#ACAD8A", "#C3BEAC", "#DCD6C7", "#E1DCCB"
+            ]
         case .trueAutumn:
-            return ["#E6DCC5", "#DF793D", "#9BA16A", "#087D87", "#49312D", "#F4E1AD", "#E1CA94", "#8F7D66", "#6B6151", "#E7AE91", "#D99A7D", "#414438"]
+            return [
+                "#E6DCC5", "#55B0BB", "#216D6B", "#19474A", "#6B6151",
+                "#6A592A", "#838873", "#9BA16A", "#D99A7D", "#F99F91",
+                "#DF793D", "#BF4C3A", "#A82F40", "#592A37", "#49312D",
+                "#414438", "#A36A5E", "#E1CA94", "#CEC5B2", "#DFD0BB"
+            ]
         case .darkAutumn:
-            return ["#E4D8C7", "#AD8E50", "#C65D53", "#105448", "#5B5448", "#EBD3AD", "#F0D0AE", "#C6A585", "#918B85", "#AB9785", "#D7B066", "#514C50"]
+            return [
+                "#E4D8C7", "#283D53", "#105448", "#4D9E9B", "#9C8F4F",
+                "#D6A0C3", "#A0467C", "#7C3940", "#C65D53", "#B5745B",
+                "#D7B066", "#AD8E50", "#99632D", "#5F523B", "#5B5448",
+                "#918B85", "#AB9785", "#C6A585", "#F0D0AE", "#EBD3AD"
+            ]
         case .darkWinter:
-            return ["#F2F5FC", "#D05776", "#007257", "#147BA4", "#29292B", "#F0E69C", "#EBCDD4", "#B7E4D6", "#B3DDE8", "#B8B5D0", "#F58DA1", "#6D696A"]
+            return [
+                "#F2F5FC", "#B3DDE8", "#147BA4", "#28688D", "#3EA38F",
+                "#194C47", "#862336", "#9E253A", "#B51D3D", "#CF3566",
+                "#F58DA1", "#EBCDD4", "#B184B7", "#633F78", "#252633",
+                "#29292B", "#6D696A", "#9D9D9B", "#C9C3BA", "#DEDDD7"
+            ]
         case .trueWinter:
-            return ["#EEF1FF", "#B72F75", "#009B8E", "#4B61A4", "#292F50", "#F2D5DF", "#F0E99A", "#B8D8C8", "#B1E4E9", "#BBC5DC", "#E9B9D9", "#EDA0CC"]
+            return [
+                "#EEF1FF", "#F0E99A", "#252940", "#514071", "#62295F",
+                "#8F2E70", "#B72F75", "#D7659F", "#A75A98", "#EDA0CC",
+                "#7184C1", "#B1E4E9", "#08736C", "#2D6F8E", "#233F7E",
+                "#292F50", "#382B2A", "#706E6D", "#D1D0C5", "#E3E3DB"
+            ]
         case .brightWinter:
-            return ["#F3F8FF", "#D74770", "#009697", "#38539D", "#2C3043", "#F2E7B0", "#F5D0D1", "#B8E2DC", "#F2D5E5", "#BFB3CA", "#EC898D", "#858180"]
+            return [
+                "#F3F8FF", "#F2D5E5", "#F5D0D1", "#EC898D", "#D74770",
+                "#D03168", "#C63F87", "#762744", "#737DB7", "#009697",
+                "#0085B8", "#38539D", "#303F82", "#2C3043", "#26262B",
+                "#343636", "#4E4B50", "#747273", "#858180", "#ADA99B"
+            ]
         }
     }
 

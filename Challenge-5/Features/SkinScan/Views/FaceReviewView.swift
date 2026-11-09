@@ -130,15 +130,45 @@ struct FaceReviewView: View {
 
                 Spacer()
 
-                Text("Tap each to confirm")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.mutedCaption)
+                if viewModel.isPhotoValidating {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Verifying photo...")
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.mutedCaption)
+                    }
+                } else {
+                    Text("Auto-verified • Tap to adjust")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.mutedCaption)
+                }
+            }
+
+            if let validationMessage = viewModel.reviewValidationMessage, !viewModel.isPhotoValidating {
+                let allPassed = viewModel.isBareFaceConfirmed && viewModel.isLightingConfirmed && viewModel.isDirectAngleConfirmed
+                HStack(spacing: 8) {
+                    Image(systemName: allPassed ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(allPassed ? Color.green : Color.orange)
+
+                    Text(validationMessage)
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.espressoTitle)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background((allPassed ? Color.green : Color.orange).opacity(0.10))
+                .clipShape(RoundedRectangle(cornerRadius: AppDimensions.chipCornerRadius))
             }
 
             HStack(spacing: 12) {
-                // Item 1: Bare Face
+                // Item 1: Bare Face & Uncovered
                 checkBadge(
-                    title: "Bare Face",
+                    title: "Bare & Uncovered",
                     iconName: "face.smiling",
                     isConfirmed: viewModel.isBareFaceConfirmed
                 ) {
@@ -149,7 +179,7 @@ struct FaceReviewView: View {
 
                 // Item 2: Optimal Lighting
                 checkBadge(
-                    title: "Natural Light",
+                    title: "Bright Daylight",
                     iconName: "sun.max.fill",
                     isConfirmed: viewModel.isLightingConfirmed
                 ) {
@@ -160,7 +190,7 @@ struct FaceReviewView: View {
 
                 // Item 3: Direct Angle
                 checkBadge(
-                    title: "Direct Angle",
+                    title: "Eye-Level Direct",
                     iconName: "person.fill.viewfinder",
                     isConfirmed: viewModel.isDirectAngleConfirmed
                 ) {

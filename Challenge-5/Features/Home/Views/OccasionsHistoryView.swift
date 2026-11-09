@@ -213,12 +213,7 @@ struct OccasionsHistoryView: View {
     
     private func deleteOccasion(_ occasion: OccasionItem) {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-            modelContext.delete(occasion)
-            do {
-                try modelContext.save()
-            } catch {
-                print("OccasionsHistoryView: Failed to delete occasion: \(error.localizedDescription)")
-            }
+            occasion.deletePreservingBookmarkedLooks(in: modelContext)
         }
     }
 }

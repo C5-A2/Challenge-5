@@ -38,7 +38,7 @@ public final class LibraryViewModel {
     
     // MARK: - Initializer
     
-    public init(initialLooks: [SavedLookItem] = SavedLookItem.samples) {
+    public init(initialLooks: [SavedLookItem] = []) {
         self.savedLooks = initialLooks
     }
     
@@ -172,23 +172,16 @@ public final class LibraryViewModel {
     }
     
     /// Loads saved looks (newest first) through `SavedLookStoring`.
-    /// Keeps the sample looks when nothing is saved yet (Lofi testing).
     func loadSavedLooks(using storage: any SavedLookStoring) {
         savedLookStorage = storage
         do {
             let fetched = try storage.fetchSavedLooks()
-            // Looks were shown from storage before, so an empty fetch means all were unsaved.
-            let didShowStoredLooks = !outfitLooksByID.isEmpty
             outfitLooksByID = Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0) })
-            if fetched.isEmpty && didShowStoredLooks {
-                self.savedLooks = []
-            } else if !fetched.isEmpty {
-                self.savedLooks = fetched.enumerated().map { index, outfitLook in
-                    SavedLookItem(
-                        outfitLook: outfitLook,
-                        cardHeightRatio: index.isMultiple(of: 2) ? 1.5 : 1.2
-                    )
-                }
+            self.savedLooks = fetched.enumerated().map { index, outfitLook in
+                SavedLookItem(
+                    outfitLook: outfitLook,
+                    cardHeightRatio: index.isMultiple(of: 2) ? 1.5 : 1.2
+                )
             }
         } catch {
             print("Failed to fetch saved looks from SwiftData: \(error)")

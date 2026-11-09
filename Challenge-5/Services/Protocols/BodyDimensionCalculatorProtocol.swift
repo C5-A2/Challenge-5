@@ -86,8 +86,24 @@ public struct CalculatedBodyDimensions: Sendable, Equatable {
     public let hipDepthCm: Double
 
     public let torsoLengthCm: Double
+    public let shoulderToWaistCm: Double
     public let torsoToHeightRatio: Double
     public let pixelsPerCm: Double
+
+    public let frontChestY: Double
+    public let frontWaistY: Double
+    public let frontHipY: Double
+    public let sideChestY: Double
+    public let sideWaistY: Double
+    public let sideHipY: Double
+
+    public let frontChestSlice: SliceExtractionResult?
+    public let frontWaistSlice: SliceExtractionResult?
+    public let frontHipSlice: SliceExtractionResult?
+    public let sideChestSlice: SliceExtractionResult?
+    public let sideWaistSlice: SliceExtractionResult?
+    public let sideHipSlice: SliceExtractionResult?
+
     public let warnings: [String]
 
     public init(
@@ -102,8 +118,21 @@ public struct CalculatedBodyDimensions: Sendable, Equatable {
         hipWidthCm: Double,
         hipDepthCm: Double,
         torsoLengthCm: Double,
+        shoulderToWaistCm: Double = 0.0,
         torsoToHeightRatio: Double,
         pixelsPerCm: Double,
+        frontChestY: Double = 0.30,
+        frontWaistY: Double = 0.42,
+        frontHipY: Double = 0.54,
+        sideChestY: Double = 0.30,
+        sideWaistY: Double = 0.42,
+        sideHipY: Double = 0.54,
+        frontChestSlice: SliceExtractionResult? = nil,
+        frontWaistSlice: SliceExtractionResult? = nil,
+        frontHipSlice: SliceExtractionResult? = nil,
+        sideChestSlice: SliceExtractionResult? = nil,
+        sideWaistSlice: SliceExtractionResult? = nil,
+        sideHipSlice: SliceExtractionResult? = nil,
         warnings: [String] = []
     ) {
         self.shoulderWidthCm = shoulderWidthCm
@@ -117,8 +146,21 @@ public struct CalculatedBodyDimensions: Sendable, Equatable {
         self.hipWidthCm = hipWidthCm
         self.hipDepthCm = hipDepthCm
         self.torsoLengthCm = torsoLengthCm
+        self.shoulderToWaistCm = shoulderToWaistCm
         self.torsoToHeightRatio = torsoToHeightRatio
         self.pixelsPerCm = pixelsPerCm
+        self.frontChestY = frontChestY
+        self.frontWaistY = frontWaistY
+        self.frontHipY = frontHipY
+        self.sideChestY = sideChestY
+        self.sideWaistY = sideWaistY
+        self.sideHipY = sideHipY
+        self.frontChestSlice = frontChestSlice
+        self.frontWaistSlice = frontWaistSlice
+        self.frontHipSlice = frontHipSlice
+        self.sideChestSlice = sideChestSlice
+        self.sideWaistSlice = sideWaistSlice
+        self.sideHipSlice = sideHipSlice
         self.warnings = warnings
     }
 }

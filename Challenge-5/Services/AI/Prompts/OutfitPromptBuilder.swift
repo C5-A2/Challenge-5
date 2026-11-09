@@ -365,7 +365,9 @@ struct OutfitPromptBuilder: Sendable {
         let hasReference = hasReferenceImages(occasion)
         let title = archetype.title(hasReference: hasReference, hasVision: !occasion.visions.isEmpty)
 
+        // The occasion and dresscode come first: every look direction works inside them.
         var sections: [String] = [
+            occasionSection(for: occasion),
             """
             LOOK DIRECTION: \(title.uppercased())
             \(archetypeBrief(archetype, occasion: occasion, hasReference: hasReference))
@@ -379,8 +381,7 @@ struct OutfitPromptBuilder: Sendable {
             """
         ]
 
-        // The occasion, its dresscode and the Indonesian setting apply to every look.
-        sections.append(occasionSection(for: occasion))
+        // The Indonesian setting and a modern style apply to every look.
         sections.append(Self.indonesiaSetting)
         sections.append(Self.currentTrends)
         if let note = occasion.customNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
@@ -396,7 +397,7 @@ struct OutfitPromptBuilder: Sendable {
         if let bodySection = bodySection(for: archetype, profile: profile) {
             sections.append(bodySection)
         }
-        if let colorSection = colorSection(for: archetype, profile: profile, occasion: occasion) {
+        if let colorSection = colorSection(for: archetype, lookIndex: lookIndex, profile: profile, occasion: occasion, hasReference: hasReference) {
             sections.append(colorSection)
         }
         if let previousSection = previousLooksSection(previousLooks) {
@@ -428,11 +429,12 @@ struct OutfitPromptBuilder: Sendable {
     /// (style visions, body rules) repeats "tailored" and "structured" a lot, and small models copy them.
     /// No concrete example names are given, because the model tends to copy examples too.
     private static let garmentNamingRule = """
-    GARMENT NAMES:
-    - Write each "name" as [cut or detail] + [garment type]. The cut or detail is the neckline, collar, sleeve, closure, waist or silhouette that makes the piece specific.
+    GARMENT NAMES & VISUAL PROMPTS:
+    - Write each "name" as a short phrase: the cut or detail, then the garment type (no "+" sign). The cut or detail is the neckline, collar, sleeve, closure, waist or silhouette that makes the piece specific.
     - Do NOT put color words in the name; the color belongs only in "colorName".
     - Do NOT use vague words such as "tailored", "structured", "elegant", "classic", "chic", "sophisticated", "modern" or "refined" in the name. Describe the cut that creates that effect instead.
     - Every garment in this look must name a different kind of detail, and must not reuse a detail from the previous looks.
+    - "playgroundPrompt": A clean 3-5 word phrase for image generation: "[color] [fabric] [clothing noun]" (e.g. "warm ivory embroidered blouse", "charcoal wool coat", "navy straight trousers"). Never use "sheer", "translucent", "revealing", or body-part words. For Outer layers, always specify "long-sleeve".
     """
 
     // MARK: - Occasion & Setting
@@ -440,14 +442,24 @@ struct OutfitPromptBuilder: Sendable {
     /// Every look is for this occasion: the direction changes the style, never the event it's for.
     private func occasionSection(for occasion: OccasionItem) -> String {
         var lines = [
-            "OCCASION (every look is for this event): '\(occasion.title)'.",
-            "Think about where it happens, the time of day and what she will do there (standing, sitting, walking, dancing), and choose pieces that feel right and comfortable for it."
+            "OCCASION (every look is for this event, this matters most): '\(occasion.title)'.",
+            "First decide what this event needs: the likely venue, time of day, how formal it is, and what she will do there (standing, sitting, walking, eating, dancing). Then choose pieces a stylish woman would really wear to it. Do not overdress a casual event or underdress a formal one."
         ]
         lines.append("Date: \(occasion.date.formatted(date: .complete, time: .omitted)). Use the month to judge the weather in Indonesia (roughly October to April is the rainy season: humid, sudden rain; May to September is drier and still hot).")
         lines.append("Location: work out where this event takes place from the title and note (indoor with air conditioning like a mall, office, restaurant or hall; outdoors; beach or hill; on the road). Dress for that place: strong air conditioning allows a light layer, outdoors and beaches need the lightest, most breathable and easy-to-move-in pieces, rain risk means no delicate fabric that stains or sticks to the skin.")
         let cleanDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !cleanDresscode.isEmpty {
-            lines.append("Dresscode: \(cleanDresscode). Every piece must suit this level of formality.")
+        // Known occasions get a short guide, so the model doesn't have to guess what the title means.
+        let note = occasion.customNote ?? ""
+        if let guide = OccasionStyleBank.guide(forTitle: occasion.title, dresscode: cleanDresscode + " " + note) {
+            lines.append(guide.promptText)
+        }
+        if cleanDresscode.isEmpty {
+            lines.append("No dresscode given: infer the right formality from the occasion.")
+        } else {
+            lines.append("DRESSCODE (hard rule, overrides the look direction): \"\(cleanDresscode)\". Every piece must match this dresscode's formality, colors and style.")
+            if OutfitStructure(dresscode: cleanDresscode) != nil {
+                lines.append("The dresscode names the garment: this look MUST use exactly that garment type, with the length, fit and details it names (for example a \"mini\" length stays above the knee). Put those words in the garment \"name\".")
+            }
         }
         return lines.joined(separator: "\n")
     }
@@ -484,10 +496,10 @@ struct OutfitPromptBuilder: Sendable {
         switch archetype {
         case .referenceMatch:
             return hasReference
-                ? "Recreate the outfit in the user's reference photos as closely as possible: the same kind of pieces, layering, silhouette and color story. Change only what the dresscode or the color palette requires."
+                ? "Recreate the outfit in the user's reference photos as closely as possible: the same kind of pieces, layering, silhouette and color story. Change only what the occasion, the dresscode or the color palette requires."
                 : "Create the user's signature outfit for this occasion: timeless, well-cut pieces she would happily wear again."
         case .localTouch:
-            return "Bring in ONE Indonesian element in a modern way: a batik, tenun, songket, lurik or ikat piece, or a modern kebaya or kurung-inspired silhouette. Style it so it feels current and personal, not like a costume, and right for the occasion and dresscode."
+            return "Bring in ONE subtle Indonesian element in a modern way: one batik, tenun, lurik or ikat piece in a contemporary cut, or a modern kebaya-inspired top. Keep every other piece simple and current, so the whole outfit feels like today's street style, not like a traditional costume, and right for the occasion and dresscode."
         case .colorStory:
             return "Let color lead this outfit. Build one deliberate color story from her palette: tonal (shades of one color), monochrome, or two to three colors blocked with intention. Put her most flattering color closest to her face. The pieces can be simple; the colors make the look."
         case .surpriseMe:
@@ -573,7 +585,13 @@ struct OutfitPromptBuilder: Sendable {
 
     /// The seasonal palette. The color story look builds a deliberate palette;
     /// the surprise look may add one accent outside it.
-    private func colorSection(for archetype: OutfitArchetype, profile: UserProfile?, occasion: OccasionItem) -> String? {
+    private func colorSection(
+        for archetype: OutfitArchetype,
+        lookIndex: Int,
+        profile: UserProfile?,
+        occasion: OccasionItem,
+        hasReference: Bool
+    ) -> String? {
         guard let colorSeason = profile?.colorSeason else { return nil }
         let swatches = colorSeason.palette
         let neutrals = colorSeason.neutralSwatches
@@ -646,13 +664,24 @@ struct OutfitPromptBuilder: Sendable {
         """
     }
 
+    // MARK: - Outfit Pieces
+
+    /// How many garments the look has, and where an optional outer goes.
+    private func piecesRule(for structure: OutfitStructure) -> String {
+        let required = structure.categories.map { "\"\($0.rawValue)\"" }.joined(separator: ", ")
+        if structure.hasOptionalOuter {
+            return "The \"garments\" array must contain these categories in this order: \(required). If you add an outer layer, put ONE \"\(GarmentCategory.outer.rawValue)\" item first."
+        }
+        return "The \"garments\" array must contain exactly \(structure.categories.count) item(s), with these categories in this order: \(required)."
+    }
+
     // MARK: - Output Schema
 
     /// The JSON shape for this look's structure, with neutral placeholders (no example garments,
     /// which a small model tends to copy).
     private func outputSchema(lookIndex: Int, title: String) -> String {
         let garments = """
-                  {"category": "<Top, Bottom, Dress, or Outer>", "name": "<cut or detail + garment type>", "material": "<fabric>", "colorName": "<color name>", "hexColor": "<#RRGGBB>", "rationale": "<1-2 short sentences>"}
+                  {"category": "<Top, Bottom, Dress, or Outer>", "name": "<cut or detail + garment type>", "material": "<fabric>", "colorName": "<color name>", "hexColor": "<#RRGGBB>", "rationale": "<1-2 short sentences>", "playgroundPrompt": "<color> <fabric> <garment noun>"}
                   (1 piece if Dress, 2 pieces if Top + Bottom, or 3 only if an Outer is truly needed for cold AC/formal)
         """
         return """
@@ -680,7 +709,7 @@ struct OutfitPromptBuilder: Sendable {
         var lines: [String] = ["Create look \(lookIndex + 1) (\(title)) for: \(occasion.title)"]
 
         let cleanDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !cleanDresscode.isEmpty { lines.append("Dresscode: \(cleanDresscode)") }
+        if !cleanDresscode.isEmpty { lines.append("Dresscode (must follow exactly): \(cleanDresscode)") }
 
         if !occasion.visions.isEmpty {
             lines.append("I want to look more: \(occasion.visions.map(\.adjective).joined(separator: ", "))")

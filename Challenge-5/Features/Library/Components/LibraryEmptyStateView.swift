@@ -28,83 +28,37 @@ public struct LibraryEmptyStateView: View {
     // MARK: - Body
     
     public var body: some View {
-        VStack(spacing: 20) {
-            Spacer(minLength: 40)
+        VStack(spacing: 0) {
+            // Magazine / Lookbook Artwork from Assets
+            Image("empty_library_card")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 220, height: 210)
             
-            // Stylized Bookmark Icon Container
-            ZStack {
-                Circle()
-                    .fill(AppColors.cardBackground)
-                    .frame(width: 88, height: 88)
-                    .overlay(
-                        Circle()
-                            .strokeBorder(AppColors.subtleBorder, lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.06), radius: 10, y: 5)
-                
-                Image(systemName: "bookmark")
-                    .font(.system(size: 34, weight: .light))
-                    .foregroundStyle(AppColors.espressoTitle.opacity(0.75))
-            }
-            .padding(.bottom, 8)
+            // 40 px spacing between image and headline
+            Spacer()
+                .frame(height: 40)
             
-            // Header & Description
-            VStack(spacing: 8) {
-                Text("No Saved Looks Yet")
-                    .font(AppTypography.sectionHeader)
-                    .foregroundStyle(AppColors.espressoTitle)
-                
-                Text("Looks you bookmark from your styling recommendations will appear here for future outfit inspiration.")
-                    .font(AppTypography.bodyRegular)
-                    .foregroundStyle(AppColors.mutedCaption)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .padding(.horizontal, 32)
-            }
+            // Header: Body SemiBold - SF Pro SemiBold 17 pt
+            Text("A little inspiration goes a long way.")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color(hex: "#2B231D"))
+                .multilineTextAlignment(.center)
             
-            // Action Buttons
-            VStack(spacing: 12) {
-                if let onAddSampleLooks {
-                    Button(action: onAddSampleLooks) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 14, weight: .semibold))
-                            Text("Load Sample Looks")
-                                .font(AppTypography.buttonLabel)
-                        }
-                        .foregroundStyle(AppColors.espressoTitle)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(
-                            Capsule()
-                                .fill(AppColors.cardBackground)
-                                .overlay(
-                                    Capsule()
-                                        .strokeBorder(AppColors.subtleBorder, lineWidth: 1)
-                                )
-                                .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-                
-                if let onExploreOccasions {
-                    Button(action: onExploreOccasions) {
-                        Text("Explore Occasions")
-                            .font(AppTypography.buttonLabel)
-                            .foregroundStyle(AppColors.espressoTitle)
-                            .underline()
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 4)
-                }
-            }
-            .padding(.top, 12)
+            // 6 px spacing between title and description
+            Spacer()
+                .frame(height: 6)
             
-            Spacer(minLength: 60)
+            // Description: Footnote Regular - SF Pro Regular 13 pt
+            Text("Add more Occasion and Explore different fashion aesthetics, discover new styles, also build a collection that reflects your personality.")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(Color(hex: "#7D746D"))
+                .multilineTextAlignment(.center)
+                .lineSpacing(3)
+                .padding(.horizontal, 24)
         }
-        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
     }
 }
 

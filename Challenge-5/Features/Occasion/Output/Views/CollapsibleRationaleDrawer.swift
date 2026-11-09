@@ -113,12 +113,14 @@ struct CollapsibleRationaleDrawer: View {
             if !viewModel.currentGarments.isEmpty {
                 ForEach(viewModel.currentGarments) { garment in
                     garmentCutRationaleCard(
+                        garment: garment,
                         garmentName: "\(garment.name) (\(garment.category.rawValue))",
                         rationale: !garment.rationale.isEmpty ? garment.rationale : (viewModel.currentLook?.fitRationale ?? "Specially selected to complement your body silhouette and balance proportions.")
                     )
                 }
             } else {
                 garmentCutRationaleCard(
+                    garment: nil,
                     garmentName: "AI Recommended Fit",
                     rationale: viewModel.currentLook?.fitRationale
                         ?? "The slim-fit polo with a sharp collar softens the broad shoulder line without adding upper bulk. Paired with straight-leg burgundy trousers, it draws the gaze downward to create a well-balanced silhouette."
@@ -195,21 +197,23 @@ struct CollapsibleRationaleDrawer: View {
         )
     }
 
-    private func garmentCutRationaleCard(garmentName: String, rationale: String) -> some View {
+    private func garmentCutRationaleCard(
+        garment: GarmentItem? = nil,
+        garmentName: String,
+        rationale: String
+    ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                blueWireframeIcon
-                    .frame(width: 48, height: 48)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(garmentName)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(AppColors.espressoTitle)
-                    
-                    Text("AI Recommended Fit")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color(hex: "#007AFF"))
+                if let garment {
+                    garmentThumbnail(for: garment)
+                } else {
+                    blueWireframeIcon
+                        .frame(width: 54, height: 54)
                 }
+                
+                Text(garmentName)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(AppColors.espressoTitle)
             }
             
             Text(rationale)
@@ -227,6 +231,78 @@ struct CollapsibleRationaleDrawer: View {
                         .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
                 )
         )
+    }
+
+    private func garmentThumbnail(for garment: GarmentItem) -> some View {
+        ZStack {
+            garmentImageView(for: garment)
+                .frame(width: 54, height: 54)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            
+            framingCornerBrackets
+                .frame(width: 44, height: 44)
+        }
+        .frame(width: 54, height: 54)
+        .background(Color(hex: "#7F8183"))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+    
+    private func garmentImageView(for garment: GarmentItem) -> some View {
+        Group {
+            if let cropImage = viewModel.garmentCropImages[garment.id] {
+                Image(decorative: cropImage, scale: 1)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(AppColors.cardBackground)
+            } else if garment.category == .top, let img = UIImage(named: "mock_garment_polo") {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+            } else if garment.category == .bottom, let img = UIImage(named: "mock_garment_pants") {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+            } else if let img = UIImage(named: "mock_garment_shoes") {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                ZStack {
+                    Color(hex: "#7F8183")
+                    Image(systemName: garment.category == .top ? "tshirt.fill" : "figure.walk")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+            }
+        }
+    }
+    
+    private var framingCornerBrackets: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let length: CGFloat = 7
+            
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: length))
+                path.addLine(to: CGPoint(x: 0, y: 0))
+                path.addLine(to: CGPoint(x: length, y: 0))
+                
+                path.move(to: CGPoint(x: w - length, y: 0))
+                path.addLine(to: CGPoint(x: w, y: 0))
+                path.addLine(to: CGPoint(x: w, y: length))
+                
+                path.move(to: CGPoint(x: 0, y: h - length))
+                path.addLine(to: CGPoint(x: 0, y: h))
+                path.addLine(to: CGPoint(x: length, y: h))
+                
+                path.move(to: CGPoint(x: w - length, y: h))
+                path.addLine(to: CGPoint(x: w, y: h))
+                path.addLine(to: CGPoint(x: w, y: h - length))
+            }
+            .stroke(Color.white.opacity(0.95), lineWidth: 1.6)
+        }
     }
 
     private var blueWireframeIcon: some View {

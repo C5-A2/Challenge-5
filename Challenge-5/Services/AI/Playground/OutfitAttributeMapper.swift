@@ -40,7 +40,8 @@ enum OutfitAttributeMapper {
                 colorHex: cleanHex,
                 colorName: garment.colorName.isEmpty ? "Neutral" : garment.colorName,
                 fabricMaterial: garment.material.isEmpty ? "Premium Cotton Blend" : garment.material,
-                fitSilhouette: extractSilhouetteFromRationale(look.fitRationale, category: garment.category)
+                fitSilhouette: extractSilhouetteFromRationale(look.fitRationale, category: garment.category),
+                playgroundPrompt: garment.playgroundPrompt
             )
         }
         
@@ -77,6 +78,7 @@ enum OutfitAttributeMapper {
         let fabricMaterial: String?
         let colorName: String?
         let colorHex: String?
+        let playgroundPrompt: String?
     }
     
     private struct RawLLMLookDTO: Decodable {
@@ -185,7 +187,8 @@ enum OutfitAttributeMapper {
             colorHex: hex,
             colorName: dto.colorName ?? "Tailored Hue",
             fabricMaterial: dto.fabricMaterial ?? "Premium Fabric",
-            fitSilhouette: dto.cutDetail ?? "Refined tailored fit"
+            fitSilhouette: dto.cutDetail ?? "Refined tailored fit",
+            playgroundPrompt: dto.playgroundPrompt
         )
     }
     

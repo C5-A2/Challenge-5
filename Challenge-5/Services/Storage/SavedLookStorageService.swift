@@ -42,6 +42,11 @@ final class SavedLookStorageService: SavedLookStoring {
         }
         look.isBookmarked = isSaved
         look.savedAt = isSaved ? Date() : nil
+        if isSaved, let occasion = look.occasion {
+            look.cachedOccasionTitle = occasion.title
+            look.cachedOccasionDresscode = occasion.dresscode
+            look.cachedOccasionDate = occasion.date
+        }
         do {
             try modelContext.save()
         } catch {

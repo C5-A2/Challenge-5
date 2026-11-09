@@ -47,6 +47,9 @@ enum SavedLookSampleData {
             if isSaved {
                 look.savedAt = Date().addingTimeInterval(-Double(look.lookIndex) * savedIntervalSeconds)
             }
+            if look.lookImageData == nil {
+                look.lookImageData = OccasionOutputViewModel.makePlaceholderLookImageData(for: look.lookIndex)
+            }
             context.insert(look)
             occasion.generatedLooks.append(look)
         }

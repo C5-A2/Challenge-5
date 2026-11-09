@@ -28,7 +28,7 @@ final class OccasionItem {
     var createdAt: Date = Date()
     var isCompleted: Bool = false
     
-    @Relationship(deleteRule: .cascade, inverse: \OutfitLook.occasion)
+    @Relationship(deleteRule: .nullify, inverse: \OutfitLook.occasion)
     var generatedLooks: [OutfitLook] = []
     
     // MARK: - Computed Properties
@@ -59,6 +59,10 @@ final class OccasionItem {
     
     var formattedDateString: String {
         date.formatted(date: .abbreviated, time: .omitted)
+    }
+    
+    var dateFormatted: String {
+        formattedDateString
     }
     
     // MARK: - Initializers
@@ -154,5 +158,32 @@ extension OccasionItem {
                 visionKeywords: ["Mysterious", "Elegant"]
             )
         ]
+    }
+}
+
+// MARK: - Safe Deletion Preserving Saved Looks
+extension OccasionItem {
+    /// Deletes this occasion from the context while preserving any bookmarked looks in the Library.
+    ///
+    /// Non-bookmarked looks are permanently removed to prevent orphaned entities, while bookmarked
+    /// looks cache the occasion metadata and are detached so they remain visible in Library.
+    func deletePreservingBookmarkedLooks(in context: ModelContext) {
+        ReferenceImageStyleAnalyzer.shared.saveDescriptions([], forOccasionID: self.id)
+        
+        let looksToProcess = generatedLooks
+        for look in looksToProcess {
+            if look.isBookmarked {
+                look.cachedOccasionTitle = self.title
+                look.cachedOccasionDresscode = self.dresscode
+                look.cachedOccasionDate = self.date
+                look.occasion = nil
+            } else {
+                context.delete(look)
+            }
+        }
+        self.generatedLooks.removeAll()
+        
+        context.delete(self)
+        try? context.save()
     }
 }
