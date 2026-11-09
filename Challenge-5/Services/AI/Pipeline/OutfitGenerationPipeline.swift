@@ -496,8 +496,14 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let options = ParseOptions(colorSeason: colorSeason, structure: structure, allowsOffPaletteAccent: allowsOffPaletteAccent)
         var cleanJSON = jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Strip markdown code fences the model may have wrapped the JSON in
+        // Strip any <think>...</think> reasoning block (Qwen 3 / 3.5) and markdown code fences
+        if let thinkRegex = try? NSRegularExpression(pattern: "<think>[\\s\\S]*?</think>", options: []) {
+            let range = NSRange(cleanJSON.startIndex..<cleanJSON.endIndex, in: cleanJSON)
+            cleanJSON = thinkRegex.stringByReplacingMatches(in: cleanJSON, options: [], range: range, withTemplate: "")
+        }
         cleanJSON = cleanJSON
+            .replacingOccurrences(of: "<think>", with: "")
+            .replacingOccurrences(of: "</think>", with: "")
             .replacingOccurrences(of: "```json", with: "")
             .replacingOccurrences(of: "```", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)

@@ -328,15 +328,16 @@ struct OutfitPromptBuilder: Sendable {
             lookIndex: lookIndex
         )
 
-        // Qwen 2.5 uses ChatML tokens (<|im_start|> ... <|im_end|>)
+        // Qwen 2.5 / Qwen 3.5 uses ChatML tokens (<|im_start|> ... <|im_end|>)
         if LLMResource.isQwenActive {
+            let thinkingBypass = LLMResource.isQwen3Active ? "<think>\n\n</think>\n\n" : ""
             return """
             <|im_start|>system
             \(system)<|im_end|>
             <|im_start|>user
             \(user)<|im_end|>
             <|im_start|>assistant
-            \(OutfitPromptBuilder.assistantPrefill)
+            \(thinkingBypass)\(OutfitPromptBuilder.assistantPrefill)
             """
         }
 
