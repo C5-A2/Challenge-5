@@ -153,7 +153,7 @@ enum OutfitAttributeMapper {
         var garmentDescriptions: [String] = []
         
         for garment in garments {
-            let desc = "\(garment.colorName) (\(garment.colorHex)) \(garment.fabricMaterial) \(garment.name) with \(garment.fitSilhouette)"
+            let desc = "\(garment.colorName) color (\(garment.colorHex)) \(garment.fabricMaterial) \(garment.name) with \(garment.fitSilhouette)"
             garmentDescriptions.append(desc)
         }
         

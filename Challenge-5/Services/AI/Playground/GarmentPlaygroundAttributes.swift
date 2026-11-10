@@ -158,15 +158,37 @@ extension OutfitPlaygroundPackage {
         return cleaned
     }
     
+    /// Ensures the word "color" follows the garment's color name so literal swatch names
+    /// (e.g. "Sweet Corn", "Peach", "Tofu", "Lemonade") are interpreted as colors rather than printed motifs.
+    private static func ensureColorWord(in prompt: String, colorName: String) -> String {
+        let trimmedColor = colorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedColor.isEmpty else { return prompt }
+
+        let lowerWords = prompt.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+        if lowerWords.contains("color") || lowerWords.contains("colored") {
+            return prompt
+        }
+
+        if let range = prompt.range(of: trimmedColor, options: .caseInsensitive) {
+            let matchedColor = String(prompt[range])
+            return prompt.replacingCharacters(in: range, with: "\(matchedColor) color")
+        }
+
+        return "\(trimmedColor.lowercased()) color \(prompt)"
+    }
+
     /// Builds a clean phrase for an individual garment.
-    /// Prefers the LLM's dynamic `playgroundPrompt`; falls back to basic `colorName + name`.
+    /// Prefers the LLM's dynamic `playgroundPrompt`; falls back to basic `colorName + color + name`.
     private static func buildPhrase(for garment: GarmentPlaygroundAttributes, hasOuter: Bool) -> String {
         if let direct = garment.playgroundPrompt?.trimmingCharacters(in: .whitespacesAndNewlines), !direct.isEmpty {
-            return sanitizePrompt(direct, category: garment.category, hasOuter: hasOuter)
+            let withColorWord = ensureColorWord(in: direct, colorName: garment.colorName)
+            return sanitizePrompt(withColorWord, category: garment.category, hasOuter: hasOuter)
         }
         
         // Lightweight fallback when playgroundPrompt is nil
-        let fallback = "\(garment.colorName) \(garment.name)"
+        let fallback = "\(garment.colorName) color \(garment.name)"
         return sanitizePrompt(fallback, category: garment.category, hasOuter: hasOuter)
     }
 
