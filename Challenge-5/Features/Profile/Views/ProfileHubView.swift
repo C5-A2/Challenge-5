@@ -224,7 +224,7 @@ struct ProfileHubView: View {
 
     private var titleSection: some View {
         Text("Profile")
-            .font(.system(size: 34, weight: .bold))
+            .font(AppTypography.titleBold)
             .foregroundStyle(AppColors.espressoTitle)
             .padding(.top, 2)
     }
@@ -320,7 +320,7 @@ struct ProfileHubView: View {
                         handleRetakeTap()
                     } label: {
                         Text("Retake the photo")
-                            .font(.system(size: 16, weight: .medium))
+                            .font(AppTypography.calloutSemiBold)
                             .foregroundStyle(Color(hex: "#007AFF"))
                             .padding(.horizontal, 24)
                             .padding(.vertical, 10)
@@ -358,7 +358,7 @@ struct ProfileHubView: View {
                 .padding(.top, 6)
 
                 Text(seasonDisplayName(for: activeSeason))
-                    .font(.system(size: 21, weight: .bold).width(.expanded))
+                    .font(AppTypography.title2Bold.width(.expanded))
                     .foregroundStyle(AppColors.espressoTitle)
 
                 undertoneHighlightedText(for: activeSeason)
@@ -418,7 +418,7 @@ struct ProfileHubView: View {
     private func swatchSectionHeader(title: String, action: @escaping () -> Void) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 16, weight: .medium))
+                .font(AppTypography.calloutSemiBold)
                 .foregroundStyle(Color(hex: "#1C1C1E"))
             Spacer()
             Button(action: action) {
@@ -454,7 +454,7 @@ struct ProfileHubView: View {
                 .fill(Color(hex: normalizedHex))
 
             Text(normalizedHex)
-                .font(.system(size: 11, weight: .regular))
+                .font(AppTypography.caption2Regular)
                 .foregroundStyle(isDark ? Color.white.opacity(0.92) : Color(hex: "#2C2C2E"))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -508,7 +508,7 @@ struct ProfileHubView: View {
                     .padding(.vertical, 2)
 
                 Text(activeBodyType.rawValue)
-                    .font(.system(size: 21, weight: .bold).width(.expanded))
+                    .font(AppTypography.title2Bold.width(.expanded))
                     .foregroundStyle(AppColors.espressoTitle)
 
                 bodyTypeHighlightedText(for: activeBodyType)
