@@ -91,14 +91,15 @@ public struct SwipeToDeleteModifier: ViewModifier {
                     }
                 }
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 15, coordinateSpace: .local)
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
                 .onChanged { value in
                     // Disambiguate horizontal vs vertical intent
                     if isHorizontalDrag == nil {
-                        if abs(value.translation.height) > abs(value.translation.width) {
+                        // Jika tarikan vertikal lebih dominan, batalkan swipe horizontal agar scrollview bekerja
+                        if abs(value.translation.height) >= abs(value.translation.width) {
                             isHorizontalDrag = false
-                        } else if abs(value.translation.width) > 10 {
+                        } else if abs(value.translation.width) > 12 {
                             isHorizontalDrag = true
                         }
                     }
