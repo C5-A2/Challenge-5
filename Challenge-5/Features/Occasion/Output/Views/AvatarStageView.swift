@@ -13,6 +13,7 @@ struct AvatarStageView: View {
     var viewModel: OccasionOutputViewModel
     var onPlaygroundTap: (() -> Void)? = nil
     var isProcessingPlayground: Bool = false
+    var failedPlaygroundLookIDs: Set<UUID> = []
     
     @State private var dragOffset: CGFloat = 0
     
@@ -21,11 +22,13 @@ struct AvatarStageView: View {
     init(
         viewModel: OccasionOutputViewModel,
         onPlaygroundTap: (() -> Void)? = nil,
-        isProcessingPlayground: Bool = false
+        isProcessingPlayground: Bool = false,
+        failedPlaygroundLookIDs: Set<UUID> = []
     ) {
         self.viewModel = viewModel
         self.onPlaygroundTap = onPlaygroundTap
         self.isProcessingPlayground = isProcessingPlayground
+        self.failedPlaygroundLookIDs = failedPlaygroundLookIDs
     }
     
     
@@ -104,8 +107,8 @@ struct AvatarStageView: View {
             .opacity(opacity)
             .zIndex(Double(centerFactor))
             .onTapGesture {
-                let isUngenerated = index >= viewModel.looks.count 
-                    || viewModel.looks[index].lookImageData == nil 
+                let isUngenerated = index >= viewModel.looks.count
+                    || viewModel.looks[index].lookImageData == nil
                     || OccasionOutputViewModel.isPlaceholderData(viewModel.looks[index].lookImageData ?? Data(), lookIndex: viewModel.looks[index].lookIndex)
                 if isCenter && isUngenerated {
                     onPlaygroundTap?()
@@ -194,14 +197,16 @@ struct AvatarStageView: View {
                     }
                     .shadow(color: Color.black.opacity(0.10), radius: 6, y: 2)
                     
-                    // Tombol Generate
+                    // Tombol Generate / Regenerate (saat gagal atau dibatalkan tanpa hasil)
+                    let hasFailedAttempt = index < viewModel.looks.count
+                        && failedPlaygroundLookIDs.contains(viewModel.looks[index].id)
                     Button {
                         onPlaygroundTap?()
                     } label: {
                         HStack(spacing: 5) {
-                            Image(systemName: "wand.and.stars")
+                            Image(systemName: hasFailedAttempt ? "arrow.clockwise" : "wand.and.stars")
                                 .font(.system(size: 11, weight: .bold))
-                            Text("Generate Look")
+                            Text(hasFailedAttempt ? "Regenerate" : "Generate Look")
                                 .font(.system(size: 12, weight: .semibold))
                         }
                         .padding(.horizontal, 14)
