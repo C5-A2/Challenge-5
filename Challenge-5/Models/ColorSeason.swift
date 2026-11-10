@@ -185,6 +185,130 @@ public enum ColorSeason: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
+
+    /// Swatches of colors that do NOT suit this season (for the "Colors that don't suit you" UI).
+    public var colorsToAvoidPalette: [ColorSwatch] {
+        switch self {
+                case .brightSpring:
+            return [
+                ColorSwatch(name: "Dusty Mauve", hex: "#C28EB6"),
+                ColorSwatch(name: "Greyed Mauve", hex: "#BBA6AF"),
+                ColorSwatch(name: "Muddy Rose Brown", hex: "#957A76"),
+                ColorSwatch(name: "Muddy Olive Brown", hex: "#634D1F"),
+                ColorSwatch(name: "Muddy Brown", hex: "#7A4B1F"),
+                ColorSwatch(name: "Dusty Khaki", hex: "#DCD8A8"),
+                ColorSwatch(name: "Dusty Pink", hex: "#D9A6A1"),
+                ColorSwatch(name: "Dusty Periwinkle", hex: "#7C83BC"),
+                ColorSwatch(name: "Cool Grey Green", hex: "#6E7870"),
+                ColorSwatch(name: "Dusty Blue Grey", hex: "#9BAEB6")
+            ]
+        case .trueSpring:
+            return [
+                ColorSwatch(name: "Fuchsia", hex: "#C2188F"),
+                ColorSwatch(name: "Icy Blue", hex: "#CFE8F5"),
+                ColorSwatch(name: "Silver", hex: "#C0C0C0"),
+                ColorSwatch(name: "Cool Grey", hex: "#9A9EA3"),
+                ColorSwatch(name: "Taupe", hex: "#8B7D76"),
+                ColorSwatch(name: "Dusty Rose", hex: "#C4959B"),
+                ColorSwatch(name: "Stark Black", hex: "#000000"),
+                ColorSwatch(name: "Cool White", hex: "#F5F8FF")
+            ]
+        case .lightSpring:
+            return [
+                ColorSwatch(name: "Black", hex: "#000000"),
+                ColorSwatch(name: "Deep Navy", hex: "#0B1A3A"),
+                ColorSwatch(name: "Dark Chocolate", hex: "#3B2218"),
+                ColorSwatch(name: "Icy Blue", hex: "#CFE8F5"),
+                ColorSwatch(name: "Icy Lilac", hex: "#D8D4F2"),
+                ColorSwatch(name: "Greyish Taupe", hex: "#7D7571"),
+                ColorSwatch(name: "Muted Slate", hex: "#6F7780")
+            ]
+        case .lightSummer:
+            return [
+                ColorSwatch(name: "Black", hex: "#000000"),
+                ColorSwatch(name: "Deep Burgundy", hex: "#4A0E1E"),
+                ColorSwatch(name: "Dark Chocolate", hex: "#3B2218"),
+                ColorSwatch(name: "Orange", hex: "#F57C00"),
+                ColorSwatch(name: "Mustard", hex: "#C99A1B"),
+                ColorSwatch(name: "Copper", hex: "#B87333"),
+                ColorSwatch(name: "Heavy Saturated Red", hex: "#D00000")
+            ]
+        case .trueSummer:
+            return [
+                ColorSwatch(name: "Orange", hex: "#F57C00"),
+                ColorSwatch(name: "Yellow Gold", hex: "#E3A800"),
+                ColorSwatch(name: "Coral", hex: "#FF6F61"),
+                ColorSwatch(name: "Rust", hex: "#B7410E"),
+                ColorSwatch(name: "Neon Green", hex: "#39FF14"),
+                ColorSwatch(name: "Electric Blue", hex: "#0AA5FF")
+            ]
+        case .softSummer:
+            return [
+                ColorSwatch(name: "Electric Pink", hex: "#FF1493"),
+                ColorSwatch(name: "Vivid Yellow", hex: "#FFE600"),
+                ColorSwatch(name: "Stark Black", hex: "#000000"),
+                ColorSwatch(name: "Bright Orange", hex: "#FF6A00"),
+                ColorSwatch(name: "Vivid Red", hex: "#E10600")
+            ]
+        case .softAutumn:
+            return [
+                ColorSwatch(name: "Magenta", hex: "#E6007E"),
+                ColorSwatch(name: "Neon Green", hex: "#39FF14"),
+                ColorSwatch(name: "Royal Blue", hex: "#2342D6"),
+                ColorSwatch(name: "Icy Blue", hex: "#CFE8F5"),
+                ColorSwatch(name: "Pure Black", hex: "#000000"),
+                ColorSwatch(name: "Bright White", hex: "#FFFFFF")
+            ]
+        case .trueAutumn:
+            return [
+                ColorSwatch(name: "Icy Pink", hex: "#F7D6E6"),
+                ColorSwatch(name: "Royal Blue", hex: "#2342D6"),
+                ColorSwatch(name: "Silver", hex: "#C0C0C0"),
+                ColorSwatch(name: "Stark Black", hex: "#000000"),
+                ColorSwatch(name: "Cool White", hex: "#F5F8FF"),
+                ColorSwatch(name: "Fuchsia", hex: "#C2188F")
+            ]
+        case .darkAutumn:
+            return [
+                ColorSwatch(name: "Pastel Pink", hex: "#F8D8E4"),
+                ColorSwatch(name: "Pastel Blue", hex: "#CFE3F7"),
+                ColorSwatch(name: "Icy Blue", hex: "#CFE8F5"),
+                ColorSwatch(name: "Silver", hex: "#C0C0C0"),
+                ColorSwatch(name: "Muted Lavender", hex: "#B8A9C9"),
+                ColorSwatch(name: "Dusty Pink", hex: "#C9A0A6")
+            ]
+        case .darkWinter:
+            return [
+                ColorSwatch(name: "Orange", hex: "#F57C00"),
+                ColorSwatch(name: "Mustard", hex: "#C99A1B"),
+                ColorSwatch(name: "Rust", hex: "#B7410E"),
+                ColorSwatch(name: "Earthy Khaki", hex: "#A39A76"),
+                ColorSwatch(name: "Muted Olive", hex: "#7A7A55"),
+                ColorSwatch(name: "Pale Peach", hex: "#FBE0C8"),
+                ColorSwatch(name: "Warm Cream", hex: "#F6E7C1")
+            ]
+        case .trueWinter:
+            return [
+                ColorSwatch(name: "Orange", hex: "#F57C00"),
+                ColorSwatch(name: "Golden Yellow", hex: "#F2B800"),
+                ColorSwatch(name: "Peach", hex: "#FFCBA4"),
+                ColorSwatch(name: "Rust", hex: "#B7410E"),
+                ColorSwatch(name: "Brown", hex: "#8B5A2B"),
+                ColorSwatch(name: "Khaki", hex: "#B5A97A"),
+                ColorSwatch(name: "Taupe", hex: "#8B7D76")
+            ]
+        case .brightWinter:
+            return [
+                ColorSwatch(name: "Dusty Rose", hex: "#C4959B"),
+                ColorSwatch(name: "Sage Green", hex: "#9CAF88"),
+                ColorSwatch(name: "Muted Mauve", hex: "#A08D94"),
+                ColorSwatch(name: "Orange", hex: "#F57C00"),
+                ColorSwatch(name: "Mustard", hex: "#C99A1B"),
+                ColorSwatch(name: "Golden Brown", hex: "#996515")
+            ]
+        }
+    }
+
     /// Tonal dimensions (Hue, Value, Chroma) for this season.
     public var tonalCoordinates: TonalCoordinates {
         switch self {

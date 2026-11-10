@@ -44,6 +44,7 @@ struct ProfileHubView: View {
 
     @State private var selectedTab: ProfileTab = .colorSeason
     @State private var activeSheet: ActiveProfileSheet? = nil
+    @State private var activeColorSheet: ColorListSheet? = nil
     private let showManualProfileDebug: Bool = false
     @State private var isShowingDebugSheet: Bool = false
     @State private var selectedBodyPhotoSide: Int = 0 // 0 = Front, 1 = Side
@@ -76,6 +77,11 @@ struct ProfileHubView: View {
         case waist
         case hips
         case torso
+    }
+
+    private enum ColorListSheet: String, Identifiable {
+        case suits, avoid
+        var id: String { rawValue }
     }
 
     private enum ActiveProfileSheet: Identifiable {
@@ -373,18 +379,68 @@ struct ProfileHubView: View {
 
             // "Color suits you the most" Swatch Grid
             VStack(alignment: .leading, spacing: 12) {
-                Text("Color suits you the most")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color(hex: "#1C1C1E"))
-
-                let swatches = displayedGridSwatches(for: activeSeason)
-                let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
-
-                LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(Array(swatches.enumerated()), id: \.offset) { _, hex in
-                        colorSwatchSquare(hex: hex)
-                    }
+                swatchSectionHeader(title: "Color suits you the most") {
+                    activeColorSheet = .suits
                 }
+
+                swatchGrid(hexes: Array(displayedGridSwatches(for: activeSeason).prefix(8)))
+            }
+
+            // "Color doesn't suits you" Swatch Grid
+            VStack(alignment: .leading, spacing: 12) {
+                swatchSectionHeader(title: "Color doesn't suits you") {
+                    activeColorSheet = .avoid
+                }
+
+                swatchGrid(hexes: Array(avoidHexes(for: activeSeason).prefix(8)))
+            }
+        }
+        .sheet(item: $activeColorSheet) { sheet in
+            switch sheet {
+            case .suits:
+                ColorSwatchListSheet(
+                    title: "Color Suits you the Most",
+                    hexes: displayedGridSwatches(for: activeSeason)
+                )
+            case .avoid:
+                ColorSwatchListSheet(
+                    title: "Color Doesn't Suits you",
+                    hexes: avoidHexes(for: activeSeason)
+                )
+            }
+        }
+    }
+
+    private func avoidHexes(for season: ColorSeason) -> [String] {
+        season.colorsToAvoidPalette.map(\.hex)
+    }
+
+    private func swatchSectionHeader(title: String, action: @escaping () -> Void) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Color(hex: "#1C1C1E"))
+            Spacer()
+            Button(action: action) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                    .frame(width: 30, height: 30)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func swatchGrid(hexes: [String]) -> some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+        return LazyVGrid(columns: columns, spacing: 10) {
+            ForEach(Array(hexes.enumerated()), id: \.offset) { _, hex in
+                colorSwatchSquare(hex: hex)
             }
         }
     }
@@ -1174,4 +1230,68 @@ private struct BodyScanFlowHostView: View {
 #Preview {
     ProfileHubView()
         .modelContainer(for: [UserProfile.self], inMemory: true)
+}
+
+// MARK: - Color Swatch List Sheet
+
+/// Full-height sheet listing every swatch (4 per row) with a title and close button.
+struct ColorSwatchListSheet: View {
+    let title: String
+    let hexes: [String]
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold).width(.expanded))
+                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                Spacer()
+            }
+            .overlay(alignment: .trailing) {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color(hex: "#1C1C1E"))
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color(hex: "#EFEFF0")))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 20)
+
+            ScrollView(showsIndicators: false) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
+                    ForEach(Array(hexes.enumerated()), id: \.offset) { _, hex in
+                        let upper = hex.uppercased()
+                        ZStack {
+                            Rectangle().fill(Color(hex: upper))
+                            Text(upper)
+                                .font(.system(size: 10))
+                                .foregroundStyle(isDark(upper) ? Color.white.opacity(0.92) : Color(hex: "#2C2C2E"))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        .aspectRatio(1.0, contentMode: .fit)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 24)
+            }
+        }
+        .background(Color.white)
+        .presentationDragIndicator(.visible)
+        .environment(\.colorScheme, .light)
+    }
+
+    private func isDark(_ hex: String) -> Bool {
+        let c = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        guard c.count == 6, let v = UInt64(c, radix: 16) else { return false }
+        let r = Double((v >> 16) & 0xFF) / 255, g = Double((v >> 8) & 0xFF) / 255, b = Double(v & 0xFF) / 255
+        return 0.299 * r + 0.587 * g + 0.114 * b < 0.52
+    }
 }
