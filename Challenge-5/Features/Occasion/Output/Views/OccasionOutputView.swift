@@ -26,7 +26,8 @@ struct OccasionOutputView: View {
     @State private var isShowingPlayground: Bool = false
     @State private var playgroundPackage: OutfitPlaygroundPackage? = nil
     @State private var isProcessingPlayground: Bool = false
-    @State private var isVLMDebugExpanded: Bool = true
+    private let showVLMDebug: Bool = false
+    @State private var isVLMDebugExpanded: Bool = false
     
     
     var onDismiss: (() -> Void)? = nil
@@ -109,7 +110,7 @@ struct OccasionOutputView: View {
             .frame(maxWidth: .infinity)
             .clipped()
             
-            if !viewModel.isLoading && !isProcessingPlayground && viewModel.hasReferencePhotos {
+            if showVLMDebug && !viewModel.isLoading && !isProcessingPlayground && viewModel.hasReferencePhotos {
                 vlmDebugOverlay
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, 114)
@@ -342,7 +343,7 @@ struct OccasionOutputView: View {
                         .padding(.horizontal, 16)
                 }
 
-                if !isProcessingPlayground && !viewModel.vlmDebugDescriptions.isEmpty {
+                if showVLMDebug && !isProcessingPlayground && !viewModel.vlmDebugDescriptions.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 5) {
                             Image(systemName: "sparkles")

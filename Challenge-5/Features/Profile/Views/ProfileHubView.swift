@@ -44,6 +44,7 @@ struct ProfileHubView: View {
 
     @State private var selectedTab: ProfileTab = .colorSeason
     @State private var activeSheet: ActiveProfileSheet? = nil
+    private let showManualProfileDebug: Bool = false
     @State private var isShowingDebugSheet: Bool = false
     @State private var selectedBodyPhotoSide: Int = 0 // 0 = Front, 1 = Side
     @State private var showSkeleton: Bool = true
@@ -133,9 +134,11 @@ struct ProfileHubView: View {
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
                     .padding(.bottom, 12)
 
-                debugAutoFillSection
-                    .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-                    .padding(.bottom, 12)
+                if showManualProfileDebug {
+                    debugAutoFillSection
+                        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+                        .padding(.bottom, 12)
+                }
 
                 segmentedTabBar
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
