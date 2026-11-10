@@ -493,11 +493,21 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         structure: OutfitStructure? = nil,
         allowsOffPaletteAccent: Bool = false
     ) throws -> [OutfitLook] {
-        let options = ParseOptions(colorSeason: colorSeason, structure: structure, allowsOffPaletteAccent: allowsOffPaletteAccent)
+        let options = ParseOptions(
+            colorSeason: colorSeason,
+            structure: structure,
+            allowsOffPaletteAccent: allowsOffPaletteAccent
+        )
         var cleanJSON = jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Strip markdown code fences the model may have wrapped the JSON in
+        // Strip any <think>...</think> reasoning block (Qwen 3 / 3.5) and markdown code fences
+        if let thinkRegex = try? NSRegularExpression(pattern: "<think>[\\s\\S]*?</think>", options: []) {
+            let range = NSRange(cleanJSON.startIndex..<cleanJSON.endIndex, in: cleanJSON)
+            cleanJSON = thinkRegex.stringByReplacingMatches(in: cleanJSON, options: [], range: range, withTemplate: "")
+        }
         cleanJSON = cleanJSON
+            .replacingOccurrences(of: "<think>", with: "")
+            .replacingOccurrences(of: "</think>", with: "")
             .replacingOccurrences(of: "```json", with: "")
             .replacingOccurrences(of: "```", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -645,7 +655,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
         // Find all garment-like objects: { ... "category" ... }
         var garments: [GarmentItem] = []
-        let palette = options.colorSeason?.palette ?? []
+        let palette = options.colorSeason?.allSwatches ?? []
 
         var depth = 0
         var objStart: String.Index? = nil
@@ -685,7 +695,11 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                                     colorName: color.name,
                                     hexColor: color.hex,
                                     rationale: dto.rationale,
-                                    playgroundPrompt: dto.playgroundPrompt
+                                    playgroundPrompt: normalizePlaygroundPrompt(
+                                        dto.playgroundPrompt,
+                                        rawColorName: dto.colorName,
+                                        resolvedColorName: color.name
+                                    )
                                 )
                                 garments.append(garment)
                             }
@@ -736,6 +750,36 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         return outfit.sortedForOutfitDisplay()
     }
 
+    /// Syncs `playgroundPrompt` with the resolved swatch name and ensures the word "color" follows
+    /// the color name so Image Playground treats literal swatch names (e.g. "Sweet Corn") as colors.
+    private func normalizePlaygroundPrompt(_ rawPrompt: String?, rawColorName: String, resolvedColorName: String) -> String? {
+        guard var prompt = rawPrompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty else {
+            return nil
+        }
+        let cleanRaw = rawColorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanResolved = resolvedColorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanRaw.isEmpty, !cleanResolved.isEmpty,
+           cleanRaw.caseInsensitiveCompare(cleanResolved) != .orderedSame,
+           let range = prompt.range(of: cleanRaw, options: .caseInsensitive) {
+            prompt.replaceSubrange(range, with: cleanResolved.lowercased())
+        }
+        let lowerWords = prompt.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+        if !lowerWords.contains("color") && !lowerWords.contains("colored") {
+            if !cleanResolved.isEmpty, let range = prompt.range(of: cleanResolved, options: .caseInsensitive) {
+                let matched = String(prompt[range])
+                prompt.replaceSubrange(range, with: "\(matched) color")
+            } else if !cleanRaw.isEmpty, let range = prompt.range(of: cleanRaw, options: .caseInsensitive) {
+                let matched = String(prompt[range])
+                prompt.replaceSubrange(range, with: "\(matched) color")
+            } else if !cleanResolved.isEmpty {
+                prompt = "\(cleanResolved.lowercased()) color \(prompt)"
+            }
+        }
+        return prompt
+    }
+
     private func decodeLooks(from jsonString: String, options: ParseOptions) throws -> [OutfitLook] {
         guard let data = jsonString.data(using: .utf8) else {
             throw LLMError.invalidOutput("Unable to convert JSON string to UTF-8 data")
@@ -753,7 +797,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             throw LLMError.invalidOutput("Unable to decode looks from JSON")
         }
 
-        let palette = options.colorSeason?.palette ?? []
+        let palette = options.colorSeason?.allSwatches ?? []
         var looks: [OutfitLook] = []
         for lookDTO in lookDTOs {
             let look = OutfitLook(
@@ -783,7 +827,11 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                     colorName: resolvedColor.name,
                     hexColor: resolvedColor.hex,
                     rationale: gDTO.rationale,
-                    playgroundPrompt: gDTO.playgroundPrompt
+                    playgroundPrompt: normalizePlaygroundPrompt(
+                        gDTO.playgroundPrompt,
+                        rawColorName: gDTO.colorName,
+                        resolvedColorName: resolvedColor.name
+                    )
                 )
                 garments.append(garment)
             }
@@ -820,14 +868,25 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
 
         let lowerName = rawName.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        if !lowerName.isEmpty, let match = palette.first(where: {
-            let palName = $0.name.lowercased()
-            return palName == lowerName || palName.contains(lowerName) || lowerName.contains(palName)
-        }) {
-            return (match.name, match.hex)
+        if !lowerName.isEmpty, let exactNameMatch = palette.first(where: { $0.name.lowercased() == lowerName }) {
+            return (exactNameMatch.name, exactNameMatch.hex)
         }
 
         let rawColor = rgbComponents(fromHex: cleanHex)
+        if !lowerName.isEmpty {
+            let partialMatches = palette.filter {
+                let palName = $0.name.lowercased()
+                return palName.contains(lowerName) || lowerName.contains(palName)
+            }
+            if let rawColor, let closestPartial = partialMatches.min(by: { first, second in
+                colorDistance(rawColor, rgbComponents(fromHex: first.hex)) < colorDistance(rawColor, rgbComponents(fromHex: second.hex))
+            }) {
+                return (closestPartial.name, closestPartial.hex)
+            } else if let firstPartial = partialMatches.first {
+                return (firstPartial.name, firstPartial.hex)
+            }
+        }
+
         if allowsOffPalette, rawColor != nil {
             return (rawName, "#\(cleanHex)")
         }

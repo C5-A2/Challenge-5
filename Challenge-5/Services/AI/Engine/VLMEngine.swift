@@ -5,7 +5,10 @@
 //  Created by Bryan Samuel on 05/11/26.
 //
 
+import CoreGraphics
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 #if canImport(LlamaSwift) && !targetEnvironment(simulator)
 import LlamaSwift
 #endif
@@ -178,32 +181,36 @@ public actor VLMEngine {
             throw VLMEngineError.modelInitFailed
         }
 
-        // Clean context per inference pass to guarantee 0 past tokens in KV cache
+        // Reuse existing context across multi-photo batches to avoid Metal buffer fragmentation,
+        // or create a fresh one on the first pass.
+        let lctx: OpaquePointer
         if let existingContext = self.context {
-            llama_free(existingContext)
-            self.context = nil
+            lctx = existingContext
+        } else {
+            var contextParams = llama_context_default_params()
+            contextParams.n_ctx = 2048
+            contextParams.n_batch = 512
+
+            guard let freshContext = llama_init_from_model(model, contextParams) else {
+                throw VLMEngineError.contextInitFailed
+            }
+            self.context = freshContext
+            lctx = freshContext
         }
 
-        var contextParams = llama_context_default_params()
-        contextParams.n_ctx = 4096
-        contextParams.n_batch = 512
-
-        guard let freshContext = llama_init_from_model(model, contextParams) else {
-            throw VLMEngineError.contextInitFailed
-        }
-        self.context = freshContext
-        let lctx = freshContext
-
-        // Clear memory cache
+        // Clear KV cache so each photo starts with 0 past tokens
         if let mem = llama_get_memory(lctx) {
             llama_memory_seq_rm(mem, -1, -1, -1)
             llama_memory_clear(mem, true)
         }
 
-        // 1. Ingest image data buffer into mtmd bitmap
-        let bitmap: OpaquePointer? = data.withUnsafeBytes { rawPtr in
+        // 1. Downscale image for VLM vision encoder (max 672px = 24x24 image tokens max)
+        // to prevent ggml_vbuffer_tensor_alloc Metal OOM on high-resolution 1600px photos,
+        // then ingest into mtmd bitmap.
+        let vlmImageData = Self.downscaleForVLM(data: data, maxPixelSize: 672)
+        let bitmap: OpaquePointer? = vlmImageData.withUnsafeBytes { rawPtr in
             guard let baseAddr = rawPtr.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return nil }
-            let wrapper = mtmd_helper_bitmap_init_from_buf(mtmdCtx, baseAddr, data.count, false)
+            let wrapper = mtmd_helper_bitmap_init_from_buf(mtmdCtx, baseAddr, vlmImageData.count, false)
             return wrapper.bitmap
         }
 
@@ -219,10 +226,10 @@ public actor VLMEngine {
         You are an expert fashion stylist and visual analyst with deep knowledge of global, Asian, and Indonesian fashion aesthetics.
         Describe ONLY the clothing and outfit worn by the person in this photo in clear, concise natural English (2 to 4 sentences).
         Highlight:
-        - Specific garment pieces and cut names (e.g. crop top, halter top, camisole, blazer, suit jacket, cardigan, button-down shirt, wide-leg trousers, pleated skirt, tiered ruffle skirt, maxi skirt, batik blouse, kebaya, denim shorts).
+        - Specific garment pieces and cut names (e.g. crop top, halter top, camisole, blazer, suit jacket, cardigan, button-down shirt, wide-leg trousers, pleated skirt, tiered ruffle skirt, maxi skirt, batik blouse, batik shirt, batik dress, batik skirt, kebaya, denim shorts).
         - Fit and silhouette (e.g. relaxed, tailored, oversized, fitted, cropped).
-        - Fabrics and materials (e.g. linen, silk, denim, cotton poplin, lace, knitwear, chiffon, batik).
-        - Surface patterns (e.g. traditional Indonesian batik motif, floral, pinstripe, solid).
+        - Fabrics and materials (e.g. linen, silk, denim, cotton poplin, lace, knitwear, chiffon, batik fabric, tenun, songket).
+        - Surface patterns (e.g. traditional Indonesian batik motif, modern batik print, floral, pinstripe, solid). If any garment has Indonesian batik motifs (such as parang, kawung, mega mendung, truntum, or ornate batik patterns), explicitly name it as "batik" (e.g. "batik blouse", "batik motif", "batik skirt"). If a garment has no pattern, state "solid".
         - Prominent garment colors (ignore the room background and walls).
         - Overall aesthetic vibe.
 
@@ -308,5 +315,31 @@ public actor VLMEngine {
         let cleanText = outputText.trimmingCharacters(in: .whitespacesAndNewlines)
         return cleanText
         #endif
+    }
+
+    // MARK: - Image Preprocessing
+
+    /// Downscales high-resolution reference photo data so Qwen 2.5 VL's vision encoder stays under
+    /// safe Metal compute buffer limits (`maxPixelSize = 672` -> at most 24x24 = 576 image tokens).
+    private static func downscaleForVLM(data: Data, maxPixelSize: Int) -> Data {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return data }
+        let decodeOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, decodeOptions as CFDictionary) else {
+            return data
+        }
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else {
+            return data
+        }
+        let encodeOptions: [CFString: Any] = [
+            kCGImageDestinationLossyCompressionQuality: 0.85
+        ]
+        CGImageDestinationAddImage(destination, cgImage, encodeOptions as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { return data }
+        return output as Data
     }
 }

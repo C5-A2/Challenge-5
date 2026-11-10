@@ -938,106 +938,131 @@ public enum ColorSeason: String, Codable, CaseIterable, Identifiable, Sendable {
 
     // MARK: - Foundation / Neutral Palette Swatches
 
-    /// 5 foundation / neutral swatches used to ground the seasonal palette.
+    /// 6 foundation / neutral swatches used to ground the seasonal palette.
     public var neutralSwatches: [ColorSwatch] {
         switch self {
         case .brightSpring:
             return [
-                ColorSwatch(name: "Snow White", pantoneCode: "11-0602 TCX", hex: "#F2F0EB"),
-                ColorSwatch(name: "Vanilla Ice", pantoneCode: "11-0104 TCX", hex: "#F0EADA"),
-                ColorSwatch(name: "Rutabaga", pantoneCode: "12-0806 TCX", hex: "#ECDDBE"),
-                ColorSwatch(name: "Summer Sand", pantoneCode: "12-0908 TCX", hex: "#D6CBBA"),
-                ColorSwatch(name: "Brindle", pantoneCode: "18-1110 TCX", hex: "#82776B")
+                ColorSwatch(name: "Snow White", hex: "#F2F0EB"),
+                ColorSwatch(name: "Rutabaga", hex: "#ECDDBE"),
+                ColorSwatch(name: "Silver Lining", hex: "#BDB6AB"),
+                ColorSwatch(name: "Dark Navy", hex: "#17406B"),
+                ColorSwatch(name: "Chimera", hex: "#4D4C47"),
+                ColorSwatch(name: "Dark Charcoal", hex: "#3B3739")
             ]
         case .trueSpring:
             return [
-                ColorSwatch(name: "Vanilla", pantoneCode: "12-0712 TCX", hex: "#F3E5C8"),
-                ColorSwatch(name: "Sun Kiss", pantoneCode: "12-0807 TCX", hex: "#EBDBC3"),
-                ColorSwatch(name: "Desert Mist", pantoneCode: "14-1127 TCX", hex: "#E0B589"),
-                ColorSwatch(name: "Pale Gold", pantoneCode: "15-0927 TCX", hex: "#BD9865"),
-                ColorSwatch(name: "Dachshund", pantoneCode: "18-1033 TCX", hex: "#704F3B")
+                ColorSwatch(name: "Vanilla", hex: "#F3E5C8"),
+                ColorSwatch(name: "Warm Stone", hex: "#D3CAAF"),
+                ColorSwatch(name: "Golden Mist", hex: "#D5CD94"),
+                ColorSwatch(name: "Rich Warm Brown", hex: "#56352D"),
+                ColorSwatch(name: "Demitasse", hex: "#40342B"),
+                ColorSwatch(name: "Dark Olive Charcoal", hex: "#46483D")
             ]
         case .lightSpring:
             return [
-                ColorSwatch(name: "Vanilla", pantoneCode: "12-0712 TCX", hex: "#F3E5C8"),
-                ColorSwatch(name: "Golden Fleece", pantoneCode: "12-0822 TCX", hex: "#F2D1A0"),
-                ColorSwatch(name: "Desert Mist", pantoneCode: "14-1127 TCX", hex: "#E0B589"),
-                ColorSwatch(name: "Moonstone", pantoneCode: "14-1026 TCX", hex: "#BEA987"),
-                ColorSwatch(name: "Dachshund", pantoneCode: "18-1033 TCX", hex: "#704F3B")
+                ColorSwatch(name: "Shortbread", hex: "#F1DEC7"),
+                ColorSwatch(name: "Ancient Scroll", hex: "#CBC3B7"),
+                ColorSwatch(name: "Light Warm Sand", hex: "#D2CBAF"),
+                ColorSwatch(name: "Bungee Cord", hex: "#696256"),
+                ColorSwatch(name: "Muted Olive Gray", hex: "#696B62"),
+                ColorSwatch(name: "Soft Charcoal", hex: "#575358")
             ]
         case .lightSummer:
             return [
-                ColorSwatch(name: "Tofu", pantoneCode: "11-4801 TCX", hex: "#E7E5D9"),
-                ColorSwatch(name: "Bone White", pantoneCode: "12-0105 TCX", hex: "#D7D1C1"),
-                ColorSwatch(name: "Pelican", pantoneCode: "14-6305 TCX", hex: "#C2BCAC"),
-                ColorSwatch(name: "Atmosphere", pantoneCode: "16-1406 TCX", hex: "#A99C94"),
-                ColorSwatch(name: "Silent Storm", pantoneCode: "17-1508 TCX", hex: "#827D77")
+                ColorSwatch(name: "Tofu", hex: "#E7E5D9"),
+                ColorSwatch(name: "Light Ash Gray", hex: "#AFB3B6"),
+                ColorSwatch(name: "Shadow Gray", hex: "#BAA5A0"),
+                ColorSwatch(name: "Slate Blue", hex: "#4F677B"),
+                ColorSwatch(name: "Catawba Grape", hex: "#5C3B42"),
+                ColorSwatch(name: "Cool Charcoal", hex: "#5C5657")
             ]
         case .trueSummer:
             return [
-                ColorSwatch(name: "Light Gray", pantoneCode: "12-0404 TCX", hex: "#DAD9CB"),
-                ColorSwatch(name: "Pale Mist", pantoneCode: "12-0906 TCX", hex: "#D2C9C0"),
-                ColorSwatch(name: "Silver Cloud", pantoneCode: "15-4502 TCX", hex: "#BDB7B2"),
-                ColorSwatch(name: "Castor Gray", pantoneCode: "18-5203 TCX", hex: "#96918C"),
-                ColorSwatch(name: "Major Brown", pantoneCode: "19-0810 TCX", hex: "#625955")
+                ColorSwatch(name: "Light Gray", hex: "#DAD9CB"),
+                ColorSwatch(name: "Lunar Rock", hex: "#C6C6C6"),
+                ColorSwatch(name: "Soft Steel Blue", hex: "#A2B4C4"),
+                ColorSwatch(name: "Cool Navy", hex: "#284972"),
+                ColorSwatch(name: "Cool Plum Brown", hex: "#5F4B51"),
+                ColorSwatch(name: "Forged Iron", hex: "#454348")
             ]
         case .softSummer:
             return [
-                ColorSwatch(name: "Birch", pantoneCode: "13-0905 TCX", hex: "#DED6C8"),
-                ColorSwatch(name: "Fog", pantoneCode: "13-0401 TCX", hex: "#BDB3AB"),
-                ColorSwatch(name: "Pavement", pantoneCode: "16-1407 TCX", hex: "#9A908D"),
-                ColorSwatch(name: "French Roast", pantoneCode: "19-1012 TCX", hex: "#766762"),
-                ColorSwatch(name: "Lead Gray", pantoneCode: "19-4015 TCX", hex: "#5B585B")
+                ColorSwatch(name: "Icicle", hex: "#D9DCD1"),
+                ColorSwatch(name: "Chateau Gray", hex: "#BDB3AB"),
+                ColorSwatch(name: "Mirage Gray", hex: "#AEB4B2"),
+                ColorSwatch(name: "Iron", hex: "#766762"),
+                ColorSwatch(name: "Muted Espresso", hex: "#493F41"),
+                ColorSwatch(name: "Raven", hex: "#3F3D3D")
             ]
         case .softAutumn:
             return [
-                ColorSwatch(name: "Sweet Corn", pantoneCode: "11-0106 TCX", hex: "#F0ECD7"),
-                ColorSwatch(name: "Alabaster", pantoneCode: "12-0907 TCX", hex: "#E1DCCB"),
-                ColorSwatch(name: "Doeskin", pantoneCode: "14-1110 TCX", hex: "#DCD6C7"),
-                ColorSwatch(name: "Chinchilla", pantoneCode: "16-1108 TCX", hex: "#C3BEAC"),
-                ColorSwatch(name: "Carob Brown", pantoneCode: "18-1229 TCX", hex: "#865E4D")
+                ColorSwatch(name: "Sweet Corn", hex: "#F0ECD7"),
+                ColorSwatch(name: "Overcast", hex: "#C3BEAC"),
+                ColorSwatch(name: "Warm Camel", hex: "#CCA57F"),
+                ColorSwatch(name: "Olive Night", hex: "#514F3E"),
+                ColorSwatch(name: "Rum Raisin", hex: "#573432"),
+                ColorSwatch(name: "Warm Charcoal", hex: "#494743")
             ]
         case .trueAutumn:
             return [
-                ColorSwatch(name: "Seedpearl", pantoneCode: "12-0703 TCX", hex: "#E6DCC5"),
-                ColorSwatch(name: "Rugby Tan", pantoneCode: "13-1013 TCX", hex: "#DFD0BB"),
-                ColorSwatch(name: "Nougat", pantoneCode: "14-1014 TCX", hex: "#CEC5B2"),
-                ColorSwatch(name: "Apple Cinnamon", pantoneCode: "17-1028 TCX", hex: "#8F7D66"),
-                ColorSwatch(name: "Chicory Coffee", pantoneCode: "19-1419 TCX", hex: "#49312D")
+                ColorSwatch(name: "Seedpearl", hex: "#E6DCC5"),
+                ColorSwatch(name: "Warm Bisque", hex: "#EECFB9"),
+                ColorSwatch(name: "Tidal Foam", hex: "#C2BDA7"),
+                ColorSwatch(name: "Deep Depths", hex: "#414438"),
+                ColorSwatch(name: "Chicory Coffee", hex: "#49312D"),
+                ColorSwatch(name: "Dark Earth Charcoal", hex: "#3C3B35")
             ]
         case .darkAutumn:
             return [
-                ColorSwatch(name: "White Swan", pantoneCode: "12-0000 TCX", hex: "#E4D8C7"),
-                ColorSwatch(name: "Cornsilk", pantoneCode: "13-0917 TCX", hex: "#CDBBAA"),
-                ColorSwatch(name: "Toasted Almond", pantoneCode: "14-1213 TCX", hex: "#C6A585"),
-                ColorSwatch(name: "Bitter Chocolate", pantoneCode: "19-1317 TCX", hex: "#5B5448"),
-                ColorSwatch(name: "Tarmac", pantoneCode: "19-0822 TCX", hex: "#5B5448")
+                ColorSwatch(name: "White Swan", hex: "#E4D8C7"),
+                ColorSwatch(name: "Summer Melon", hex: "#EBD3AD"),
+                ColorSwatch(name: "French Oak", hex: "#C9C0B4"),
+                ColorSwatch(name: "Deep Midnight Navy", hex: "#263056"),
+                ColorSwatch(name: "Dark Forest Slate", hex: "#24312D"),
+                ColorSwatch(name: "Dark Charcoal Black", hex: "#2F2D30")
             ]
         case .darkWinter:
             return [
-                ColorSwatch(name: "Lucent White", pantoneCode: "11-0700 TCX", hex: "#F2F5FC"),
-                ColorSwatch(name: "Vapor Blue", pantoneCode: "12-4306 TCX", hex: "#DEDDD7"),
-                ColorSwatch(name: "Silver Birch", pantoneCode: "13-4403 TCX", hex: "#C9C3BA"),
-                ColorSwatch(name: "Steel Gray", pantoneCode: "18-4005 TCX", hex: "#9D9D9B"),
-                ColorSwatch(name: "Tap Shoe", pantoneCode: "19-4004 TCX", hex: "#29292B")
+                ColorSwatch(name: "Lucent White", hex: "#F2F5FC"),
+                ColorSwatch(name: "Vaporous Gray", hex: "#DEDDD7"),
+                ColorSwatch(name: "Cool Pale Silver", hex: "#D1D5D0"),
+                ColorSwatch(name: "Baritone Blue", hex: "#252633"),
+                ColorSwatch(name: "Ponderosa Pine", hex: "#1F3F3F"),
+                ColorSwatch(name: "Tap Shoe", hex: "#29292B")
             ]
         case .trueWinter:
             return [
-                ColorSwatch(name: "Brilliant White", pantoneCode: "11-4001 TCX", hex: "#EEF1FF"),
-                ColorSwatch(name: "Bright White", pantoneCode: "11-0601 TCX", hex: "#E3E3DB"),
-                ColorSwatch(name: "Glacier", pantoneCode: "14-4107 TCX", hex: "#D1D0C5"),
-                ColorSwatch(name: "Castlerock", pantoneCode: "18-0201 TCX", hex: "#706E6D"),
-                ColorSwatch(name: "Medieval Blue", pantoneCode: "19-3933 TCX", hex: "#292F50")
+                ColorSwatch(name: "Brilliant White", hex: "#EEF1FF"),
+                ColorSwatch(name: "Lily White", hex: "#E3E3DB"),
+                ColorSwatch(name: "Icy Silver Gray", hex: "#D9DBDE"),
+                ColorSwatch(name: "Ocean Cavern", hex: "#252940"),
+                ColorSwatch(name: "Môle", hex: "#382B2A"),
+                ColorSwatch(name: "Jet Black", hex: "#26262A")
             ]
         case .brightWinter:
             return [
-                ColorSwatch(name: "Bright White", pantoneCode: "11-0601 TCX", hex: "#F3F8FF"),
-                ColorSwatch(name: "Star White", pantoneCode: "11-4202 TCX", hex: "#E6DFCE"),
-                ColorSwatch(name: "Vapor", pantoneCode: "12-4304 TCX", hex: "#ADA99B"),
-                ColorSwatch(name: "Steel", pantoneCode: "18-4006 TCX", hex: "#858180"),
-                ColorSwatch(name: "Black Iris", pantoneCode: "19-3921 TCX", hex: "#2C3043")
+                ColorSwatch(name: "Bright White", hex: "#F3F8FF"),
+                ColorSwatch(name: "Arctic Wolf", hex: "#E6DFCE"),
+                ColorSwatch(name: "Icy Light Gray", hex: "#D5D5D8"),
+                ColorSwatch(name: "Deep Indigo Navy", hex: "#302453"),
+                ColorSwatch(name: "Slate Charcoal", hex: "#5D5B60"),
+                ColorSwatch(name: "Carbon Black", hex: "#39373B")
             ]
         }
+    }
+
+    /// All valid swatches for this season, with foundation neutrals prioritized first followed by the seasonal palette.
+    public var allSwatches: [ColorSwatch] {
+        var seen = Set<String>()
+        var result: [ColorSwatch] = []
+        for swatch in neutralSwatches + palette {
+            let key = swatch.hex.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).uppercased()
+            if seen.insert(key).inserted {
+                result.append(swatch)
+            }
+        }
+        return result
     }
 
     // MARK: - LLM System Prompt & Context
@@ -1054,6 +1079,7 @@ public enum ColorSeason: String, Codable, CaseIterable, Identifiable, Sendable {
         - Hue: \(hue)
         - Value: \(value)
         - Chroma: \(chroma)
+        Neutral Colors (Prioritize First): \(neutralSwatches.map { "\($0.name) (\($0.hex))" }.joined(separator: ", "))
         Color Palette: \(palette.map { "\($0.name) (\($0.hex))" }.joined(separator: ", "))
         """
     }

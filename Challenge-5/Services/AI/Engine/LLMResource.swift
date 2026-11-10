@@ -7,13 +7,13 @@
 
 import Foundation
 
-/// Locates and inspects on-device GGUF models (`qwen2.5-3b-instruct-q4_k_m.gguf` or `Llama-3.2-1B-Instruct-Q4_K_M.gguf`).
+/// Locates and inspects the on-device Qwen 3.5 GGUF model (`Qwen3.5-4B-Q3_K_M-00001-of-00002.gguf` + `-00002-of-00002.gguf`).
 public struct LLMResource: Sendable {
 
-    /// Prioritized list of model candidates: Qwen 2.5 3B is preferred, falling back to Llama 3.2 1B.
+    /// Text LLM candidate: exclusively uses Qwen 3.5 4B (Q3_K_M), split into 2 GGUF shards (<2 GiB each for Git LFS).
     public static let supportedModelFilenames = [
-        "qwen2.5-3b-instruct-q4_k_m",
-        "Llama-3.2-1B-Instruct-Q4_K_M"
+        "Qwen3.5-4B-Q3_K_M-00001-of-00002",
+        "Qwen3.5-4B-Q3_K_M"
     ]
     public static let modelExtension = "gguf"
 
@@ -43,7 +43,7 @@ public struct LLMResource: Sendable {
                 return name
             }
         }
-        return supportedModelFilenames.first ?? "qwen2.5-3b-instruct-q4_k_m"
+        return supportedModelFilenames.first ?? "Qwen3.5-4B-Q3_K_M"
     }
 
     /// Alias for backward compatibility with existing code referencing `modelFilename`.
@@ -54,6 +54,11 @@ public struct LLMResource: Sendable {
     /// True if the currently active model on disk is a Qwen variant.
     public static var isQwenActive: Bool {
         activeModelFilename.lowercased().contains("qwen")
+    }
+
+    /// True if the active model is Qwen 3 / Qwen 3.5, which supports `<think>\n\n</think>\n\n` non-thinking prefill.
+    public static var isQwen3Active: Bool {
+        activeModelFilename.lowercased().contains("qwen3")
     }
 
     /// Checks if a supported GGUF model file is accessible either in the App Bundle or in project Resources.
@@ -70,11 +75,18 @@ public struct LLMResource: Sendable {
     /// (the model wasn't downloaded with `git lfs pull`), which llama.cpp can't load.
     private static let minimumModelFileBytes: Int64 = 1_000_000
 
-    /// Whether the file is a downloaded model and not a Git LFS pointer.
+    /// Whether the file (and any companion GGUF split shard) is a downloaded model and not a Git LFS pointer.
     public static func isUsableModelFile(atPath path: String) -> Bool {
         let attributes = try? FileManager.default.attributesOfItem(atPath: path)
         let size = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
-        return size >= minimumModelFileBytes
+        guard size >= minimumModelFileBytes else { return false }
+        if path.hasSuffix("-00001-of-00002.gguf") {
+            let shard2Path = path.replacingOccurrences(of: "-00001-of-00002.gguf", with: "-00002-of-00002.gguf")
+            let shard2Attrs = try? FileManager.default.attributesOfItem(atPath: shard2Path)
+            let shard2Size = (shard2Attrs?[.size] as? NSNumber)?.int64Value ?? 0
+            return shard2Size >= minimumModelFileBytes
+        }
+        return true
     }
 
     private static func candidateURL(for name: String) -> URL? {
