@@ -18,26 +18,30 @@ struct ContentView: View {
     // MARK: - Body
     
     var body: some View {
-        Group {
-            switch selectedTab {
-            case .occasions:
-                OccasionsHomeView(
-                    selectedTab: $selectedTab,
-                    onProfileTap: {
-                        isShowingProfileSheet = true
-                    }
-                )
-            case .library:
-                LibraryView(
-                    selectedTab: $selectedTab,
-                    onProfileTap: {
-                        isShowingProfileSheet = true
-                    }
-                )
+        NavigationStack {
+            Group {
+                switch selectedTab {
+                case .occasions:
+                    OccasionsHomeView(
+                        selectedTab: $selectedTab,
+                        onProfileTap: {
+                            isShowingProfileSheet = true
+                        }
+                    )
+                case .library:
+                    LibraryView(
+                        selectedTab: $selectedTab,
+                        onProfileTap: {
+                            isShowingProfileSheet = true
+                        }
+                    )
+                }
             }
-        }
-        .sheet(isPresented: $isShowingProfileSheet) {
-            ProfileHubView()
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $isShowingProfileSheet) {
+                ProfileHubView()
+                    .toolbar(.hidden, for: .navigationBar)
+            }
         }
     }
 }

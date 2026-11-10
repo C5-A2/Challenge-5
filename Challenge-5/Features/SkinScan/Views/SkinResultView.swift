@@ -308,6 +308,23 @@ struct SkinResultView: View {
                     .font(AppTypography.bodyRegular)
                     .foregroundStyle(AppColors.bodyText)
                     .lineSpacing(2)
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 10)], spacing: 10) {
+                    ForEach(activeSeason.colorsToAvoidPalette) { swatch in
+                        Circle()
+                            .fill(Color(hex: swatch.hex))
+                            .frame(width: 40, height: 40)
+                            .overlay(Circle().stroke(AppColors.subtleBorder, lineWidth: 1))
+                            .overlay(
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .shadow(color: .black.opacity(0.5), radius: 1)
+                            )
+                            .accessibilityLabel(swatch.name)
+                    }
+                }
+                .padding(.top, 4)
             }
         }
         .padding(AppDimensions.cardInternalPadding)
