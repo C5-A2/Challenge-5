@@ -236,6 +236,75 @@ enum OutfitAttributeMapper {
         return cleaned
     }
     
+    // MARK: - Playground Source Photo
+
+    /// The last prepared photo, so it isn't recomputed on every view update.
+    private static var sourceImageCache: (key: Int, image: UIImage)?
+    /// Where the clothes start below the face, in face heights below the chin.
+    private static let neckOffsetFaceRatio: CGFloat = 0.25
+    /// The flat gray painted over her clothes.
+    private static let plainClothesGray: CGFloat = 0.78
+
+    /// The user's full-body photo for Image Playground, with her clothes painted plain gray.
+    ///
+    /// With the original photo, Image Playground copies the outfit she wore in it (the same dress,
+    /// bag and sneakers in every look). A head-only crop avoided that but made the result half-body.
+    /// This keeps the full-body framing, pose and body shape, and only removes what she was wearing.
+    /// Falls back to the original photo when no face or person is found.
+    static func playgroundSourceImage(fromPhotoData data: Data) -> UIImage? {
+        let key = data.count ^ data.prefix(256).hashValue
+        if let cached = sourceImageCache, cached.key == key { return cached.image }
+        guard let photo = UIImage(data: data) else { return nil }
+        let image = photoWithPlainClothes(photo) ?? photo
+        sourceImageCache = (key, image)
+        return image
+    }
+
+    private static func photoWithPlainClothes(_ photo: UIImage) -> UIImage? {
+        // Redraw first so the pixels are upright, whatever the photo's EXIF orientation.
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let upright = UIGraphicsImageRenderer(size: photo.size, format: format).image { _ in
+            photo.draw(in: CGRect(origin: .zero, size: photo.size))
+        }
+        guard let cgImage = upright.cgImage else { return nil }
+
+        let faceRequest = VNDetectFaceRectanglesRequest()
+        let personRequest = VNGeneratePersonSegmentationRequest()
+        personRequest.qualityLevel = .balanced
+        personRequest.outputPixelFormat = kCVPixelFormatType_OneComponent8
+        do {
+            try VNImageRequestHandler(cgImage: cgImage, options: [:]).perform([faceRequest, personRequest])
+        } catch {
+            return nil
+        }
+        guard let face = faceRequest.results?.max(by: { $0.boundingBox.width < $1.boundingBox.width }),
+              let maskBuffer = personRequest.results?.first?.pixelBuffer else { return nil }
+
+        let original = CIImage(cgImage: cgImage)
+        let extent = original.extent
+        let rawMask = CIImage(cvPixelBuffer: maskBuffer)
+        let personMask = rawMask.transformed(by: CGAffineTransform(
+            scaleX: extent.width / rawMask.extent.width,
+            y: extent.height / rawMask.extent.height
+        ))
+
+        // Only the body below the chin. Vision and Core Image both put the origin at the bottom left.
+        let neckY = max(0, (face.boundingBox.minY - face.boundingBox.height * neckOffsetFaceRatio) * extent.height)
+        let bodyArea = CIImage(color: .white)
+            .cropped(to: CGRect(x: 0, y: 0, width: extent.width, height: neckY))
+            .composited(over: CIImage(color: .black).cropped(to: extent))
+        let clothesMask = personMask.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: bodyArea])
+
+        let gray = CIImage(color: CIColor(red: plainClothesGray, green: plainClothesGray, blue: plainClothesGray)).cropped(to: extent)
+        let result = gray.applyingFilter("CIBlendWithMask", parameters: [
+            kCIInputBackgroundImageKey: original,
+            kCIInputMaskImageKey: clothesMask
+        ])
+        guard let output = CIContext().createCGImage(result, from: extent) else { return nil }
+        return UIImage(cgImage: output)
+    }
+
     // MARK: - 4. Vision Background Removal (Transparent Cutout)
     
     /// Removes background from a UIImage using Apple Vision foreground instance mask,

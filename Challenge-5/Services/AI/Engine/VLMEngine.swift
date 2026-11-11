@@ -224,12 +224,14 @@ public actor VLMEngine {
         // 2. Free-form natural language styling prompt (NO JSON)
         let systemPrompt = """
         You are an expert fashion stylist and visual analyst with deep knowledge of global, Asian, and Indonesian fashion aesthetics.
-        Describe ONLY the clothing and outfit worn by the person in this photo in clear, concise natural English (2 to 4 sentences).
+        Describe ONLY the clothing worn by the person in this photo in clear natural English, garment by garment: one sentence per garment (top, bottom or dress, and any outer layer), then one short sentence for the overall vibe.
+        For EACH garment state its type, neckline or collar, sleeve length, length (cropped, waist, hip, knee, midi, maxi), fit, fabric, pattern, and its exact color with a shade word (for example "dusty pastel pink", "light wash blue", not just "pink" or "blue").
         Highlight:
         - Specific garment pieces and cut names (e.g. crop top, halter top, camisole, blazer, suit jacket, cardigan, button-down shirt, wide-leg trousers, pleated skirt, tiered ruffle skirt, maxi skirt, batik blouse, batik shirt, batik dress, batik skirt, kebaya, denim shorts).
         - Fit and silhouette (e.g. relaxed, tailored, oversized, fitted, cropped).
         - Fabrics and materials (e.g. linen, silk, denim, cotton poplin, lace, knitwear, chiffon, batik fabric, tenun, songket).
         - Surface patterns (e.g. traditional Indonesian batik motif, modern batik print, floral, pinstripe, solid). If any garment has Indonesian batik motifs (such as parang, kawung, mega mendung, truntum, or ornate batik patterns), explicitly name it as "batik" (e.g. "batik blouse", "batik motif", "batik skirt"). If a garment has no pattern, state "solid".
+        - Embellishments, trims and textures (e.g. lace, feathers, beading, pearls, sequins, ruffles, bows, pleats, corset or bustier bodice, tulle or organza layers). Name every one you can see.
         - Prominent garment colors (ignore the room background and walls).
         - Overall aesthetic vibe.
 
