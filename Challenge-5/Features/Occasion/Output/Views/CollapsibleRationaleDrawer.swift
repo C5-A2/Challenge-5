@@ -18,7 +18,7 @@ struct CollapsibleRationaleDrawer: View {
     // MARK: - Computed Active Profile Helpers
     
     private var activeProfile: UserProfile {
-        viewModel.profile ?? userProfiles.first ?? UserProfile.mockSample
+        userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
     }
     
     private var activeBodyType: BodyType {
@@ -31,6 +31,40 @@ struct CollapsibleRationaleDrawer: View {
     
     private var activeColorSeason: ColorSeason {
         activeProfile.colorSeason ?? .trueAutumn
+    }
+
+    private var activeMeasurements: BodyMeasurements {
+        activeProfile.measurements ?? UserProfile.mockSample.measurements!
+    }
+
+    private var activeBustText: String {
+        "\(Int(round(activeMeasurements.resolvedBustCircumferenceCm))) Cm"
+    }
+
+    private var activeWaistText: String {
+        "\(Int(round(activeMeasurements.resolvedWaistCircumferenceCm))) Cm"
+    }
+
+    private var activeHipsText: String {
+        "\(Int(round(activeMeasurements.resolvedHipCircumferenceCm))) Cm"
+    }
+
+    private var activeTorsoLengthText: String {
+        "\(Int(round(activeMeasurements.resolvedTorsoLengthCm))) Cm"
+    }
+
+    private var activeLegLengthText: String {
+        "\(Int(round(activeMeasurements.resolvedLegLengthCm))) Cm"
+    }
+
+    private var activeTorsoRatioText: String {
+        let pct = Int(round(activeMeasurements.torsoToHeightPercentage))
+        return "\(pct)% (\(activeTorsoBalance.displayName))"
+    }
+
+    private var activeFaceImage: UIImage? {
+        guard let data = activeProfile.facePhotoData else { return nil }
+        return UIImage(data: data)
     }
     
     // MARK: - Initializer
@@ -101,10 +135,9 @@ struct CollapsibleRationaleDrawer: View {
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(AppColors.espressoTitle)
                     
-                    // Dummy metrics preserved per design requirement
-                    metricBadge(title: "Shoulder", value: "70 Cm")
-                    metricBadge(title: "Waist", value: "50 Cm")
-                    metricBadge(title: "Hips", value: "40 Cm")
+                    metricBadge(title: "Bust", value: activeBustText)
+                    metricBadge(title: "Waist", value: activeWaistText)
+                    metricBadge(title: "Hips", value: activeHipsText)
                 }
                 Spacer()
             }
@@ -173,7 +206,7 @@ struct CollapsibleRationaleDrawer: View {
         case .rectangle:
             return "Balanced Frame"
         case .invertedTriangle:
-            return "Bahu Lebar"
+            return "Broad Shoulders"
         case .apple:
             return "Round Curve"
         }
@@ -359,7 +392,12 @@ struct CollapsibleRationaleDrawer: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(hex: "#FAF6F0"))
             
-            ColorSeasonWheelView(selectedSeasonName: colorSeasonWheelLabel, wheelDiameter: 96)
+            ColorSeasonWheelView(
+                selectedSeasonName: colorSeasonWheelLabel,
+                wheelDiameter: 96,
+                hexColors: activeColorSeason.wheelHexColors,
+                faceImage: activeFaceImage
+            )
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
@@ -446,10 +484,9 @@ struct CollapsibleRationaleDrawer: View {
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(AppColors.espressoTitle)
                     
-                    // Dummy metrics preserved per design requirement
-                    metricBadge(title: "Upper Body", value: "38 Cm")
-                    metricBadge(title: "Leg Length", value: "79 Cm")
-                    metricBadge(title: "Torso Ratio", value: "32% (Balanced)")
+                    metricBadge(title: "Upper Body", value: activeTorsoLengthText)
+                    metricBadge(title: "Leg Length", value: activeLegLengthText)
+                    metricBadge(title: "Torso Ratio", value: activeTorsoRatioText)
                 }
                 Spacer()
             }

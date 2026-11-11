@@ -487,6 +487,9 @@ struct ProfileHubView: View {
 
     private var profileTorsoCm: Double {
         if let editedTorsoCm { return editedTorsoCm }
+        if let savedTorso = currentProfile?.measurements?.torsoLengthCm {
+            return savedTorso
+        }
         let height = currentProfile?.measurements?.heightCm ?? 170.0
         let ratio: Double = {
             switch activeTorsoBalance {
@@ -682,7 +685,8 @@ struct ProfileHubView: View {
             shoulderWidthCm: shoulder,
             bustCircumferenceCm: newBust,
             waistCircumferenceCm: newWaist,
-            hipCircumferenceCm: newHip
+            hipCircumferenceCm: newHip,
+            torsoLengthCm: newTorso
         )
 
         let classification = BodyClassifier.classify(
@@ -704,13 +708,10 @@ struct ProfileHubView: View {
     }
 
     private var profileTorsoClassificationCard: some View {
-        let thrRatio: Double = {
-            switch activeTorsoBalance {
-            case .shortTorso: return 28.5
-            case .balanced: return 31.5
-            case .longTorso: return 34.5
-            }
-        }()
+        let height = currentProfile?.measurements?.heightCm ?? 170.0
+        let thrRatio: Double = height > 0
+            ? round(((profileTorsoCm / height) * 100.0) * 10) / 10
+            : 31.5
 
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
