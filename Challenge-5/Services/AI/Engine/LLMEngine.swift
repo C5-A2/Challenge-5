@@ -203,11 +203,11 @@ public actor LLMEngine {
         self.model = loadedModel
         
         var contextParams = llama_context_default_params()
-        // Optimized context window: 4,096 tokens.
+        // Optimized context window: 3,584 tokens and 256 batch evaluation.
         // Provides ample headroom for single-look prompts (~1,200 tokens) + output (~500 tokens),
-        // while keeping the KV cache footprint under ~150 MB to prevent iOS Jetsam memory kills on 3B models (Qwen 2.5 3B).
-        contextParams.n_ctx = 4096
-        contextParams.n_batch = 512
+        // while cutting Metal compute scratch buffers by half to prevent Metal GPU OOM (llama_decode ret = -3).
+        contextParams.n_ctx = 3584
+        contextParams.n_batch = 256
         
         guard let loadedContext = llama_init_from_model(loadedModel, contextParams) else {
             llama_model_free(loadedModel)
@@ -400,8 +400,8 @@ public actor LLMEngine {
         }
 
         var contextParams = llama_context_default_params()
-        contextParams.n_ctx = 4096
-        contextParams.n_batch = 512
+        contextParams.n_ctx = 3584
+        contextParams.n_batch = 256
 
         guard let freshContext = llama_init_from_model(model, contextParams) else {
             throw LLMEngineError.contextInitFailed
@@ -455,15 +455,15 @@ public actor LLMEngine {
             llama_sampler_chain_add(sampler, llama_sampler_init_dist(0xFFFFFFFF)) // LLAMA_DEFAULT_SEED
         }
         
-        // Evaluate the prompt batch in chunks of 512
-        var batch = llama_batch_init(512, 0, 1)
+        // Evaluate the prompt batch in chunks of 256 to minimize Metal scratch buffer peaks
+        var batch = llama_batch_init(256, 0, 1)
         defer {
             llama_batch_free(batch)
         }
         
         var i: Int32 = 0
         while i < nTokens {
-            let n_eval = min(512, nTokens - i)
+            let n_eval = min(256, nTokens - i)
             batch.n_tokens = n_eval
             
             for j in 0..<n_eval {
@@ -476,6 +476,8 @@ public actor LLMEngine {
             
             let res = llama_decode(context, batch)
             if res != 0 {
+                llama_free(context)
+                self.context = nil
                 throw LLMEngineError.decodingFailed(res)
             }
             i += n_eval
@@ -514,6 +516,8 @@ public actor LLMEngine {
             let res = llama_decode(context, batch)
             if res != 0 {
                 print("⚠️ [LLMEngine] Decode stopped at pos \(curPos) with code \(res)")
+                llama_free(context)
+                self.context = nil
                 break
             }
             

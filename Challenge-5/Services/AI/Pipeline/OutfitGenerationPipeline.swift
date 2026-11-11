@@ -261,16 +261,25 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         // Rejected repeats are added to the "previous looks" list, so the next attempt avoids them too.
         var avoidedLooks = previousLooks
         var lastRepeatedLook: OutfitLook?
+        var lastDresscodeViolation: String? = nil
 
         for attempt in 0..<Self.maximumAttemptsPerLook {
-            let temperature = min(baseTemperature + Float(attempt) * Self.retryTemperatureStep, Self.maximumRetryTemperature)
+            let temperature: Float
+            if lastDresscodeViolation != nil {
+                // Disciplined, lower temperature for strict dresscode compliance retry
+                temperature = min(baseTemperature, 0.35)
+            } else {
+                temperature = min(baseTemperature + Float(attempt) * Self.retryTemperatureStep, Self.maximumRetryTemperature)
+            }
+
             let prompt = promptBuilder.buildFormattedPrompt(
                 occasion: occasion,
                 profile: profile,
                 lookIndex: lookIndex,
                 structure: structure,
                 previousLooks: avoidedLooks,
-                referenceAnalysis: referenceAnalysis
+                referenceAnalysis: referenceAnalysis,
+                dresscodeViolation: lastDresscodeViolation
             )
             print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) \(archetype) / \(structure.rawValue) (temp \(temperature), attempt \(attempt + 1)/\(Self.maximumAttemptsPerLook)). Prompt \(prompt.count) chars. Running \(LLMResource.activeModelFilename)…")
 
@@ -288,22 +297,47 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                     from: rawOutput.trimmingCharacters(in: .whitespacesAndNewlines),
                     colorSeason: profile.colorSeason,
                     structure: structure,
-                    allowsOffPaletteAccent: archetype.allowsOffPaletteAccent
+                    allowsOffPaletteAccent: archetype.allowsOffPaletteAccent,
+                    dresscode: occasion.dresscode
                 )
                 guard let first = parsedLooks.first else {
                     throw LLMError.invalidOutput("LLM returned 0 looks for look index \(lookIndex).")
+                }
+                guard !first.garments.isEmpty else {
+                    throw LLMError.invalidOutput("Look \(lookIndex) contains 0 valid garments.")
+                }
+                guard Self.isOutfitComplete(first.garments, for: structure) else {
+                    let cats = first.garments.map { $0.category.rawValue }.joined(separator: ", ")
+                    throw LLMError.invalidOutput("Look \(lookIndex) outfit is incomplete for \(structure.rawValue) (found: [\(cats)]).")
                 }
                 parsedLook = first
             } catch {
                 print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) attempt \(attempt + 1) could not be parsed: \(error.localizedDescription)")
                 if attempt == Self.maximumAttemptsPerLook - 1 {
-                    if let lastRepeatedLook { return lastRepeatedLook }
+                    if let lastRepeatedLook {
+                        DresscodeValidator.enforceCompliance(on: lastRepeatedLook, dresscode: occasion.dresscode, colorSeason: profile.colorSeason)
+                        return lastRepeatedLook
+                    }
                     throw error
                 }
                 continue
             }
             // Enforce the intended index regardless of what the model output.
             parsedLook.lookIndex = lookIndex
+
+            // Validate Dresscode Compliance (Pattern, Cuts, Number of pieces, Color, Vibe)
+            let compliance = DresscodeValidator.checkCompliance(look: parsedLook, dresscode: occasion.dresscode)
+            if !compliance.isCompliant {
+                print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) attempt \(attempt + 1) failed dresscode compliance: \(compliance.violationSummary)")
+                lastDresscodeViolation = compliance.violationSummary
+                if attempt < Self.maximumAttemptsPerLook - 1 {
+                    print("🔄 [OutfitGenerationPipeline] Regenerating look \(lookIndex) with stricter dresscode prompt (attempt \(attempt + 2)/\(Self.maximumAttemptsPerLook))...")
+                    continue
+                } else {
+                    print("🛡️ [OutfitGenerationPipeline] Applying deterministic dresscode enforcement on final attempt for look \(lookIndex)...")
+                    DresscodeValidator.enforceCompliance(on: parsedLook, dresscode: occasion.dresscode, colorSeason: profile.colorSeason)
+                }
+            }
 
             guard let repeatedIndex = Self.repeatedLookIndex(of: parsedLook, in: avoidedLooks) else {
                 return parsedLook
@@ -317,7 +351,30 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         guard let lastRepeatedLook else {
             throw LLMError.invalidOutput("Could not generate look index \(lookIndex).")
         }
+        DresscodeValidator.enforceCompliance(on: lastRepeatedLook, dresscode: occasion.dresscode, colorSeason: profile.colorSeason)
         return lastRepeatedLook
+    }
+
+    // MARK: - Completeness Check
+
+    /// Validates that an outfit has all required pieces to be wearable and matches the requested structure.
+    /// - When structure has a dress (`structure.hasDress`): MUST contain a `.dress`.
+    /// - When structure has separates: MUST contain BOTH `.top` and `.bottom`, and NO `.dress`.
+    private static func isOutfitComplete(_ garments: [GarmentItem], for structure: OutfitStructure?) -> Bool {
+        let categories = Set(garments.map { $0.category })
+        if let structure {
+            if structure.hasDress {
+                return categories.contains(.dress)
+            } else {
+                return categories.contains(.top) && categories.contains(.bottom) && !categories.contains(.dress)
+            }
+        }
+        if categories.contains(.dress) {
+            // A dress is a complete 1-piece outfit (can also have an outer layer)
+            return true
+        }
+        // If not a dress, it MUST contain both top and bottom
+        return categories.contains(.top) && categories.contains(.bottom)
     }
 
     // MARK: - Repeat Check
@@ -487,16 +544,19 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
     /// - Parameters:
     ///   - structure: The pieces the look should have; garments outside it are dropped when possible.
     ///   - allowsOffPaletteAccent: The surprise look may keep one color outside the palette.
+    ///   - dresscode: The user's dresscode constraint to respect during color resolution.
     func parseLooks(
         from jsonString: String,
         colorSeason: ColorSeason? = nil,
         structure: OutfitStructure? = nil,
-        allowsOffPaletteAccent: Bool = false
+        allowsOffPaletteAccent: Bool = false,
+        dresscode: String? = nil
     ) throws -> [OutfitLook] {
         let options = ParseOptions(
             colorSeason: colorSeason,
             structure: structure,
-            allowsOffPaletteAccent: allowsOffPaletteAccent
+            allowsOffPaletteAccent: allowsOffPaletteAccent,
+            dresscode: dresscode
         )
         var cleanJSON = jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -583,6 +643,19 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let colorSeason: ColorSeason?
         let structure: OutfitStructure?
         let allowsOffPaletteAccent: Bool
+        let dresscode: String?
+
+        init(
+            colorSeason: ColorSeason? = nil,
+            structure: OutfitStructure? = nil,
+            allowsOffPaletteAccent: Bool = false,
+            dresscode: String? = nil
+        ) {
+            self.colorSeason = colorSeason
+            self.structure = structure
+            self.allowsOffPaletteAccent = allowsOffPaletteAccent
+            self.dresscode = dresscode
+        }
     }
 
     // MARK: - LLM JSON Sanitization & Resilient Fallback
@@ -637,6 +710,20 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "$1\"hexColor\":$2")
         }
 
+        // Fix trailing garbage like `,[0]]}` or `,[0]` or `,[0]]` after garments array:
+        let trailingGarbagePattern = #"(["\d\}]\s*\])\s*,\s*\[[^\{\}]*\][\s\}\]]*$"#
+        if let regex = try? NSRegularExpression(pattern: trailingGarbagePattern, options: []) {
+            let range = NSRange(result.startIndex..<result.endIndex, in: result)
+            result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "$1}]")
+        }
+
+        // Fix swapped closing brackets like `]}` instead of `}]` at the very end
+        let reversedClosingPattern = #"(["\d\}])\s*\]\s*\}\s*$"#
+        if let regex = try? NSRegularExpression(pattern: reversedClosingPattern, options: []) {
+            let range = NSRange(result.startIndex..<result.endIndex, in: result)
+            result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "$1}]")
+        }
+
         return result
     }
 
@@ -653,12 +740,23 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             fitRationale = "Harmonious ensemble tailored to your silhouette and seasonal palette."
         }
 
-        // Find all garment-like objects: { ... "category" ... }
+        // Find lookIndex if present
+        let lookIndex: Int
+        let indexPattern = #"\"lookIndex\"\s*:\s*(\d+)"#
+        if let regex = try? NSRegularExpression(pattern: indexPattern, options: []),
+           let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..<text.endIndex, in: text)),
+           let range = Range(match.range(at: 1), in: text),
+           let parsedIndex = Int(text[range]) {
+            lookIndex = parsedIndex
+        } else {
+            lookIndex = 0
+        }
+
+        // Find all garment-like objects: { ... "category" ... } using exact brace stack
         var garments: [GarmentItem] = []
         let palette = options.colorSeason?.allSwatches ?? []
 
-        var depth = 0
-        var objStart: String.Index? = nil
+        var braceStack: [String.Index] = []
         var inString = false
         var escaped = false
 
@@ -673,40 +771,40 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 inString.toggle()
             } else if !inString {
                 if ch == "{" {
-                    if depth == 0 || (depth == 1 && objStart == nil) {
-                        objStart = idx
-                    }
-                    depth += 1
+                    braceStack.append(idx)
                 } else if ch == "}" {
-                    depth = max(0, depth - 1)
-                    if let start = objStart, text[start...idx].contains("\"category\"") {
+                    if let start = braceStack.popLast() {
                         let candidate = String(text[start...idx])
-                        if let data = candidate.data(using: .utf8),
-                           let dto = try? JSONDecoder().decode(LLMOutfitGenerationResponse.GarmentDTO.self, from: data) {
-                            // Pieces outside Outer / Top / Bottom (shoes, accessories) are skipped.
-                            if let cat = GarmentCategory(generatedLabel: dto.category)
-                                ?? GarmentCategory(generatedLabel: dto.name) {
-                                let color = resolveSeasonalColor(rawName: dto.colorName, rawHex: dto.hexColor, palette: palette,
-                                                                 allowsOffPalette: options.allowsOffPaletteAccent)
-                                let garment = GarmentItem(
-                                    category: cat,
-                                    name: dto.name,
-                                    material: dto.material,
-                                    colorName: color.name,
-                                    hexColor: color.hex,
-                                    rationale: dto.rationale,
-                                    playgroundPrompt: normalizePlaygroundPrompt(
-                                        dto.playgroundPrompt,
-                                        rawColorName: dto.colorName,
-                                        resolvedColorName: color.name
+                        if candidate.contains("\"category\"") && !candidate.contains("\"garments\"") {
+                            if let data = candidate.data(using: .utf8),
+                               let dto = try? JSONDecoder().decode(LLMOutfitGenerationResponse.GarmentDTO.self, from: data) {
+                                // Pieces outside Outer / Top / Bottom (shoes, accessories) are skipped.
+                                if let cat = GarmentCategory(generatedLabel: dto.category)
+                                    ?? GarmentCategory(generatedLabel: dto.name) {
+                                    let color = resolveSeasonalColor(
+                                        rawName: dto.colorName,
+                                        rawHex: dto.hexColor,
+                                        palette: palette,
+                                        allowsOffPalette: options.allowsOffPaletteAccent,
+                                        dresscode: options.dresscode
                                     )
-                                )
-                                garments.append(garment)
+                                    let garment = GarmentItem(
+                                        category: cat,
+                                        name: dto.name,
+                                        material: dto.material,
+                                        colorName: color.name,
+                                        hexColor: color.hex,
+                                        rationale: dto.rationale,
+                                        playgroundPrompt: normalizePlaygroundPrompt(
+                                            dto.playgroundPrompt,
+                                            rawColorName: dto.colorName,
+                                            resolvedColorName: color.name
+                                        )
+                                    )
+                                    garments.append(garment)
+                                }
                             }
                         }
-                        objStart = nil
-                    } else if depth <= 1 {
-                        objStart = nil
                     }
                 }
             }
@@ -716,7 +814,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         guard !garments.isEmpty else { return nil }
 
         let look = OutfitLook(
-            lookIndex: 0,
+            lookIndex: lookIndex,
             fitRationale: fitRationale,
             isBookmarked: false,
             lookImageData: nil
@@ -817,7 +915,8 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                     rawName: gDTO.colorName,
                     rawHex: gDTO.hexColor,
                     palette: palette,
-                    allowsOffPalette: options.allowsOffPaletteAccent
+                    allowsOffPalette: options.allowsOffPaletteAccent,
+                    dresscode: options.dresscode
                 )
 
                 let garment = GarmentItem(
@@ -847,18 +946,44 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
     }
 
     /// Snaps the model's color to the seasonal palette.
-    /// 1. Same hex as a swatch, 2. same or contained name, 3. with `allowsOffPalette` (surprise look)
-    /// a valid hex is kept as it is, 4. otherwise the closest swatch by RGB distance, so the result
-    /// is stable and close to what the model meant (the old `hashValue` pick changed on every launch).
+    /// 1. If the dresscode mandates a color (e.g. "red") and the raw color matches it, snaps to a matching palette swatch or preserves it.
+    /// 2. Same hex as a swatch, 3. same or contained name, 4. with `allowsOffPalette` (surprise look)
+    /// a valid hex is kept as it is, 5. otherwise the closest swatch by RGB distance.
     private func resolveSeasonalColor(
         rawName: String,
         rawHex: String,
         palette: [ColorSeason.ColorSwatch],
-        allowsOffPalette: Bool = false
+        allowsOffPalette: Bool = false,
+        dresscode: String? = nil
     ) -> (name: String, hex: String) {
         let cleanHex = rawHex.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).uppercased()
         guard !palette.isEmpty else {
             return (rawName, "#\(cleanHex)")
+        }
+
+        // Check if dresscode mandates a specific color (e.g. "red" in "red dress")
+        if let cleanDresscode = dresscode?.trimmingCharacters(in: .whitespacesAndNewlines), !cleanDresscode.isEmpty {
+            let req = DresscodeRequirement(dresscode: cleanDresscode)
+            for targetColor in req.requiredColors {
+                let dummyGarment = GarmentItem(category: .top, name: "", material: "", colorName: rawName, hexColor: "#\(cleanHex)", rationale: "")
+                if DresscodeValidator.isGarmentMatchingColor(dummyGarment, canonicalColor: targetColor) {
+                    let matchingSwatches = palette.filter { swatch in
+                        let dummySwatch = GarmentItem(category: .top, name: "", material: "", colorName: swatch.name, hexColor: swatch.hex, rationale: "")
+                        return DresscodeValidator.isGarmentMatchingColor(dummySwatch, canonicalColor: targetColor)
+                    }
+                    if let rawColor = rgbComponents(fromHex: cleanHex),
+                       let closestMatching = matchingSwatches.min(by: { first, second in
+                           colorDistance(rawColor, rgbComponents(fromHex: first.hex)) < colorDistance(rawColor, rgbComponents(fromHex: second.hex))
+                       }) {
+                        return (closestMatching.name, closestMatching.hex)
+                    } else if let firstMatch = matchingSwatches.first {
+                        return (firstMatch.name, firstMatch.hex)
+                    } else {
+                        // Palette lacks this required dresscode color: preserve the dresscode color!
+                        return (rawName, "#\(cleanHex)")
+                    }
+                }
+            }
         }
 
         if let match = palette.first(where: {

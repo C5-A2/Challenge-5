@@ -26,8 +26,8 @@ struct OccasionOutputView: View {
     @State private var isShowingPlayground: Bool = false
     @State private var playgroundPackage: OutfitPlaygroundPackage? = nil
     @State private var isProcessingPlayground: Bool = false
-    private let showVLMDebug: Bool = false
-    @State private var isVLMDebugExpanded: Bool = false
+    private let showVLMDebug: Bool = true
+    @State private var isVLMDebugExpanded: Bool = true
     
     
     var onDismiss: (() -> Void)? = nil

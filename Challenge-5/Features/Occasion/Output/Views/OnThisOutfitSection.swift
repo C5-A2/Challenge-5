@@ -31,33 +31,7 @@ struct OnThisOutfitSection: View {
     
     
     private var displayGarments: [GarmentItem] {
-        if !garments.isEmpty {
-            return garments
-        }
-        // Placeholders in the same order as real garments: inner top, outer, bottom.
-        return [
-            GarmentItem(
-                category: .top,
-                name: "Polo",
-                material: "french terry Cotton",
-                colorName: "Black",
-                hexColor: "#1A1A1A"
-            ),
-            GarmentItem(
-                category: .outer,
-                name: "Polo",
-                material: "french terry Cotton",
-                colorName: "Black",
-                hexColor: "#1A1A1A"
-            ),
-            GarmentItem(
-                category: .bottom,
-                name: "Polo",
-                material: "french terry Cotton",
-                colorName: "Black",
-                hexColor: "#1A1A1A"
-            )
-        ]
+        garments
     }
     
     
@@ -70,7 +44,7 @@ struct OnThisOutfitSection: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
-                    if isLoading {
+                    if isLoading || displayGarments.isEmpty {
                         ForEach(["Outer", "Top", "Bottom"], id: \.self) { category in
                             skeletonCard(category: category)
                         }

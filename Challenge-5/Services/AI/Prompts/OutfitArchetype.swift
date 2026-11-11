@@ -51,12 +51,15 @@ nonisolated enum OutfitStructure: String, Sendable, CaseIterable {
     /// Whole words only, so "dressy casual" or "dresscode" don't count as a dress.
     private static let dresscodeOnePieceKeywords: Set<String> = [
         "dress", "dresses", "gown", "gowns", "jumpsuit", "jumpsuits", "romper", "rompers", "playsuit", "terusan", "gaun",
-        "swimsuit", "swimsuits", "monokini"
+        "gamis", "kaftan", "swimsuit", "swimsuits", "monokini", "cheongsam", "qipao"
     ]
     private static let dresscodeSeparatesKeywords: Set<String> = [
         "skirt", "rok", "pants", "trousers", "jeans", "shorts", "culottes", "kulot", "celana",
         "blouse", "shirt", "kemeja", "top", "atasan",
-        "bikini", "bikinis", "swimwear", "renang"
+        "separates", "two-piece", "bikini", "bikinis", "swimwear", "renang"
+    ]
+    private static let dresscodeOuterwearKeywords: Set<String> = [
+        "blazer", "suit", "pantsuit", "jacket", "coat", "cardigan", "outer", "jas"
     ]
 
     /// The pieces the dresscode itself asks for ("mini dress" -> a dress, "skirt" -> separates),
@@ -66,9 +69,17 @@ nonisolated enum OutfitStructure: String, Sendable, CaseIterable {
             .components(separatedBy: CharacterSet.letters.inverted)
             .filter { !$0.isEmpty }
         guard !words.isEmpty else { return nil }
-        if words.contains(where: { Self.dresscodeOnePieceKeywords.contains($0) }) {
+        let hasOuter = words.contains(where: { Self.dresscodeOuterwearKeywords.contains($0) })
+        let hasOnePiece = words.contains(where: { Self.dresscodeOnePieceKeywords.contains($0) })
+        let hasSeparates = words.contains(where: { Self.dresscodeSeparatesKeywords.contains($0) })
+
+        if hasOuter && hasOnePiece {
+            self = .dressWithOuter
+        } else if hasOuter {
+            self = .outerTopBottom
+        } else if hasOnePiece {
             self = .dressOptionalOuter
-        } else if words.contains(where: { Self.dresscodeSeparatesKeywords.contains($0) }) {
+        } else if hasSeparates {
             self = .topBottomOptionalOuter
         } else {
             return nil

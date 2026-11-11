@@ -211,6 +211,8 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
 
         // Unload VLM weights once at the end of the entire batch to free ~2.6 GB VRAM before main LLM runs
         await VLMEngine.shared.unload()
+        // Allow iOS Metal memory manager to reclaim freed memory pages before LLM loads
+        try? await Task.sleep(nanoseconds: 300_000_000)
         return results.filter { !$0.isEmpty }
     }
 
