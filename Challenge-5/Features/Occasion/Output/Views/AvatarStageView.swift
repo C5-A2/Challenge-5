@@ -140,9 +140,7 @@ struct AvatarStageView: View {
             .zIndex(Double(centerFactor))
             .onTapGesture {
                 guard !viewModel.isLookLoading(at: index), !isProcessingPlayground else { return }
-                if isCenter {
-                    onPlaygroundTap?()
-                } else {
+                if !isCenter {
                     handleCardTap(at: index)
                 }
             }
