@@ -34,6 +34,9 @@ public struct BodyMeasurements: Codable, Equatable, Hashable, Sendable {
     /// Estimated widest hip circumference in centimeters.
     public var hipCircumferenceCm: Double?
 
+    /// Estimated vertical torso length (shoulder/neck to hip/crotch) in centimeters.
+    public var torsoLengthCm: Double?
+
     // MARK: - Initializer
 
     public init(
@@ -44,7 +47,8 @@ public struct BodyMeasurements: Codable, Equatable, Hashable, Sendable {
         shoulderWidthCm: Double? = nil,
         bustCircumferenceCm: Double? = nil,
         waistCircumferenceCm: Double? = nil,
-        hipCircumferenceCm: Double? = nil
+        hipCircumferenceCm: Double? = nil,
+        torsoLengthCm: Double? = nil
     ) {
         self.age = age
         self.weightKg = weightKg
@@ -54,6 +58,46 @@ public struct BodyMeasurements: Codable, Equatable, Hashable, Sendable {
         self.bustCircumferenceCm = bustCircumferenceCm
         self.waistCircumferenceCm = waistCircumferenceCm
         self.hipCircumferenceCm = hipCircumferenceCm
+        self.torsoLengthCm = torsoLengthCm
+    }
+
+    // MARK: - Computed Anthropometric Fallbacks
+
+    /// Resolved shoulder width in cm (uses measured value or proportional estimate from height).
+    public var resolvedShoulderWidthCm: Double {
+        shoulderWidthCm ?? round((heightCm * 0.235) * 10) / 10
+    }
+
+    /// Resolved bust circumference in cm (uses measured value or proportional estimate from height).
+    public var resolvedBustCircumferenceCm: Double {
+        bustCircumferenceCm ?? round((heightCm * 0.53) * 10) / 10
+    }
+
+    /// Resolved waist circumference in cm (uses measured value or proportional estimate from height).
+    public var resolvedWaistCircumferenceCm: Double {
+        waistCircumferenceCm ?? round((heightCm * 0.41) * 10) / 10
+    }
+
+    /// Resolved hip circumference in cm (uses measured value or proportional estimate from height).
+    public var resolvedHipCircumferenceCm: Double {
+        hipCircumferenceCm ?? round((heightCm * 0.56) * 10) / 10
+    }
+
+    /// Resolved torso length in cm (uses measured value or proportional estimate from height).
+    public var resolvedTorsoLengthCm: Double {
+        torsoLengthCm ?? round((heightCm * 0.315) * 10) / 10
+    }
+
+    /// Resolved leg length in cm derived from total height and torso length.
+    public var resolvedLegLengthCm: Double {
+        let leg = max(0, heightCm - resolvedTorsoLengthCm - (heightCm * 0.19))
+        return round(leg * 10) / 10
+    }
+
+    /// Torso-to-height ratio (THR) expressed as a percentage (e.g. 31.5).
+    public var torsoToHeightPercentage: Double {
+        guard heightCm > 0 else { return 31.5 }
+        return round(((resolvedTorsoLengthCm / heightCm) * 100.0) * 10) / 10
     }
 
     // MARK: - Ratio Computations

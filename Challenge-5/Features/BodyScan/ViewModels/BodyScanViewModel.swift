@@ -557,7 +557,9 @@ public final class BodyScanViewModel {
 
     /// Helper to assemble the `BodyMeasurements` value from current state.
     public func buildBodyMeasurements() -> BodyMeasurements {
-        BodyMeasurements(
+        let resolvedTorso = torsoLengthCm
+            ?? ((computedTorsoToHeightRatio != nil) ? round((computedTorsoToHeightRatio! * heightCm / 100.0) * 10) / 10 : nil)
+        return BodyMeasurements(
             age: age,
             weightKg: weightKg,
             heightCm: heightCm,
@@ -565,7 +567,8 @@ public final class BodyScanViewModel {
             shoulderWidthCm: shoulderWidthCm,
             bustCircumferenceCm: bustCircumferenceCm,
             waistCircumferenceCm: waistCircumferenceCm,
-            hipCircumferenceCm: hipCircumferenceCm
+            hipCircumferenceCm: hipCircumferenceCm,
+            torsoLengthCm: resolvedTorso
         )
     }
 
