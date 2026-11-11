@@ -187,26 +187,13 @@ struct OccasionOutputView: View {
             package: playgroundPackage,
             sourceImage: activePlaygroundSourceImage,
             onGenerated: { resultCG in
-                let uiImage = UIImage(cgImage: resultCG)
-                isProcessingPlayground = true
-                Task {
-                    let transparentPng = await OutfitAttributeMapper.removeBackground(from: uiImage) ?? uiImage.pngData()
-                    await MainActor.run {
-                        if let transparentPng, let look = viewModel.currentLook {
-                            failedPlaygroundLookIDs.remove(look.id)
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                viewModel.updateLookImage(transparentPng, for: look)
-                            }
-                            Task {
-                                await viewModel.loadCurrentGarmentCrops()
-                            }
-                        } else if let look = viewModel.currentLook {
-                            failedPlaygroundLookIDs.insert(look.id)
-                            viewModel.errorMessage = "Unable to process the generated avatar image. Please try again."
-                            viewModel.isShowingErrorAlert = true
-                        }
-                        self.isProcessingPlayground = false
+                if let look = viewModel.currentLook {
+                    isProcessingPlayground = true
+                    Task {
+                        await handleGeneratedPlaygroundCGImage(resultCG, for: look)
                     }
+                } else {
+                    isProcessingPlayground = false
                 }
             },
             onCancellation: {
@@ -233,6 +220,11 @@ struct OccasionOutputView: View {
             let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
             await viewModel.generateLooksIfNeeded(profile: activeProfile)
             updatePlaygroundPackage()
+        }
+        .onChange(of: viewModel.isLoading) { wasLoading, isLoading in
+            if wasLoading && !isLoading {
+                updatePlaygroundPackage()
+            }
         }
         .onChange(of: viewModel.selectedLookIndex) { _, _ in
             updatePlaygroundPackage()
@@ -350,7 +342,7 @@ struct OccasionOutputView: View {
                     
                     Text(
                         isProcessingPlayground
-                            ? "Preparing visual outfit mapper and loading Image Playground..."
+                            ? "Styling and mapping your outfit visual..."
                             : (viewModel.loadingStageSubtitle.isEmpty
                                 ? "Styling ensembles tailored to your silhouette and \(viewModel.occasion.title)..."
                                 : viewModel.loadingStageSubtitle)
@@ -549,6 +541,9 @@ struct OccasionOutputView: View {
         isProcessingPlayground = true
         updatePlaygroundPackage()
         
+        #if targetEnvironment(simulator)
+        simulatePlaygroundGeneration(for: currentLook)
+        #else
         #if canImport(ImagePlayground)
         if #available(iOS 18.2, *) {
             if ImagePlaygroundViewController.isAvailable {
@@ -561,14 +556,32 @@ struct OccasionOutputView: View {
         }
         #endif
         
-        #if targetEnvironment(simulator)
-        simulatePlaygroundGeneration(for: currentLook)
-        #else
         isProcessingPlayground = false
         failedPlaygroundLookIDs.insert(currentLook.id)
         viewModel.errorMessage = "Image Playground is unavailable on this device right now. Make sure Apple Intelligence is enabled, then tap Regenerate."
         viewModel.isShowingErrorAlert = true
         #endif
+    }
+    
+    private func handleGeneratedPlaygroundCGImage(_ cgImage: CGImage, for look: OutfitLook) async {
+        let uiImage = UIImage(cgImage: cgImage)
+        let transparentPng = await OutfitAttributeMapper.removeBackground(from: uiImage) ?? uiImage.pngData()
+        await MainActor.run {
+            if let transparentPng {
+                failedPlaygroundLookIDs.remove(look.id)
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    viewModel.updateLookImage(transparentPng, for: look)
+                }
+                Task {
+                    await viewModel.loadCurrentGarmentCrops()
+                }
+            } else {
+                failedPlaygroundLookIDs.insert(look.id)
+                viewModel.errorMessage = "Unable to process the generated avatar image. Please try again."
+                viewModel.isShowingErrorAlert = true
+            }
+            self.isProcessingPlayground = false
+        }
     }
     
     private func simulatePlaygroundGeneration(for look: OutfitLook) {
