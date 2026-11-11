@@ -34,8 +34,18 @@ struct AvatarStageView: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            carouselTrack
-                .frame(height: 330)
+            ZStack {
+                carouselTrack
+                    .frame(height: 330)
+                
+                if shouldShowRegenerateButton {
+                    regenerateButtonOverlay
+                        .opacity(abs(dragOffset) > 12 ? 0 : 1)
+                        .animation(.easeInOut(duration: 0.18), value: abs(dragOffset) > 12)
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                }
+            }
+            .frame(height: 330)
             
             if viewModel.looks.count > 1 {
                 nativePageControlDots
@@ -46,6 +56,28 @@ struct AvatarStageView: View {
         .clipped()
         .contentShape(Rectangle())
         .gesture(dragGesture)
+    }
+    
+    private var shouldShowRegenerateButton: Bool {
+        viewModel.isCurrentLookImageGenerated
+            && !viewModel.isCurrentLookLoading
+            && !isProcessingPlayground
+            && !viewModel.isLoading
+    }
+    
+    private var regenerateButtonOverlay: some View {
+        LiquidGlassCircularButton(
+            systemName: "arrow.clockwise",
+            size: 32,
+            iconSize: 13.5,
+            isEnabled: !isProcessingPlayground
+        ) {
+            onPlaygroundTap?()
+        }
+        .accessibilityLabel("Regenerate Avatar")
+        .padding(.trailing, 8)
+        .padding(.bottom, 8)
+        .frame(width: 190, height: 330, alignment: .bottomTrailing)
     }
     
     
@@ -107,10 +139,8 @@ struct AvatarStageView: View {
             .opacity(opacity)
             .zIndex(Double(centerFactor))
             .onTapGesture {
-                let isUngenerated = index >= viewModel.looks.count
-                    || viewModel.looks[index].lookImageData == nil
-                    || OccasionOutputViewModel.isPlaceholderData(viewModel.looks[index].lookImageData ?? Data(), lookIndex: viewModel.looks[index].lookIndex)
-                if isCenter && isUngenerated {
+                guard !viewModel.isLookLoading(at: index), !isProcessingPlayground else { return }
+                if isCenter {
                     onPlaygroundTap?()
                 } else {
                     handleCardTap(at: index)
