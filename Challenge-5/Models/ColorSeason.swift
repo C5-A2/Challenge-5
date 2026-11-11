@@ -189,122 +189,161 @@ public enum ColorSeason: String, Codable, CaseIterable, Identifiable, Sendable {
     /// Swatches of colors that do NOT suit this season (for the "Colors that don't suit you" UI).
     public var colorsToAvoidPalette: [ColorSwatch] {
         switch self {
-                case .brightSpring:
+        case .brightSpring:
             return [
-                ColorSwatch(name: "Dusty Mauve", hex: "#C28EB6"),
-                ColorSwatch(name: "Greyed Mauve", hex: "#BBA6AF"),
-                ColorSwatch(name: "Muddy Rose Brown", hex: "#957A76"),
-                ColorSwatch(name: "Muddy Olive Brown", hex: "#634D1F"),
-                ColorSwatch(name: "Muddy Brown", hex: "#7A4B1F"),
-                ColorSwatch(name: "Dusty Khaki", hex: "#DCD8A8"),
-                ColorSwatch(name: "Dusty Pink", hex: "#D9A6A1"),
-                ColorSwatch(name: "Dusty Periwinkle", hex: "#7C83BC"),
-                ColorSwatch(name: "Cool Grey Green", hex: "#6E7870"),
-                ColorSwatch(name: "Dusty Blue Grey", hex: "#9BAEB6")
+                ColorSwatch(name: "#C1BEB7", hex: "#C1BEB7"),
+                ColorSwatch(name: "#DBD8AD", hex: "#DBD8AD"),
+                ColorSwatch(name: "#D1A8A3", hex: "#D1A8A3"),
+                ColorSwatch(name: "#B8A7AF", hex: "#B8A7AF"),
+                ColorSwatch(name: "#9FADB5", hex: "#9FADB5"),
+                ColorSwatch(name: "#707871", hex: "#707871"),
+                ColorSwatch(name: "#7D83B8", hex: "#7D83B8"),
+                ColorSwatch(name: "#917B77", hex: "#917B77"),
+                ColorSwatch(name: "#734D28", hex: "#734D28"),
+                ColorSwatch(name: "#604E27", hex: "#604E27")
             ]
         case .trueSpring:
             return [
-                ColorSwatch(name: "Fuchsia", hex: "#C2188F"),
-                ColorSwatch(name: "Icy Blue", hex: "#CFE8F5"),
-                ColorSwatch(name: "Silver", hex: "#C0C0C0"),
-                ColorSwatch(name: "Cool Grey", hex: "#9A9EA3"),
-                ColorSwatch(name: "Taupe", hex: "#8B7D76"),
-                ColorSwatch(name: "Dusty Rose", hex: "#C4959B"),
-                ColorSwatch(name: "Stark Black", hex: "#000000"),
-                ColorSwatch(name: "Cool White", hex: "#F5F8FF")
+                ColorSwatch(name: "#F5F5F5", hex: "#F5F5F5"),
+                ColorSwatch(name: "#E4AFCA", hex: "#E4AFCA"),
+                ColorSwatch(name: "#7D3855", hex: "#7D3855"),
+                ColorSwatch(name: "#A881AE", hex: "#A881AE"),
+                ColorSwatch(name: "#616D88", hex: "#616D88"),
+                ColorSwatch(name: "#253149", hex: "#253149"),
+                ColorSwatch(name: "#9C9089", hex: "#9C9089"),
+                ColorSwatch(name: "#949599", hex: "#949599"),
+                ColorSwatch(name: "#40464D", hex: "#40464D"),
+                ColorSwatch(name: "#000000", hex: "#000000")
             ]
         case .lightSpring:
             return [
-                ColorSwatch(name: "Black", hex: "#000000"),
-                ColorSwatch(name: "Deep Navy", hex: "#0B1A3A"),
-                ColorSwatch(name: "Dark Chocolate", hex: "#3B2218"),
-                ColorSwatch(name: "Icy Blue", hex: "#CFE8F5"),
-                ColorSwatch(name: "Icy Lilac", hex: "#D8D4F2"),
-                ColorSwatch(name: "Greyish Taupe", hex: "#7D7571"),
-                ColorSwatch(name: "Muted Slate", hex: "#6F7780")
+                ColorSwatch(name: "#F5F5F5", hex: "#F5F5F5"),
+                ColorSwatch(name: "#BE5C23", hex: "#BE5C23"),
+                ColorSwatch(name: "#4F1512", hex: "#4F1512"),
+                ColorSwatch(name: "#520F40", hex: "#520F40"),
+                ColorSwatch(name: "#3D474E", hex: "#3D474E"),
+                ColorSwatch(name: "#1A383D", hex: "#1A383D"),
+                ColorSwatch(name: "#7D4729", hex: "#7D4729"),
+                ColorSwatch(name: "#453526", hex: "#453526"),
+                ColorSwatch(name: "#544C49", hex: "#544C49"),
+                ColorSwatch(name: "#000000", hex: "#000000")
             ]
         case .lightSummer:
             return [
-                ColorSwatch(name: "Black", hex: "#000000"),
-                ColorSwatch(name: "Deep Burgundy", hex: "#4A0E1E"),
-                ColorSwatch(name: "Dark Chocolate", hex: "#3B2218"),
-                ColorSwatch(name: "Orange", hex: "#F57C00"),
-                ColorSwatch(name: "Mustard", hex: "#C99A1B"),
-                ColorSwatch(name: "Copper", hex: "#B87333"),
-                ColorSwatch(name: "Heavy Saturated Red", hex: "#D00000")
+                ColorSwatch(name: "#F5F5F5", hex: "#F5F5F5"),
+                ColorSwatch(name: "#F0C045", hex: "#F0C045"),
+                ColorSwatch(name: "#E08F3E", hex: "#E08F3E"),
+                ColorSwatch(name: "#BE4A36", hex: "#BE4A36"),
+                ColorSwatch(name: "#8B7539", hex: "#8B7539"),
+                ColorSwatch(name: "#844427", hex: "#844427"),
+                ColorSwatch(name: "#3E171E", hex: "#3E171E"),
+                ColorSwatch(name: "#2A152A", hex: "#2A152A"),
+                ColorSwatch(name: "#162F1C", hex: "#162F1C"),
+                ColorSwatch(name: "#000000", hex: "#000000")
             ]
         case .trueSummer:
             return [
-                ColorSwatch(name: "Orange", hex: "#F57C00"),
-                ColorSwatch(name: "Yellow Gold", hex: "#E3A800"),
-                ColorSwatch(name: "Coral", hex: "#FF6F61"),
-                ColorSwatch(name: "Rust", hex: "#B7410E"),
-                ColorSwatch(name: "Neon Green", hex: "#39FF14"),
-                ColorSwatch(name: "Electric Blue", hex: "#0AA5FF")
+                ColorSwatch(name: "#F5F5F5", hex: "#F5F5F5"),
+                ColorSwatch(name: "#F0C145", hex: "#F0C145"),
+                ColorSwatch(name: "#D1A544", hex: "#D1A544"),
+                ColorSwatch(name: "#E0633B", hex: "#E0633B"),
+                ColorSwatch(name: "#BB4933", hex: "#BB4933"),
+                ColorSwatch(name: "#ECAB92", hex: "#ECAB92"),
+                ColorSwatch(name: "#9B5A30", hex: "#9B5A30"),
+                ColorSwatch(name: "#874529", hex: "#874529"),
+                ColorSwatch(name: "#230263", hex: "#230263"),
+                ColorSwatch(name: "#000000", hex: "#000000")
             ]
         case .softSummer:
             return [
-                ColorSwatch(name: "Electric Pink", hex: "#FF1493"),
-                ColorSwatch(name: "Vivid Yellow", hex: "#FFE600"),
-                ColorSwatch(name: "Stark Black", hex: "#000000"),
-                ColorSwatch(name: "Bright Orange", hex: "#FF6A00"),
-                ColorSwatch(name: "Vivid Red", hex: "#E10600")
+                ColorSwatch(name: "#F5F5F5", hex: "#F5F5F5"),
+                ColorSwatch(name: "#FBF250", hex: "#FBF250"),
+                ColorSwatch(name: "#BCA145", hex: "#BCA145"),
+                ColorSwatch(name: "#DF7047", hex: "#DF7047"),
+                ColorSwatch(name: "#DA3731", hex: "#DA3731"),
+                ColorSwatch(name: "#DB4696", hex: "#DB4696"),
+                ColorSwatch(name: "#0513F5", hex: "#0513F5"),
+                ColorSwatch(name: "#81BC56", hex: "#81BC56"),
+                ColorSwatch(name: "#372415", hex: "#372415"),
+                ColorSwatch(name: "#000000", hex: "#000000")
             ]
         case .softAutumn:
             return [
-                ColorSwatch(name: "Magenta", hex: "#E6007E"),
-                ColorSwatch(name: "Neon Green", hex: "#39FF14"),
-                ColorSwatch(name: "Royal Blue", hex: "#2342D6"),
-                ColorSwatch(name: "Icy Blue", hex: "#CFE8F5"),
-                ColorSwatch(name: "Pure Black", hex: "#000000"),
-                ColorSwatch(name: "Bright White", hex: "#FFFFFF")
+                ColorSwatch(name: "#F5F5F5", hex: "#F5F5F5"),
+                ColorSwatch(name: "#F4ED5B", hex: "#F4ED5B"),
+                ColorSwatch(name: "#E0633B", hex: "#E0633B"),
+                ColorSwatch(name: "#DB3786", hex: "#DB3786"),
+                ColorSwatch(name: "#2E318C", hex: "#2E318C"),
+                ColorSwatch(name: "#D7DE52", hex: "#D7DE52"),
+                ColorSwatch(name: "#98C454", hex: "#98C454"),
+                ColorSwatch(name: "#57585A", hex: "#57585A"),
+                ColorSwatch(name: "#240247", hex: "#240247"),
+                ColorSwatch(name: "#000000", hex: "#000000")
             ]
         case .trueAutumn:
             return [
-                ColorSwatch(name: "Icy Pink", hex: "#F7D6E6"),
-                ColorSwatch(name: "Royal Blue", hex: "#2342D6"),
-                ColorSwatch(name: "Silver", hex: "#C0C0C0"),
-                ColorSwatch(name: "Stark Black", hex: "#000000"),
-                ColorSwatch(name: "Cool White", hex: "#F5F8FF"),
-                ColorSwatch(name: "Fuchsia", hex: "#C2188F")
+                ColorSwatch(name: "#EEF1FE", hex: "#EEF1FE"),
+                ColorSwatch(name: "#F3D8E6", hex: "#F3D8E6"),
+                ColorSwatch(name: "#D7C3DD", hex: "#D7C3DD"),
+                ColorSwatch(name: "#BFDAEF", hex: "#BFDAEF"),
+                ColorSwatch(name: "#9FADD3", hex: "#9FADD3"),
+                ColorSwatch(name: "#D6E7C7", hex: "#D6E7C7"),
+                ColorSwatch(name: "#A8A9AD", hex: "#A8A9AD"),
+                ColorSwatch(name: "#DC478D", hex: "#DC478D"),
+                ColorSwatch(name: "#1334F5", hex: "#1334F5"),
+                ColorSwatch(name: "#000000", hex: "#000000")
             ]
         case .darkAutumn:
             return [
-                ColorSwatch(name: "Pastel Pink", hex: "#F8D8E4"),
-                ColorSwatch(name: "Pastel Blue", hex: "#CFE3F7"),
-                ColorSwatch(name: "Icy Blue", hex: "#CFE8F5"),
-                ColorSwatch(name: "Silver", hex: "#C0C0C0"),
-                ColorSwatch(name: "Muted Lavender", hex: "#B8A9C9"),
-                ColorSwatch(name: "Dusty Pink", hex: "#C9A0A6")
+                ColorSwatch(name: "#F5F5F5", hex: "#F5F5F5"),
+                ColorSwatch(name: "#F1D6E1", hex: "#F1D6E1"),
+                ColorSwatch(name: "#E690AB", hex: "#E690AB"),
+                ColorSwatch(name: "#B8A7B0", hex: "#B8A7B0"),
+                ColorSwatch(name: "#976D7D", hex: "#976D7D"),
+                ColorSwatch(name: "#A1AFB5", hex: "#A1AFB5"),
+                ColorSwatch(name: "#5B6675", hex: "#5B6675"),
+                ColorSwatch(name: "#454D55", hex: "#454D55"),
+                ColorSwatch(name: "#808281", hex: "#808281"),
+                ColorSwatch(name: "#000000", hex: "#000000")
             ]
         case .darkWinter:
             return [
-                ColorSwatch(name: "Orange", hex: "#F57C00"),
-                ColorSwatch(name: "Mustard", hex: "#C99A1B"),
-                ColorSwatch(name: "Rust", hex: "#B7410E"),
-                ColorSwatch(name: "Earthy Khaki", hex: "#A39A76"),
-                ColorSwatch(name: "Muted Olive", hex: "#7A7A55"),
-                ColorSwatch(name: "Pale Peach", hex: "#FBE0C8"),
-                ColorSwatch(name: "Warm Cream", hex: "#F6E7C1")
+                ColorSwatch(name: "#F8E2DE", hex: "#F8E2DE"),
+                ColorSwatch(name: "#F5E5A6", hex: "#F5E5A6"),
+                ColorSwatch(name: "#DBCA93", hex: "#DBCA93"),
+                ColorSwatch(name: "#DEC773", hex: "#DEC773"),
+                ColorSwatch(name: "#DDB97F", hex: "#DDB97F"),
+                ColorSwatch(name: "#E39D41", hex: "#E39D41"),
+                ColorSwatch(name: "#EE7D6D", hex: "#EE7D6D"),
+                ColorSwatch(name: "#AB6C36", hex: "#AB6C36"),
+                ColorSwatch(name: "#B05F34", hex: "#B05F34"),
+                ColorSwatch(name: "#834628", hex: "#834628")
             ]
         case .trueWinter:
             return [
-                ColorSwatch(name: "Orange", hex: "#F57C00"),
-                ColorSwatch(name: "Golden Yellow", hex: "#F2B800"),
-                ColorSwatch(name: "Peach", hex: "#FFCBA4"),
-                ColorSwatch(name: "Rust", hex: "#B7410E"),
-                ColorSwatch(name: "Brown", hex: "#8B5A2B"),
-                ColorSwatch(name: "Khaki", hex: "#B5A97A"),
-                ColorSwatch(name: "Taupe", hex: "#8B7D76")
+                ColorSwatch(name: "#FDF4DF", hex: "#FDF4DF"),
+                ColorSwatch(name: "#D3B548", hex: "#D3B548"),
+                ColorSwatch(name: "#EEB5A2", hex: "#EEB5A2"),
+                ColorSwatch(name: "#E7A58E", hex: "#E7A58E"),
+                ColorSwatch(name: "#9E5F5A", hex: "#9E5F5A"),
+                ColorSwatch(name: "#B7DEFC", hex: "#B7DEFC"),
+                ColorSwatch(name: "#ABAE8A", hex: "#ABAE8A"),
+                ColorSwatch(name: "#A19D48", hex: "#A19D48"),
+                ColorSwatch(name: "#9B774D", hex: "#9B774D"),
+                ColorSwatch(name: "#995730", hex: "#995730")
             ]
         case .brightWinter:
             return [
-                ColorSwatch(name: "Dusty Rose", hex: "#C4959B"),
-                ColorSwatch(name: "Sage Green", hex: "#9CAF88"),
-                ColorSwatch(name: "Muted Mauve", hex: "#A08D94"),
-                ColorSwatch(name: "Orange", hex: "#F57C00"),
-                ColorSwatch(name: "Mustard", hex: "#C99A1B"),
-                ColorSwatch(name: "Golden Brown", hex: "#996515")
+                ColorSwatch(name: "#F1DFC9", hex: "#F1DFC9"),
+                ColorSwatch(name: "#EEBF68", hex: "#EEBF68"),
+                ColorSwatch(name: "#953E2C", hex: "#953E2C"),
+                ColorSwatch(name: "#BEB6BE", hex: "#BEB6BE"),
+                ColorSwatch(name: "#8FB5C0", hex: "#8FB5C0"),
+                ColorSwatch(name: "#7C8B73", hex: "#7C8B73"),
+                ColorSwatch(name: "#544424", hex: "#544424"),
+                ColorSwatch(name: "#995A30", hex: "#995A30"),
+                ColorSwatch(name: "#AF644F", hex: "#AF644F"),
+                ColorSwatch(name: "#4B2513", hex: "#4B2513")
             ]
         }
     }

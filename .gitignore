@@ -1,6 +1,7 @@
 # DerivedData
 .derivedData/
 DerivedData/
+build/
 
 # Xcode
 #

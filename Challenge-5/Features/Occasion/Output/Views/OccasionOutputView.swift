@@ -26,6 +26,10 @@ struct OccasionOutputView: View {
     @State private var isShowingPlayground: Bool = false
     @State private var playgroundPackage: OutfitPlaygroundPackage? = nil
     @State private var isProcessingPlayground: Bool = false
+    @State private var failedPlaygroundLookIDs: Set<UUID> = []
+    @State private var simulatorMockCycle: Int = 0
+    private let showVLMDebug: Bool = false
+    @State private var isVLMDebugExpanded: Bool = false
     private let showVLMDebug: Bool = true
     @State private var isVLMDebugExpanded: Bool = true
     
@@ -76,7 +80,8 @@ struct OccasionOutputView: View {
                     onPlaygroundTap: {
                         triggerPlaygroundGeneration()
                     },
-                    isProcessingPlayground: isProcessingPlayground
+                    isProcessingPlayground: isProcessingPlayground,
+                    failedPlaygroundLookIDs: failedPlaygroundLookIDs
                 )
                 
                 Spacer(minLength: 4)
@@ -184,25 +189,28 @@ struct OccasionOutputView: View {
             package: playgroundPackage,
             sourceImage: activePlaygroundSourceImage,
             onGenerated: { resultCG in
-                let uiImage = UIImage(cgImage: resultCG)
-                isProcessingPlayground = true
-                Task {
-                    let transparentPng = await OutfitAttributeMapper.removeBackground(from: uiImage) ?? uiImage.pngData()
-                    await MainActor.run {
-                        if let transparentPng, let look = viewModel.currentLook {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                viewModel.updateLookImage(transparentPng, for: look)
-                            }
-                            Task {
-                                await viewModel.loadCurrentGarmentCrops()
-                            }
-                        }
-                        self.isProcessingPlayground = false
+                if let look = viewModel.currentLook {
+                    isProcessingPlayground = true
+                    Task {
+                        await handleGeneratedPlaygroundCGImage(resultCG, for: look)
                     }
+                } else {
+                    isProcessingPlayground = false
                 }
             },
             onCancellation: {
                 isProcessingPlayground = false
+                if let look = viewModel.currentLook, !viewModel.hasGeneratedImage(look) {
+                    failedPlaygroundLookIDs.insert(look.id)
+                }
+            },
+            onFailure: {
+                isProcessingPlayground = false
+                if let look = viewModel.currentLook {
+                    failedPlaygroundLookIDs.insert(look.id)
+                }
+                viewModel.errorMessage = "Image Playground failed to render this outfit. Please tap Regenerate to try again."
+                viewModel.isShowingErrorAlert = true
             }
         )
         .alert("AI Generation Error", isPresented: $viewModel.isShowingErrorAlert, presenting: viewModel.errorMessage) { _ in
@@ -214,6 +222,11 @@ struct OccasionOutputView: View {
             let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
             await viewModel.generateLooksIfNeeded(profile: activeProfile)
             updatePlaygroundPackage()
+        }
+        .onChange(of: viewModel.isLoading) { wasLoading, isLoading in
+            if wasLoading && !isLoading {
+                updatePlaygroundPackage()
+            }
         }
         .onChange(of: viewModel.selectedLookIndex) { _, _ in
             updatePlaygroundPackage()
@@ -273,15 +286,14 @@ struct OccasionOutputView: View {
         }
     }
 
-    /// The user's own front body photo. Without one, Image Playground creates the person from
-    /// the text only (no mock photo, which made every result look like `mock_result_1`).
+    /// The user's own front body photo, falling back to the mock body (`mock_result_1`) when none is set.
     private var activePlaygroundSourceImage: Image? {
         let activeProfile = userProfiles.first ?? viewModel.profile
         if let frontData = activeProfile?.frontBodyPhotoData,
            let uiImage = UIImage(data: frontData) {
             return Image(uiImage: uiImage)
         }
-        return nil
+        return Image("mock_result_1")
     }
     
     // MARK: - Studio Stage Background (Asset Spotlight)
@@ -332,7 +344,7 @@ struct OccasionOutputView: View {
                     
                     Text(
                         isProcessingPlayground
-                            ? "Preparing visual outfit mapper and loading Image Playground..."
+                            ? "Styling and mapping your outfit visual..."
                             : (viewModel.loadingStageSubtitle.isEmpty
                                 ? "Styling ensembles tailored to your silhouette and \(viewModel.occasion.title)..."
                                 : viewModel.loadingStageSubtitle)
@@ -522,15 +534,18 @@ struct OccasionOutputView: View {
     }
     
     private func triggerPlaygroundGeneration() {
-        guard let currentLook = viewModel.currentLook else { return }
+        guard !isProcessingPlayground,
+              !viewModel.isLoading,
+              !viewModel.isCurrentLookLoading,
+              let currentLook = viewModel.currentLook else { return }
         
-        // Show loading indicator immediately when user taps Generate
+        // Show loading indicator immediately when user taps Generate / Regenerate
         isProcessingPlayground = true
+        updatePlaygroundPackage()
         
-        if playgroundPackage == nil || playgroundPackage?.lookIndex != currentLook.lookIndex {
-            updatePlaygroundPackage()
-        }
-        
+        #if targetEnvironment(simulator)
+        simulatePlaygroundGeneration(for: currentLook)
+        #else
         #if canImport(ImagePlayground)
         if #available(iOS 18.2, *) {
             if ImagePlaygroundViewController.isAvailable {
@@ -543,14 +558,44 @@ struct OccasionOutputView: View {
         }
         #endif
         
-        simulatePlaygroundGeneration(for: currentLook)
+        isProcessingPlayground = false
+        failedPlaygroundLookIDs.insert(currentLook.id)
+        viewModel.errorMessage = "Image Playground is unavailable on this device right now. Make sure Apple Intelligence is enabled, then tap Regenerate."
+        viewModel.isShowingErrorAlert = true
+        #endif
+    }
+    
+    private func handleGeneratedPlaygroundCGImage(_ cgImage: CGImage, for look: OutfitLook) async {
+        let uiImage = UIImage(cgImage: cgImage)
+        let transparentPng = await OutfitAttributeMapper.removeBackground(from: uiImage) ?? uiImage.pngData()
+        await MainActor.run {
+            if let transparentPng {
+                failedPlaygroundLookIDs.remove(look.id)
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    viewModel.updateLookImage(transparentPng, for: look)
+                }
+                Task {
+                    await viewModel.loadCurrentGarmentCrops()
+                }
+            } else {
+                failedPlaygroundLookIDs.insert(look.id)
+                viewModel.errorMessage = "Unable to process the generated avatar image. Please try again."
+                viewModel.isShowingErrorAlert = true
+            }
+            self.isProcessingPlayground = false
+        }
     }
     
     private func simulatePlaygroundGeneration(for look: OutfitLook) {
         isProcessingPlayground = true
+        let isRegenerating = viewModel.hasGeneratedImage(look)
+        if isRegenerating {
+            simulatorMockCycle += 1
+        }
+        let mockNumber = ((look.lookIndex + (isRegenerating ? simulatorMockCycle : 0)) % 5) + 1
         Task {
             try? await Task.sleep(nanoseconds: 800_000_000)
-            let assetName = "mock_result_\(look.lookIndex + 1)"
+            let assetName = "mock_result_\(mockNumber)"
             if let uiImg = UIImage(named: assetName) ?? UIImage(named: "mock_result_1") {
                 let transparentPng = await OutfitAttributeMapper.removeBackground(from: uiImg) ?? uiImg.pngData()
                 await MainActor.run {

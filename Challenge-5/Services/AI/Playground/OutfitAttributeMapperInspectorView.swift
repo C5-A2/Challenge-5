@@ -453,7 +453,8 @@ extension View {
         package: OutfitPlaygroundPackage?,
         sourceImage: Image? = nil,
         onGenerated: @escaping (CGImage) -> Void,
-        onCancellation: (() -> Void)? = nil
+        onCancellation: (() -> Void)? = nil,
+        onFailure: (() -> Void)? = nil
     ) -> some View {
         #if canImport(ImagePlayground)
         if #available(iOS 18.2, macOS 15.2, *) {
@@ -466,6 +467,10 @@ extension View {
                        let ciImage = CIImage(data: data),
                        let cgImage = CIContext().createCGImage(ciImage, from: ciImage.extent) {
                         onGenerated(cgImage)
+                    } else if let onFailure {
+                        onFailure()
+                    } else {
+                        onCancellation?()
                     }
                 },
                 onCancellation: {

@@ -154,7 +154,8 @@ extension UserProfile {
                 shoulderWidthCm: 39.5,
                 bustCircumferenceCm: 89.0,
                 waistCircumferenceCm: 68.0,
-                hipCircumferenceCm: 94.0
+                hipCircumferenceCm: 94.0,
+                torsoLengthCm: 52.9
             ),
             styleVision: .confident
         )

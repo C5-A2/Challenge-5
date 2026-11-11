@@ -23,6 +23,7 @@ public struct LibraryView: View {
     }
     
     @Environment(\.modelContext) private var modelContext
+    @Query private var userProfiles: [UserProfile]
     @State private var viewModel: LibraryViewModel
     @State private var outputPresentationItem: OutputPresentationItem? = nil
     @Binding public var selectedTab: CapsuleTabItem
@@ -97,7 +98,8 @@ public struct LibraryView: View {
                 viewModel: OccasionOutputViewModel(
                     occasion: item.occasion,
                     looks: [item.look],
-                    selectedLookIndex: 0
+                    selectedLookIndex: 0,
+                    profile: userProfiles.first ?? UserProfile.mockSample
                 ),
                 onDismiss: {
                     outputPresentationItem = nil
