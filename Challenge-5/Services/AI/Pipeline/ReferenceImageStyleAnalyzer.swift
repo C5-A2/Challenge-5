@@ -252,6 +252,9 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
 nonisolated struct ReferenceStyleAnalysis: Sendable {
     /// The reference outfits as text: the recap paragraph, or the per-photo descriptions.
     let promptDescription: String
+    /// Every per-photo description, unshortened. The reference look copies from this,
+    /// because the one-paragraph recap drops details (necklines, lengths, exact colors).
+    let fullDescription: String
     /// The outfit structure the descriptions mention most, so the reference look keeps the same pieces.
     /// `nil` when the text doesn't make it clear.
     let suggestedStructure: OutfitStructure?
@@ -269,12 +272,15 @@ nonisolated struct ReferenceStyleAnalysis: Sendable {
             .filter { !$0.isEmpty }
         guard !cleaned.isEmpty else { return nil }
 
+        fullDescription = cleaned.count == 1
+            ? cleaned[0]
+            : cleaned.enumerated()
+                .map { "Photo \($0.offset + 1): \($0.element)" }
+                .joined(separator: "\n")
         if let recap, !recap.isEmpty {
             promptDescription = recap
         } else {
-            promptDescription = cleaned.enumerated()
-                .map { "Photo \($0.offset + 1): \($0.element)" }
-                .joined(separator: "\n")
+            promptDescription = fullDescription
         }
 
         let structures = cleaned.map(Self.structure(in:))
@@ -286,9 +292,15 @@ nonisolated struct ReferenceStyleAnalysis: Sendable {
     /// The pieces one description mentions: a dress or jumpsuit (with or without an outer layer),
     /// or separates (with or without an outer layer).
     private static func structure(in description: String) -> OutfitStructure {
-        let text = description.lowercased()
-        let hasOnePiece = onePieceKeywords.contains { text.contains($0) }
-        let hasOuter = outerKeywords.contains { text.contains($0) }
+        // Whole words only: "dressed" or "petticoat" must not count as a dress or a coat.
+        let words = Set(description.lowercased()
+            .components(separatedBy: CharacterSet.letters.inverted)
+            .filter { !$0.isEmpty })
+        func mentions(_ keyword: String) -> Bool {
+            words.contains(keyword) || words.contains(keyword + "s") || words.contains(keyword + "es")
+        }
+        let hasOnePiece = onePieceKeywords.contains(where: mentions)
+        let hasOuter = outerKeywords.contains(where: mentions)
         switch (hasOnePiece, hasOuter) {
         case (true, true): return .dressWithOuter
         case (true, false): return .dress

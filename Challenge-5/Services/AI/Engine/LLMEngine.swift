@@ -19,6 +19,7 @@ public enum LLMEngineError: Error, LocalizedError {
     case decodingFailed(Int32)
     case outputParsingFailed(String)
     case simulatorUnsupported
+    case promptTooLong(Int)
 
     public var errorDescription: String? {
         switch self {
@@ -36,6 +37,8 @@ public enum LLMEngineError: Error, LocalizedError {
             return "Failed to parse structured JSON from LLM output: \(detail)"
         case .simulatorUnsupported:
             return "LLM C++ binary is built exclusively for physical device GPU. In simulator/previews, mock mode is active."
+        case .promptTooLong(let tokens):
+            return "The prompt (\(tokens) tokens) leaves no room for the answer in the model's context."
         }
     }
 }
@@ -64,6 +67,8 @@ public actor LLMEngine {
     #endif
     private var isBackendInitialized = false
     /// Loading the text model is retried this many times in total (memory may still be held by the VLM).
+    /// The smallest answer room that still fits one look's JSON.
+    private static let minimumAnswerTokens = 350
     private static let maximumModelLoadAttempts = 3
     private static let modelLoadRetryDelay: TimeInterval = 1.0
     private var isGenerating = false
@@ -438,6 +443,17 @@ public actor LLMEngine {
         guard nTokens > 0 else {
             throw LLMEngineError.tokenizationFailed
         }
+
+        // The prompt and the answer share the context window. Without this check a long prompt makes
+        // llama_decode fail mid-answer and the JSON comes back cut off.
+        let contextSize = Int(llama_n_ctx(context))
+        let answerRoom = contextSize - Int(nTokens)
+        guard answerRoom >= Self.minimumAnswerTokens else {
+            print("⚠️ [LLMEngine] Prompt is \(nTokens) tokens; context is \(contextSize).")
+            throw LLMEngineError.promptTooLong(Int(nTokens))
+        }
+        let answerTokenLimit = min(maxTokens, answerRoom)
+        print("🧮 [LLMEngine] Prompt \(nTokens) tokens, answer limit \(answerTokenLimit) of context \(contextSize).")
         
         // Setup Sampler Chain matching modern llama.cpp C-API
         let sparams = llama_sampler_chain_default_params()
@@ -487,7 +503,7 @@ public actor LLMEngine {
         var generatedCount = 0
         
         var buffer = [CChar](repeating: 0, count: 256)
-        while generatedCount < maxTokens {
+        while generatedCount < answerTokenLimit {
             let nextToken = llama_sampler_sample(sampler, context, -1)
             
             if llama_vocab_is_eog(vocab, nextToken) {

@@ -258,9 +258,19 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         )
         let baseTemperature = max(archetype.temperature, minimumTemperature ?? 0)
 
+        // Colors: the dresscode's colors are enforced on every garment; otherwise the reference look
+        // keeps the reference colors and the surprise look may add one accent outside her palette.
+        let dresscodeColors = DresscodeColorRule.forOccasion(title: occasion.title, dresscode: occasion.dresscode, note: occasion.customNote, palette: profile.colorSeason?.outfitSwatches ?? [])
+        let keepsReferenceColors = archetype == .referenceMatch && referenceAnalysis != nil
+        let dresscodeRequirements = DresscodeRequirements(dresscode: occasion.dresscode)
+        let excludedHexes = DresscodeColorRule.excludedHexes(dresscode: occasion.dresscode, palette: profile.colorSeason?.outfitSwatches ?? [])
+        let allowsOffPalette = dresscodeColors == nil && keepsReferenceColors
+
         // Rejected repeats are added to the "previous looks" list, so the next attempt avoids them too.
         var avoidedLooks = previousLooks
         var lastRepeatedLook: OutfitLook?
+        // Set when the prompt didn't fit the model's context: the next attempt uses the compact prompt.
+        var forcesCompactPrompt = false
 
         for attempt in 0..<Self.maximumAttemptsPerLook {
             let temperature = min(baseTemperature + Float(attempt) * Self.retryTemperatureStep, Self.maximumRetryTemperature)
@@ -270,32 +280,42 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 lookIndex: lookIndex,
                 structure: structure,
                 previousLooks: avoidedLooks,
-                referenceAnalysis: referenceAnalysis
+                referenceAnalysis: referenceAnalysis,
+                forcesCompact: forcesCompactPrompt
             )
             print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) \(archetype) / \(structure.rawValue) (temp \(temperature), attempt \(attempt + 1)/\(Self.maximumAttemptsPerLook)). Prompt \(prompt.count) chars. Running \(LLMResource.activeModelFilename)…")
 
-            let rawOutput = try await LLMEngine.shared.generate(
-                prompt: prompt,
-                maxTokens: Self.maximumTokensPerLook,
-                temperature: temperature,
-                topP: archetype.topP
-            )
-            print("✅ [OutfitGenerationPipeline] Look \(lookIndex) raw output (\(rawOutput.count) chars):\n\(rawOutput)")
-
             let parsedLook: OutfitLook
             do {
+                let rawOutput = try await LLMEngine.shared.generate(
+                    prompt: prompt,
+                    maxTokens: Self.maximumTokensPerLook,
+                    temperature: temperature,
+                    topP: archetype.topP
+                )
+                print("✅ [OutfitGenerationPipeline] Look \(lookIndex) raw output (\(rawOutput.count) chars):\n\(rawOutput)")
+
                 let parsedLooks = try parseLooks(
                     from: rawOutput.trimmingCharacters(in: .whitespacesAndNewlines),
                     colorSeason: profile.colorSeason,
                     structure: structure,
-                    allowsOffPaletteAccent: archetype.allowsOffPaletteAccent
+                    allowsOffPaletteAccent: allowsOffPalette,
+                    requiredSwatches: dresscodeColors?.swatches,
+                    excludedHexes: excludedHexes
                 )
                 guard let first = parsedLooks.first else {
                     throw LLMError.invalidOutput("LLM returned 0 looks for look index \(lookIndex).")
                 }
+                // A look whose garments were all dropped (unknown categories) would show placeholder cards.
+                guard !first.garments.isEmpty else {
+                    throw LLMError.invalidOutput("Look index \(lookIndex) has no usable garments.")
+                }
                 parsedLook = first
             } catch {
-                print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) attempt \(attempt + 1) could not be parsed: \(error.localizedDescription)")
+                print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) attempt \(attempt + 1) failed: \(error.localizedDescription)")
+                if let engineError = error as? LLMEngineError, case .promptTooLong = engineError {
+                    forcesCompactPrompt = true
+                }
                 if attempt == Self.maximumAttemptsPerLook - 1 {
                     if let lastRepeatedLook { return lastRepeatedLook }
                     throw error
@@ -305,7 +325,35 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             // Enforce the intended index regardless of what the model output.
             parsedLook.lookIndex = lookIndex
 
-            guard let repeatedIndex = Self.repeatedLookIndex(of: parsedLook, in: avoidedLooks) else {
+            // The pieces must match the structure: a dress when the dresscode or reference asks for one,
+            // separates otherwise. The parser keeps whatever came back when nothing matches, so check here.
+            let pieceCategories = Set(parsedLook.garments.map(\.category))
+            if !structure.categories.allSatisfy(pieceCategories.contains) {
+                print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) has \(pieceCategories.map(\.rawValue).sorted()) instead of \(structure.categories.map(\.rawValue)). Generating it again.")
+                if lastRepeatedLook == nil { lastRepeatedLook = parsedLook }
+                continue
+            }
+
+            // A textile, fabric or pattern the dresscode requires ("batik") must appear in the look.
+            if let missing = dresscodeRequirements.requiredTermGroups.first(where: { group in
+                !parsedLook.garments.contains { garment in
+                    let text = "\(garment.name) \(garment.material) \(garment.playgroundPrompt ?? "")".lowercased()
+                    return group.contains { text.contains($0) }
+                }
+            }) {
+                print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) misses the dresscode's \(missing.first ?? ""). Generating it again.")
+                if lastRepeatedLook == nil { lastRepeatedLook = parsedLook }
+                continue
+            }
+
+            // Without dresscode colors, a look mixing several bright colors is generated again (kept only as a last resort).
+            if dresscodeColors == nil, !keepsReferenceColors, Self.isTooColorful(parsedLook) {
+                print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) mixes several bright colors. Generating it again.")
+                if lastRepeatedLook == nil { lastRepeatedLook = parsedLook }
+                continue
+            }
+
+            guard let repeatedIndex = Self.repeatedLookIndex(of: parsedLook, in: avoidedLooks, comparesColors: dresscodeColors == nil) else {
                 return parsedLook
             }
             print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) repeats look \(repeatedIndex + 1). Generating it again.")
@@ -320,13 +368,43 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         return lastRepeatedLook
     }
 
+    // MARK: - Color Check
+
+    /// A color at least this saturated and this bright counts as a "color", not a neutral.
+    private static let colorfulMinimumSaturation = 0.35
+    private static let colorfulMinimumBrightness = 0.35
+    /// Hues within this many degrees count as one color (shades of the same color).
+    private static let sameColorHueRange = 30.0
+
+    /// Whether the look uses more than one non-neutral color, for example red with green and yellow.
+    private static func isTooColorful(_ look: OutfitLook) -> Bool {
+        let hues: [Double] = look.garments.compactMap { garment in
+            let clean = garment.hexColor.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+            guard clean.count == 6, let value = UInt32(clean, radix: 16) else { return nil }
+            let r = Double((value >> 16) & 0xFF) / 255, g = Double((value >> 8) & 0xFF) / 255, b = Double(value & 0xFF) / 255
+            let maximum = max(r, g, b), delta = maximum - min(r, g, b)
+            guard maximum >= colorfulMinimumBrightness, delta / maximum >= colorfulMinimumSaturation else { return nil }
+            var hue: Double
+            if maximum == r { hue = 60 * ((g - b) / delta).truncatingRemainder(dividingBy: 6) }
+            else if maximum == g { hue = 60 * ((b - r) / delta + 2) }
+            else { hue = 60 * ((r - g) / delta + 4) }
+            return hue < 0 ? hue + 360 : hue
+        }
+        guard let first = hues.first else { return false }
+        return hues.contains { hue in
+            let difference = abs(hue - first)
+            return min(difference, 360 - difference) > sameColorHueRange
+        }
+    }
+
     // MARK: - Repeat Check
 
     /// The index of the earlier look that `look` repeats, or `nil` when it's new.
     ///
     /// A look repeats an earlier one when a garment has the same category and name as one there,
     /// or when every garment matches one there in category and color (the same outfit, renamed).
-    private static func repeatedLookIndex(of look: OutfitLook, in previousLooks: [GeneratedLookSummary]) -> Int? {
+    /// With dresscode colors every look shares the same few colors, so only names are compared (`comparesColors: false`).
+    private static func repeatedLookIndex(of look: OutfitLook, in previousLooks: [GeneratedLookSummary], comparesColors: Bool = true) -> Int? {
         let garments = look.garments.map {
             (category: $0.category.rawValue, name: normalizedGarmentText($0.name), color: normalizedGarmentText($0.colorName))
         }
@@ -339,7 +417,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             let repeatsGarment = garments.contains { garment in
                 previousGarments.contains { $0.category == garment.category && $0.name == garment.name }
             }
-            let repeatsOutfit = garments.count == previousGarments.count && garments.allSatisfy { garment in
+            let repeatsOutfit = comparesColors && garments.count == previousGarments.count && garments.allSatisfy { garment in
                 previousGarments.contains { $0.category == garment.category && $0.color == garment.color }
             }
             if repeatsGarment || repeatsOutfit {
@@ -491,12 +569,16 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         from jsonString: String,
         colorSeason: ColorSeason? = nil,
         structure: OutfitStructure? = nil,
-        allowsOffPaletteAccent: Bool = false
+        allowsOffPaletteAccent: Bool = false,
+        requiredSwatches: [ColorSeason.ColorSwatch]? = nil,
+        excludedHexes: Set<String> = []
     ) throws -> [OutfitLook] {
         let options = ParseOptions(
             colorSeason: colorSeason,
             structure: structure,
-            allowsOffPaletteAccent: allowsOffPaletteAccent
+            allowsOffPaletteAccent: allowsOffPaletteAccent,
+            requiredSwatches: requiredSwatches,
+            excludedHexes: excludedHexes
         )
         var cleanJSON = jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -583,6 +665,16 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let colorSeason: ColorSeason?
         let structure: OutfitStructure?
         let allowsOffPaletteAccent: Bool
+        /// Dresscode colors: when set, every garment color is snapped to one of these instead of the season palette.
+        let requiredSwatches: [ColorSeason.ColorSwatch]?
+        /// Palette colors the dresscode rules out ("no black").
+        let excludedHexes: Set<String>
+
+        /// The colors garments are matched to.
+        var palette: [ColorSeason.ColorSwatch] {
+            // Without dresscode colors, every color is snapped to her "suits you" colors and neutrals.
+            (requiredSwatches ?? colorSeason?.outfitSwatches ?? []).filter { !excludedHexes.contains($0.hex.uppercased()) }
+        }
     }
 
     // MARK: - LLM JSON Sanitization & Resilient Fallback
@@ -655,7 +747,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
         // Find all garment-like objects: { ... "category" ... }
         var garments: [GarmentItem] = []
-        let palette = options.colorSeason?.allSwatches ?? []
+        let palette = options.palette
 
         var depth = 0
         var objStart: String.Index? = nil
@@ -797,7 +889,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             throw LLMError.invalidOutput("Unable to decode looks from JSON")
         }
 
-        let palette = options.colorSeason?.allSwatches ?? []
+        let palette = options.palette
         var looks: [OutfitLook] = []
         for lookDTO in lookDTOs {
             let look = OutfitLook(
@@ -870,6 +962,12 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let lowerName = rawName.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         if !lowerName.isEmpty, let exactNameMatch = palette.first(where: { $0.name.lowercased() == lowerName }) {
             return (exactNameMatch.name, exactNameMatch.hex)
+        }
+
+        // The reference look keeps the reference color itself. Checked before the partial name match,
+        // which would otherwise turn "white" into a palette swatch named "Whitecap Gray".
+        if allowsOffPalette, rgbComponents(fromHex: cleanHex) != nil {
+            return (rawName, "#\(cleanHex)")
         }
 
         let rawColor = rgbComponents(fromHex: cleanHex)

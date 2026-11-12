@@ -312,7 +312,8 @@ struct OutfitPromptBuilder: Sendable {
         lookIndex: Int,
         structure: OutfitStructure,
         previousLooks: [GeneratedLookSummary] = [],
-        referenceAnalysis: ReferenceStyleAnalysis? = nil
+        referenceAnalysis: ReferenceStyleAnalysis? = nil,
+        forcesCompact: Bool = false
     ) -> String {
         let system = buildSingleLookSystemPrompt(
             occasion: occasion,
@@ -320,7 +321,8 @@ struct OutfitPromptBuilder: Sendable {
             lookIndex: lookIndex,
             structure: structure,
             previousLooks: previousLooks,
-            referenceAnalysis: referenceAnalysis
+            referenceAnalysis: referenceAnalysis,
+            forcesCompact: forcesCompact
         )
         let user = buildSingleLookUserPrompt(
             occasion: occasion,
@@ -364,65 +366,89 @@ struct OutfitPromptBuilder: Sendable {
         lookIndex: Int,
         structure: OutfitStructure,
         previousLooks: [GeneratedLookSummary],
-        referenceAnalysis: ReferenceStyleAnalysis? = nil
+        referenceAnalysis: ReferenceStyleAnalysis? = nil,
+        forcesCompact: Bool = false
     ) -> String {
         let archetype = OutfitArchetype(lookIndex: lookIndex)
         let hasReference = hasReferenceImages(occasion)
         let title = archetype.title(hasReference: hasReference, hasVision: !occasion.visions.isEmpty)
 
-        // The occasion and dresscode come first: every look direction works inside them.
-        var sections: [String] = [
-            occasionSection(for: occasion),
+        let dresscodeColors = DresscodeColorRule.forOccasion(title: occasion.title, dresscode: occasion.dresscode, note: occasion.customNote, palette: profile?.colorSeason?.outfitSwatches ?? [])
+
+        // `compact` drops the least important text when the prompt would crowd the model's 4K context
+        // (look 5 with reference photos, style visions and 4 previous looks is the longest case).
+        func assemble(compact: Bool) -> String {
+            // The occasion and dresscode come first: every look direction works inside them.
+            var sections: [String] = [
+                occasionSection(for: occasion, lookIndex: lookIndex, structure: structure),
+                """
+                LOOK DIRECTION: \(title.uppercased())
+                \(archetypeBrief(archetype, occasion: occasion, hasReference: hasReference))
+                """,
+                """
+                OUTFIT PIECES: \(structure.promptDescription)
+                \(piecesRule(for: structure))
+                """
+            ]
+
+            // The Indonesian setting and a modern style apply to every look.
+            sections.append(compact ? Self.compactIndonesiaSetting : Self.indonesiaSetting)
+            sections.append(Self.modernStyle)
+            if let note = occasion.customNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+                sections.append("USER NOTE: \(note)")
+            }
+
+            if let referenceSection = referenceSection(for: archetype, analysis: referenceAnalysis, hasReference: hasReference) {
+                sections.append(referenceSection)
+            }
+            if !compact || archetype == .lookMore, let visionSection = visionSection(for: archetype, occasion: occasion) {
+                sections.append(visionSection)
+            }
+            if let bodySection = bodySection(for: archetype, profile: profile, structure: structure) {
+                sections.append(bodySection)
+            }
+            if let colorSection = colorSection(for: archetype, lookIndex: lookIndex, profile: profile, occasion: occasion, hasReference: hasReference, referenceAnalysis: referenceAnalysis, compactPalette: compact) {
+                sections.append(colorSection)
+            }
+            let shownPreviousLooks = compact ? Array(previousLooks.suffix(Self.compactPreviousLookCount)) : previousLooks
+            if let previousSection = previousLooksSection(shownPreviousLooks, keepsDresscodeColors: dresscodeColors != nil) {
+                sections.append(previousSection)
+            }
+
+            return """
+            You are a top womenswear stylist. Create ONE outstanding outfit (look \(lookIndex + 1)) for '\(occasion.title)'.
+            Use your full fashion knowledge: invent specific, real, current garments with a clear cut, detail and fabric, styled the way a professional stylist would for this exact occasion.
+
+            \(sections.joined(separator: "\n\n"))
+
+            \(Self.garmentNamingRule)
+
+            \(outputFormatSection(lookIndex: lookIndex, title: title, structure: structure))
             """
-            LOOK DIRECTION: \(title.uppercased())
-            \(archetypeBrief(archetype, occasion: occasion, hasReference: hasReference))
-            """,
-            """
-            OUTFIT PIECES: \(structure.promptDescription)
-            \(piecesRule(for: structure))
-            """
-        ]
-
-        // The Indonesian setting and a modern style apply to every look.
-        sections.append(Self.indonesiaSetting)
-        sections.append(Self.modernStyle)
-        if let note = occasion.customNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
-            sections.append("USER NOTE: \(note)")
         }
 
-        if let referenceSection = referenceSection(for: archetype, analysis: referenceAnalysis, hasReference: hasReference) {
-            sections.append(referenceSection)
+        var systemPrompt = assemble(compact: forcesCompact)
+        if !forcesCompact, systemPrompt.count > Self.maximumSystemPromptCharacters {
+            systemPrompt = assemble(compact: true)
         }
-        if let visionSection = visionSection(for: archetype, occasion: occasion) {
-            sections.append(visionSection)
-        }
-        if let bodySection = bodySection(for: archetype, profile: profile, structure: structure) {
-            sections.append(bodySection)
-        }
-        if let colorSection = colorSection(for: archetype, lookIndex: lookIndex, profile: profile, occasion: occasion, hasReference: hasReference, referenceAnalysis: referenceAnalysis) {
-            sections.append(colorSection)
-        }
-        if let previousSection = previousLooksSection(previousLooks) {
-            sections.append(previousSection)
-        }
+        print("[OutfitPromptBuilder] Look \(lookIndex) (\(title), \(structure.rawValue)) system prompt (\(systemPrompt.count) chars) for: \"\(occasion.title)\"")
 
-        let systemPrompt = """
-        You are a creative womenswear stylist. Create ONE outfit (look \(lookIndex + 1)) for '\(occasion.title)'.
-        Use your full fashion knowledge: invent specific, real garments with a clear cut, detail and fabric.
+        return systemPrompt
+    }
 
-        \(sections.joined(separator: "\n\n"))
+    /// Above this size (about 3,100 tokens) the prompt is rebuilt compact, so one look's JSON (300-600 tokens) still fits
+    /// in the model's 4,096-token context.
+    private static let maximumSystemPromptCharacters = 12_500
+    /// In a compact prompt, only the latest looks are listed as "do not repeat".
+    private static let compactPreviousLookCount = 2
 
-        \(Self.garmentNamingRule)
-
+    private func outputFormatSection(lookIndex: Int, title: String, structure: OutfitStructure) -> String {
+        """
         OUTPUT FORMAT: Return ONLY valid JSON, no markdown, no extra text.
         Put every garment inside ONE "garments" array. Garment fields: "category", "name", "material", "colorName", "hexColor", "rationale", "playgroundPrompt".
         "fitRationale": 1 short sentence on why the outfit works. "rationale": under 10 words per garment.
         \(outputSchema(lookIndex: lookIndex, title: title, structure: structure))
         """
-
-        print("[OutfitPromptBuilder] Look \(lookIndex) (\(title), \(structure.rawValue)) system prompt (\(systemPrompt.count) chars) for: \"\(occasion.title)\"")
-
-        return systemPrompt
     }
 
     // MARK: - Garment Naming
@@ -432,37 +458,50 @@ struct OutfitPromptBuilder: Sendable {
     /// No concrete example names are given, because the model tends to copy examples too.
     private static let garmentNamingRule = """
     GARMENT NAMES & VISUAL PROMPTS:
-    - Write each "name" as a short phrase: the cut or detail, then the garment type (no "+" sign). The cut or detail is the neckline, collar, sleeve, closure, waist or silhouette that makes the piece specific.
-    - ONLY if the reference text or the dresscode explicitly names a surface pattern or traditional textile, keep that exact pattern word inside the garment "name" (pattern word + cut + garment type) and inside "playgroundPrompt". If neither names a pattern, use plain solid garments and do NOT invent any pattern.
-    - "material" stays the base fabric only (e.g. Cotton Poplin, Silk, Linen) — never put a pattern word in "material".
-    - Do NOT put color words in the name; the color belongs only in "colorName".
-    - Do NOT use vague words such as "tailored", "structured", "elegant", "classic", "chic", "sophisticated", "modern" or "refined" in the name. Describe the cut that creates that effect instead.
-    - Every garment in this look must name a different cut or silhouette detail, and must not reuse the same cut detail from the previous looks (however, if the dresscode or reference text names a required pattern or textile, you MUST keep that pattern/textile word in every look using a different cut).
-    - "playgroundPrompt": A clean 4-6 word phrase for image generation: "[color] color [fabric/pattern if any] [clothing noun]" (e.g. "sweet corn color embroidered blouse", "warm ivory color wool coat", "navy color straight trousers"). Always include the word "color" right after the color name so the color is never mistaken for a printed motif. Never use "sheer", "translucent", "revealing", or body-part words. For Outer layers, always specify "long-sleeve".
+    - "name": the cut or detail, then the garment type (no "+" sign, no color words; the color goes only in "colorName"). Name the neckline, sleeve, waist, length or silhouette instead of vague words (tailored, structured, elegant, classic, chic, sophisticated, modern, refined).
+    - A textile, pattern or texture required by the dresscode or the reference goes in the "name" and "playgroundPrompt" of the garment that carries it, in every look. Do not invent a printed pattern (floral, batik, stripes) that nobody asked for. Textures and trims (lace, tulle, organza, feathers, pearls, beading, sequins, ruffles, bows, pleats, corset boning) are details, not patterns, and are welcome.
+    - "material": the base fabric only (e.g. Silk, Satin, Linen), never a pattern word.
+    - Use a different cut or detail than the previous looks.
+    - "playgroundPrompt": 5-9 words, "[color] color [fabric] [key detail, texture or textile] [clothing noun]" so the image shows the detail (e.g. "white color satin feather-trimmed corset mini dress", "navy color batik pleated midi skirt"). Never use "sheer", "translucent", "revealing" or body-part words. Outer layers always say "long-sleeve".
     """
 
     // MARK: - Occasion & Setting
 
     /// Every look is for this occasion: the direction changes the style, never the event it's for.
-    private func occasionSection(for occasion: OccasionItem) -> String {
-        var lines = [
-            "OCCASION (every look is for this event, this matters most): '\(occasion.title)'.",
-            "First decide what this event needs: the likely venue, time of day, how formal it is, and what she will do there (standing, sitting, walking, eating, dancing). Then choose pieces a stylish woman would really wear to it. Do not overdress a casual event or underdress a formal one."
-        ]
+    private func occasionSection(for occasion: OccasionItem, lookIndex: Int, structure: OutfitStructure) -> String {
+        var lines = ["OCCASION (every look is for this event; this matters most): '\(occasion.title)'."]
         let cleanDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Known occasions get a short guide, so the model doesn't have to guess what the title means.
         let note = occasion.customNote ?? ""
+
+        // Known occasions get a guide (formality, statement level, fabrics, a silhouette option for this look),
+        // so the model doesn't have to guess what the title means or fall back to plain basics.
         if let guide = OccasionStyleBank.guide(forTitle: occasion.title, dresscode: cleanDresscode + " " + note) {
-            lines.append(guide.promptText)
+            lines.append(guide.promptText(lookIndex: lookIndex, hasDress: structure.hasDress))
+        } else {
+            lines.append("Decide what this event needs: the likely venue, time of day, how formal it is and what she will do there. Then choose a striking, current outfit a stylish woman would really wear to it. Do not overdress a casual event or underdress a formal one.")
         }
+
         if cleanDresscode.isEmpty {
             lines.append("No dresscode given: infer the right formality from the occasion.")
         } else {
-            lines.append("DRESSCODE (hard rule, overrides the look direction): \"\(cleanDresscode)\". Every look must strictly follow this dresscode's formality, colors, pattern/textile and style. If the dresscode names a specific garment, textile or pattern, include it in this look and put that word in the garment \"name\" and \"playgroundPrompt\".")
+            var checklist: [String] = []
             if OutfitStructure(dresscode: cleanDresscode) != nil {
-                lines.append("The dresscode names the garment: this look MUST use exactly that garment type, with the length, color, pattern, fit and details it names. Put those words in the garment \"name\".")
+                checklist.append("Garment: EVERY look uses exactly the garment type the dresscode names, with the length, fit and details it names (put those words in the garment \"name\").")
+            }
+            if DresscodeColorRule(dresscode: cleanDresscode, palette: []) != nil {
+                checklist.append("Colors: only the colors in DRESSCODE COLORS below.")
+            }
+            checklist += DresscodeRequirements(dresscode: cleanDresscode).checklist
+            lines.append("DRESSCODE (hard rule for every look): \"\(cleanDresscode)\". Follow its formality, colors, textile, pattern, theme and garment exactly.")
+            let exclusions = DresscodeText.negated(cleanDresscode)
+            if !exclusions.isEmpty {
+                checklist.append("Ruled out by the dresscode (never use in any piece): \(exclusions).")
+            }
+            if !checklist.isEmpty {
+                lines.append("DRESSCODE CHECKLIST (this look must pass every line):\n" + checklist.map { "- \($0)" }.joined(separator: "\n"))
             }
         }
+        lines.append("HOW THE RULES COMBINE: the dresscode decides WHAT she wears (garment, textile, pattern, colors, formality); her body styling goal decides the CUT and where details go; the look direction decides the STYLE IDEA; her palette chooses colors only where the dresscode doesn't.")
         return lines.joined(separator: "\n")
     }
 
@@ -476,13 +515,17 @@ struct OutfitPromptBuilder: Sendable {
     - Traditional pieces or motifs (kebaya, batik, tenun, songket) ONLY when the reference photos or the dresscode explicitly ask for them; otherwise do NOT use traditional pieces.
     """
 
+    private static let compactIndonesiaSetting = """
+    SETTING: tropical Indonesia: breathable fabrics, light short or mid-length outers only, traditional pieces only when the dresscode or reference asks.
+    """
+
     /// The model tends to pick old-fashioned, heavily decorated pieces. This keeps every look current.
     private static let modernStyle = """
     MODERN STYLE (every look):
-    - Trend-forward, not basic: style her like a fashionable Indonesian woman in her 20s in 2026, the kind of outfit local fashion creators post for this occasion.
-    - Every outfit needs a clear modern styling idea that suits the occasion, such as fitted vs. relaxed proportions, a cropped or body-skimming fit, an interesting neckline or open back, a slit, a cut-out, an asymmetric hem, ruching or draping, or a satin, sheer or textured fabric.
-    - Shaped, not shapeless: show her waist or silhouette. Avoid loose boxy tunics, peasant blouses, shapeless smocks and plain basic tees unless the dresscode is very casual.
-    - Avoid heavy embroidery, beading, brocade, lace trims, puffed or bell sleeves, long shapeless outers, and anything vintage, matronly or costume-like, unless the dresscode asks for it.
+    - Trend-forward and styled, not basic: dress her like a fashionable Indonesian woman in her 20s in 2026, the kind of outfit local fashion creators and stylists post for this occasion.
+    - NO plain basics: every outfit needs at least ONE statement detail or texture that suits the occasion, named in the garment "name" and "playgroundPrompt". Examples of details: lace panels or lace trim, tulle or organza layers, feathers, a corset or bustier bodice, pearl or bead embellishment, sequins, ruffles, a bow, pleats, ruching, draping, satin or jacquard. Dressier events take richer details (lace, corset, pearls, feathers, tulle); casual events take lighter ones (pleats, a bow, a ruffle hem, a textured knit).
+    - Shaped, not shapeless: show her silhouette with a fitted bodice, a defined waistline, a cropped length or a body-skimming fit. Avoid loose boxy tunics, peasant blouses, shapeless smocks and plain tees unless the dresscode is very casual.
+    - Avoid anything dated, matronly or costume-like, and long shapeless outers. Only a theme named in the dresscode (vintage, retro, Y2K...) or the occasion guide's modesty rule can override this section.
     """
 
     // MARK: - Look Direction
@@ -493,8 +536,8 @@ struct OutfitPromptBuilder: Sendable {
         switch archetype {
         case .referenceMatch:
             return hasReference
-                ? "Recreate the outfit in the user's reference photos as closely as possible: the same kind of pieces, layering, silhouette, patterns and color story. Use the colors from the reference photo(s) too whenever they can be matched to her seasonal palette without going too far from her color rules; if a reference color clashes with her season, fall back to her seasonal neutrals. Change only what the occasion or the dresscode requires — the dresscode is mandatory."
-                : "Create the user's signature outfit for this occasion: timeless, well-cut pieces she would happily wear again, strictly following the dresscode."
+                ? "Recreate the outfit in the user's reference photos as closely as possible: the same kind of pieces, layering, silhouette, textures, patterns and colors (see COLORS). Change only what the dresscode requires, and fit the cut to her styling goal."
+                : "Create her signature outfit for this occasion: a polished, flattering, current look she would happily wear again, using the suggested silhouette and strictly following the dresscode."
         case .localTouch:
             return "Style her in contemporary Indonesian fashion-creator street or occasion wear: build the outfit around ONE distinctive modern element (an interesting texture, an asymmetric or draped cut, or a traditional textile ONLY if the dresscode or reference photos ask for it) while keeping every other piece simple, current and strictly compliant with the occasion and dresscode."
         case .colorStory:
@@ -523,16 +566,19 @@ struct OutfitPromptBuilder: Sendable {
                 return "REFERENCE PHOTOS: attached, but the vision model could not describe them. Follow the style vision and dresscode."
             }
             return """
-            REFERENCE PHOTOS (described by the on-device vision model, follow closely):
-            "\(analysis.promptDescription)"
-            - Keep the garment types, cuts, layering and silhouette described above.
-            - Pattern: ONLY if the reference text above (or the dresscode) explicitly names a surface pattern or motif, keep that exact pattern word inside the garment "name" and "playgroundPrompt", never in "material". If neither names a pattern, use plain solid garments and do NOT invent any pattern.
-            - Match the colors from the reference photo(s) for each corresponding piece if possible, selecting the closest swatches from her palette (Neutrals or Season colors) that stay within her seasonal color rules.
+            REFERENCE PHOTOS (described by the on-device vision model). RECREATE THIS OUTFIT AS CLOSELY AS POSSIBLE:
+            "\(analysis.fullDescription)"
+            - Use the same garment for every piece described: the same garment type, neckline, sleeves, length, fit, fabric and details. Reuse the description's own words in each garment "name".
+            - Keep the same layering and silhouette. Do not add, drop or swap pieces.
+            - For this look the reference wins over MODERN STYLE, the OCCASION GUIDE and the garment-name rules when they disagree. Only the DRESSCODE (and its colors) can change it.
+            - Keep every texture, trim and embellishment the description names (for example lace, feathers, corset, beading, pearls, tulle, ruffles) in the garment "name" and "playgroundPrompt". These details are what make the outfit look like the reference.
+            - Pattern: ONLY if the reference text above (or the dresscode) explicitly names a surface pattern or motif, keep that exact pattern word inside the garment "name" and "playgroundPrompt", never in "material". Do NOT invent a printed pattern.
+            - Colors: follow the COLORS section below.
             """
         case .localTouch, .colorStory, .lookMore:
             guard let analysis else { return nil }
             return """
-            REFERENCE PHOTOS (her taste, follow it): keep the same style, formality, vibe, fit, surface patterns (only if explicitly named below) and level of trendiness as these photos, with the same kind of garments where the look direction allows, but do not copy them piece by piece:
+            REFERENCE PHOTOS (her taste, follow it): keep the same style, formality, vibe, fit, level of trendiness and signature details as these photos (their textures and trims such as lace, feathers, corset, beading or tulle, and surface patterns only if explicitly named below), with the same kind of garments where the look direction allows, but do not copy them piece by piece:
             "\(analysis.promptDescription)"
             """
         case .surpriseMe:
@@ -569,6 +615,7 @@ struct OutfitPromptBuilder: Sendable {
         var lines: [String] = []
         if let bodyType {
             let garments = bodyType.suitableGarments
+            lines.append("STYLING GOAL (must show in this look): \(bodyType.act)")
             lines.append("Necklines: \(garments.necklines)")
             if structure.hasDress {
                 lines.append("Dresses & jumpsuits: \(garments.skirtsAndDresses)")
@@ -589,8 +636,11 @@ struct OutfitPromptBuilder: Sendable {
         guard !lines.isEmpty else { return nil }
 
         let bodyName = [bodyType?.displayName, torsoBalance?.rawValue].compactMap { $0 }.joined(separator: ", ")
-        return "BODY GUIDE (\(bodyName); prefer these cuts where they fit the look direction, they are guidance, not strict rules):\n"
-            + lines.map { "- \($0)" }.joined(separator: "\n")
+        let referenceNote = archetype == .referenceMatch
+            ? "\n- For the reference look, keep the reference pieces but choose their fit, length and neckline so they still follow the styling goal."
+            : ""
+        return "BODY GUIDE (\(bodyName)). The styling goal is a rule for every look: never hide the part it says to highlight (for example under a boxy, oversized or shapeless piece), and place statement details where they draw the eye to that part, not to the area it says to skim. The cuts below are the preferred ways to reach it:\n"
+            + lines.map { "- \($0)" }.joined(separator: "\n") + referenceNote
     }
 
     /// The seasonal palette. Neutrals are prioritized first; for the first archetype (`referenceMatch`),
@@ -601,15 +651,42 @@ struct OutfitPromptBuilder: Sendable {
         profile: UserProfile?,
         occasion: OccasionItem,
         hasReference: Bool,
-        referenceAnalysis: ReferenceStyleAnalysis? = nil
+        referenceAnalysis: ReferenceStyleAnalysis? = nil,
+        compactPalette: Bool = false
     ) -> String? {
+        // 1. Colors the event requires win over everything else (palette, reference, style vision).
+        if let dresscodeColors = DresscodeColorRule.forOccasion(title: occasion.title, dresscode: occasion.dresscode, note: occasion.customNote, palette: profile?.colorSeason?.outfitSwatches ?? []) {
+            return """
+            DRESSCODE COLORS (hard rule, overrides her season palette, the look direction, the reference photos and the style vision):
+            The event asks for "\(dresscodeColors.label)". EVERY garment must be \(dresscodeColors.label). Do not use any other color, not even as an accent or a neutral base.
+            Pick each garment's "colorName" and "hexColor" from this list only, copied exactly: \(dresscodeColors.promptList)
+            Prefer the colors marked [suits her]. Use different shades from the list across the pieces so the outfit doesn't look flat.
+            """
+        }
+
+        // 2. The reference look copies the reference colors as they are.
+        if archetype == .referenceMatch, hasReference, referenceAnalysis != nil {
+            var paletteHint = ""
+            if let colorSeason = profile?.colorSeason {
+                let palette = colorSeason.outfitSwatches.map { swatch in "\(swatch.name) (\(swatch.hex))" }.joined(separator: ", ")
+                paletteHint = " Only if a piece's color is not stated, use her \(colorSeason.rawValue) palette: \(palette)"
+            }
+            return """
+            COLORS (reference look): use the exact garment colors stated in the reference description for each corresponding piece. Give each color a clear name and an accurate hex. Do NOT swap them for palette colors.\(paletteHint)
+            """
+        }
+
         guard let colorSeason = profile?.colorSeason else { return nil }
-        let swatches = colorSeason.palette
-        let neutrals = colorSeason.neutralSwatches
+        // The same colors as "Color suits you the most" on her profile, plus her neutrals.
+        // Colors the dresscode rules out ("no black") are removed from the list.
+        let excluded = DresscodeColorRule.excludedHexes(dresscode: occasion.dresscode, palette: colorSeason.outfitSwatches)
+        let swatches = colorSeason.outfitSwatches.filter { !excluded.contains($0.hex.uppercased()) }
+        let neutrals = colorSeason.neutralSwatches.filter { !excluded.contains($0.hex.uppercased()) }
         let neutralHexSet = Set(neutrals.map { $0.hex.uppercased() })
         let seasonColors = swatches.filter { !neutralHexSet.contains($0.hex.uppercased()) }
+        // Compact prompts list names only; the parser finds the hex from the name.
         func describe(_ list: [ColorSeason.ColorSwatch]) -> String {
-            list.map { "\($0.name) (\($0.hex))" }.joined(separator: ", ")
+            list.map { compactPalette ? $0.name : "\($0.name) (\($0.hex))" }.joined(separator: ", ")
         }
         let palette = neutrals.isEmpty || seasonColors.isEmpty
             ? describe(swatches)
@@ -620,12 +697,12 @@ struct OutfitPromptBuilder: Sendable {
         case .referenceMatch where hasReference:
             rule = "Use ONLY palette colors (from Neutrals or Season colors), copied exactly (name and hex). For this first look, prioritize matching the garment colors from the user's reference photo(s) using the closest palette swatches as long as they are not too far from her \(colorSeason.rawValue) color rules."
         case .surpriseMe:
-            rule = "Use palette colors, copied exactly. You MAY add ONE accent color outside the palette if it makes the surprise work; give it a clear name and a valid hex."
+            rule = "Use ONLY palette colors, copied exactly. Surprise with the cut or the detail, not with loud colors."
         case .colorStory:
             rule = "Use ONLY palette colors, copied exactly. Choose them as one planned story (tonal, monochrome or intentional color-blocking), not random picks."
         case .lookMore where !occasion.visions.isEmpty:
             let visionColors = occasion.visions.map(\.colors).joined(separator: " ")
-            rule = "Use ONLY palette colors, copied exactly. Pick the palette colors closest to the vision's colors: \(visionColors)"
+            rule = "Use ONLY palette colors, copied exactly. Pick the palette colors closest to the vision's colors, in their softest, most muted shade: \(visionColors)"
         default:
             rule = "Use ONLY palette colors, copied exactly (name and hex)."
         }
@@ -664,13 +741,14 @@ struct OutfitPromptBuilder: Sendable {
         COLORS (\(colorSeason.rawValue)): \(rule)
         \(neutralPriority)
         \(mixingRule)
+        CALM COLORS: build the outfit on neutrals and use at most ONE non-neutral color (two shades of it are fine). Prefer soft, muted shades. Never combine several bright colors: no rainbow, neon or clashing color mixes.
         Palette: \(palette)
         Avoid: \(colorSeason.colorsToAvoid)
         """
     }
 
     /// Earlier looks, so this one is different in style and pieces, not only in color.
-    private func previousLooksSection(_ previousLooks: [GeneratedLookSummary]) -> String? {
+    private func previousLooksSection(_ previousLooks: [GeneratedLookSummary], keepsDresscodeColors: Bool = false) -> String? {
         guard !previousLooks.isEmpty else { return nil }
         let summaries = previousLooks.map { summary in
             let garments = summary.garments.map { "\($0.category): \($0.name) (\($0.colorName))" }.joined(separator: ", ")
@@ -679,7 +757,9 @@ struct OutfitPromptBuilder: Sendable {
         return """
         PREVIOUS LOOKS (do not repeat):
         \(summaries)
-        Do not reuse the same full garment name or the same main colors — choose a different cut, neckline or silhouette so this look differs in style, while still keeping any pattern/textile or garment type required by the DRESSCODE across all looks.
+        \(keepsDresscodeColors
+            ? "Do not reuse the same full garment name. Choose a different cut, neckline or silhouette so this look differs in style. Keep the DRESSCODE COLORS: vary only the shade, never leave those colors."
+            : "Do not reuse the same full garment name or the same main colors. Choose a different cut, neckline or silhouette so this look differs in style, while still keeping any pattern/textile or garment type required by the DRESSCODE across all looks.")
         """
     }
 

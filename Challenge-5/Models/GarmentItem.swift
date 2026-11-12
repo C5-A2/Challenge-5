@@ -71,10 +71,10 @@ nonisolated enum GarmentCategory: String, Codable, CaseIterable, Identifiable, S
     /// Words in an AI category label (or garment name) that point to each category.
     /// Dress is checked first, so "Shirt Dress" or "Coat Dress" is read as a dress.
     private static let generatedLabelKeywords: [(category: GarmentCategory, keywords: [String])] = [
-        (.dress, ["dress", "jumpsuit", "gown", "romper", "playsuit", "one-piece", "swimsuit", "monokini"]),
-        (.outer, ["outer", "jacket", "coat", "blazer", "cardigan", "bomber", "parka", "trench", "cover-up", "kimono"]),
-        (.bottom, ["bottom", "pants", "trousers", "jeans", "skirt", "shorts", "chinos", "culottes", "leggings"]),
-        (.top, ["top", "inner", "shirt", "blouse", "tee", "polo", "knit", "sweater", "tank", "camisole", "turtleneck"])
+        (.dress, ["dress", "jumpsuit", "gown", "romper", "playsuit", "one-piece", "swimsuit", "monokini", "kaftan", "abaya", "gamis", "terusan"]),
+        (.outer, ["outer", "jacket", "coat", "blazer", "cardigan", "bomber", "parka", "trench", "cover-up", "kimono", "bolero", "shrug", "waistcoat"]),
+        (.bottom, ["bottom", "pants", "trousers", "jeans", "skirt", "shorts", "chinos", "culottes", "leggings", "palazzo", "skort", "sarong", "jarik", "kulot", "celana"]),
+        (.top, ["top", "inner", "shirt", "blouse", "tee", "polo", "knit", "sweater", "tank", "camisole", "turtleneck", "kebaya", "tunic", "bustier", "corset", "bodysuit", "bralette", "cami"])
     ]
 
     /// Reads a category from the AI's label, which isn't always exactly "Outer" / "Top" / "Bottom"

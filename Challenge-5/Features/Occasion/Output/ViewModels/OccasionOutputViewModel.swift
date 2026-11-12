@@ -193,7 +193,7 @@ final class OccasionOutputViewModel {
         }
     }
     
-    private var isUsingMockPlaceholders = false
+    private(set) var isUsingMockPlaceholders = false
     private var hasStartedInitialGeneration = false
     private(set) var isCallerSuppliedLooks = false
 
