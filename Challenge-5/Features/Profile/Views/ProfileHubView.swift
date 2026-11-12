@@ -1050,9 +1050,9 @@ struct ProfileHubView: View {
         season.wheelHexColors
     }
 
-    /// Curated grid swatches displayed under "Color suits you the most", ordered by the seasonal ring palette.
+    /// Curated grid swatches displayed under "Color suits you the most", returning all 35 swatches from the model palette.
     private func displayedGridSwatches(for season: ColorSeason) -> [String] {
-        season.wheelHexColors
+        season.palette.map(\.hex)
     }
 
     /// Computes relative luminance of a hex color to choose readable dark/light label text.
