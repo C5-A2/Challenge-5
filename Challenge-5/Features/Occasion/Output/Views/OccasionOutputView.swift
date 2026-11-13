@@ -27,6 +27,8 @@ struct OccasionOutputView: View {
     @State private var playgroundPackage: OutfitPlaygroundPackage? = nil
     @State private var isProcessingPlayground: Bool = false
     @State private var failedPlaygroundLookIDs: Set<UUID> = []
+    @State private var attemptedPlaygroundLookIDs: Set<UUID> = []
+    @State private var playgroundVariationByLookID: [UUID: Int] = [:]
     @State private var simulatorMockCycle: Int = 0
     private let showVLMDebug: Bool = true
     @State private var isVLMDebugExpanded: Bool = true
@@ -287,10 +289,11 @@ struct OccasionOutputView: View {
     /// The user's own front body photo, falling back to the mock body (`mock_result_1`) when none is set.
     private var activePlaygroundSourceImage: Image? {
         let activeProfile = userProfiles.first ?? viewModel.profile
+        let openArms = (playgroundPackage?.upperSleeveCoverage ?? .long) != .long
         // Full-body photo with her clothes painted plain, so Image Playground draws the recommended
         // outfit instead of copying what she wore in the profile photo.
         if let frontData = activeProfile?.frontBodyPhotoData,
-           let uiImage = OutfitAttributeMapper.playgroundSourceImage(fromPhotoData: frontData) {
+           let uiImage = OutfitAttributeMapper.playgroundSourceImage(fromPhotoData: frontData, openArms: openArms) {
             return Image(uiImage: uiImage)
         }
         return Image("mock_result_1")
@@ -565,10 +568,12 @@ struct OccasionOutputView: View {
     private func updatePlaygroundPackage() {
         guard let currentLook = viewModel.currentLook else { return }
         let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+        let variationIndex = playgroundVariationByLookID[currentLook.id, default: 0]
         self.playgroundPackage = OutfitAttributeMapper.mapOutfitLookToPlayground(
             look: currentLook,
             occasion: viewModel.occasion,
-            userProfile: activeProfile
+            userProfile: activeProfile,
+            variationIndex: variationIndex
         )
     }
     
@@ -580,6 +585,13 @@ struct OccasionOutputView: View {
         
         // Show loading indicator immediately when user taps Generate / Regenerate
         isProcessingPlayground = true
+        let isRegenerating = attemptedPlaygroundLookIDs.contains(currentLook.id)
+            || failedPlaygroundLookIDs.contains(currentLook.id)
+            || viewModel.hasGeneratedImage(currentLook)
+        if isRegenerating {
+            playgroundVariationByLookID[currentLook.id] = (playgroundVariationByLookID[currentLook.id, default: 0] + 1) % 4
+        }
+        attemptedPlaygroundLookIDs.insert(currentLook.id)
         updatePlaygroundPackage()
         
         #if targetEnvironment(simulator)

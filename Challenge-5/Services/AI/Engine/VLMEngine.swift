@@ -231,11 +231,11 @@ public actor VLMEngine {
         Describe ONLY the clothing worn by the person in this photo in clear natural English, garment by garment: one sentence per garment (top, bottom or dress, and any outer layer), then one short sentence for the overall vibe.
         For EACH garment state its type, neckline or collar, sleeve length, length (cropped, waist, hip, knee, midi, maxi), fit, fabric, pattern, and its exact color with a shade word (for example "dusty pastel pink", "light wash blue", not just "pink" or "blue").
         Highlight:
-        - Specific garment pieces and cut names (e.g. crop top, halter top, camisole, blazer, suit jacket, cardigan, button-down shirt, wide-leg trousers, pleated skirt, tiered ruffle skirt, maxi skirt, batik blouse, batik shirt, batik dress, batik skirt, kebaya, denim shorts).
+        - Specific garment pieces and cut names (e.g. crop top, halter top, camisole, blazer, suit jacket, cardigan, button-down shirt, wide-leg trousers, pleated skirt, tiered ruffle skirt, maxi skirt, cheongsam/qipao, mandarin-collar dress, batik blouse, batik shirt, batik dress, batik skirt, kebaya, denim shorts).
         - Fit and silhouette (e.g. relaxed, tailored, oversized, fitted, cropped).
-        - Fabrics and materials (e.g. linen, silk, denim, cotton poplin, lace, knitwear, chiffon, batik fabric, tenun, songket).
-        - Surface patterns (e.g. traditional Indonesian batik motif, modern batik print, floral, pinstripe, solid). If any garment has Indonesian batik motifs (such as parang, kawung, mega mendung, truntum, or ornate batik patterns), explicitly name it as "batik" (e.g. "batik blouse", "batik motif", "batik skirt"). If a garment has no pattern, state "solid".
-        - Embellishments, trims and textures (e.g. lace, feathers, beading, pearls, sequins, ruffles, bows, pleats, corset or bustier bodice, tulle or organza layers). Name every one you can see.
+        - Fabrics and materials (e.g. linen, silk, denim, cotton poplin, lace, knitwear, chiffon, brocade, jacquard, batik fabric, tenun, songket).
+        - Surface patterns (e.g. traditional Indonesian batik motif, modern batik print, floral, brocade jacquard, oriental fan/floral or illustrative graphic print, embroidered motif, pinstripe, solid). If any garment has Indonesian batik motifs (such as parang, kawung, mega mendung, truntum, or ornate batik patterns), explicitly name it as "batik motif". If any garment has Chinese/oriental prints, illustrations, floral motifs, mandarin collar or frog knot closures (pankou), explicitly describe those motifs and collar details. If a garment has no pattern, state "solid".
+        - Embellishments, trims and textures (e.g. lace, feathers, beading, pearls, sequins, ruffles, bows, pleats, frog buttons, mandarin collar, tulle or organza layers). Name every one you can see.
         - Prominent garment colors (ignore the room background and walls).
         - Overall aesthetic vibe.
 
