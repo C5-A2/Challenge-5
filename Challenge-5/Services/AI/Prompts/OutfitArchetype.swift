@@ -51,7 +51,7 @@ nonisolated enum OutfitStructure: String, Sendable, CaseIterable {
     /// Whole words only, so "dressy casual" or "dresscode" don't count as a dress.
     private static let dresscodeOnePieceKeywords: Set<String> = [
         "dress", "dresses", "gown", "gowns", "jumpsuit", "jumpsuits", "romper", "rompers", "playsuit", "terusan", "gaun",
-        "swimsuit", "swimsuits", "monokini"
+        "swimsuit", "swimsuits", "monokini", "cheongsam", "cheongsams", "chongsam", "chongsams", "qipao", "qipaos", "chipao"
     ]
     private static let dresscodeSeparatesKeywords: Set<String> = [
         "skirt", "rok", "pants", "trousers", "jeans", "shorts", "culottes", "kulot", "celana",
@@ -308,6 +308,8 @@ nonisolated struct OccasionStyleGuide: Sendable {
     var modesty: String? = nil
     /// Colors the occasion itself calls for when the dresscode names none (mourning colors for a funeral).
     var impliedColors: String? = nil
+    /// Colors strictly forbidden by tradition (e.g. mourning white and black during Chinese New Year).
+    var forbiddenColors: String? = nil
     /// A place or routine (office, campus, cafe, travel) rather than an event. An event named in the
     /// same title wins: "office party" is a party, "bukber kantor" is an iftar.
     var isContext: Bool = false
@@ -329,6 +331,9 @@ nonisolated struct OccasionStyleGuide: Sendable {
         lines.append("- Avoid: \(avoid)")
         if let modesty {
             lines.append("- Modesty (overrides MODERN STYLE where they differ): \(modesty)")
+        }
+        if let forbidden = forbiddenColors, !forbidden.isEmpty {
+            lines.append("- Culturally Forbidden Colors: Do NOT use \(forbidden) in any piece of this outfit. They are strictly taboo for \(name).")
         }
         return lines.joined(separator: "\n")
     }
@@ -520,17 +525,17 @@ nonisolated enum OccasionStyleBank {
             formality: "Smart casual, romantic and flattering.",
             setting: "Cafe or restaurant, usually in the evening, sitting and talking.",
             statementLevel: "Medium-high: romantic and memorable.",
-            fabricsAndDetails: "Satin, silk, lace trim, a corset bodice, ruching, a bow, soft draping.",
+            fabricsAndDetails: "Satin, silk, lace trim, structured bodices, ruching, a bow, soft draping.",
             dressOptions: [
-                "a satin slip midi dress with lace trim",
-                "a corset-bodice mini dress",
+                "a satin wrap midi dress with lace trim",
+                "a fitted sweetheart midi dress",
                 "a ruched wrap dress",
                 "an off-shoulder fitted midi dress"
             ],
             separatesOptions: [
-                "a lace-trimmed camisole with a satin midi skirt and a cropped cardigan",
-                "a corset top with wide-leg trousers",
-                "a bow-back fitted top with a flowy mini skirt"
+                "a lace-trimmed sleeveless satin top with a satin midi skirt and a cropped cardigan",
+                "a structured square-neck top with wide-leg trousers",
+                "a bow-back fitted top with a flowy midi skirt"
             ],
             avoid: "Office-stiff suits, gym or very casual wear, formal gowns."
         ),
@@ -542,14 +547,14 @@ nonisolated enum OccasionStyleBank {
             statementLevel: "Medium-high: fun, festive and photo-ready.",
             fabricsAndDetails: "Satin, tulle, organza, a bow, ruffles, pearl trim, lace.",
             dressOptions: [
-                "a bow-detail satin mini dress",
+                "a bow-detail satin dress",
                 "a tiered tulle midi dress",
                 "a ruffle-hem fit-and-flare dress",
-                "a pearl-trimmed corset mini dress"
+                "a pearl-trimmed pleated midi dress"
             ],
             separatesOptions: [
-                "a ruffle-trim top with a satin mini skirt",
-                "a bow-back corset top with flared trousers",
+                "a ruffle-trim top with a satin pleated skirt",
+                "a bow-back fitted top with flared trousers",
                 "a coordinated pleated two-piece set"
             ],
             avoid: "Plain office wear, loungewear."
@@ -651,20 +656,40 @@ nonisolated enum OccasionStyleBank {
             avoid: "Long flowing gowns, delicate fabrics, formal tailoring."
         ),
         OccasionStyleGuide(
+            name: "Chinese New Year or Imlek",
+            keywords: ["imlek", "chinese new year", "cny", "sincia"],
+            formality: "Smart casual to dressy, festive.",
+            setting: "Indonesian family gathering, reunion dinner or temple visit, warm humid weather, lots of photos.",
+            statementLevel: "Medium-high: festive, refined and celebratory.",
+            fabricsAndDetails: "Silk, satin, floral brocade, jacquard, delicate embroidery, mandarin collar, frog knot closure (pankou), wrap silhouette.",
+            dressOptions: [
+                "a modern mandarin-collar dress with prominent contrasting gold floral embroidery",
+                "a satin cheongsam-inspired wrap midi dress with distinct contrasting oriental floral print",
+                "a floral brocade mandarin-collar midi dress with contrasting trim"
+            ],
+            separatesOptions: [
+                "a modern mandarin-collar frog-button blouse with contrasting floral embroidery and wide-leg satin trousers",
+                "a floral jacquard top with a pleated midi skirt"
+            ],
+            avoid: "Plain white or all-black outfits (strictly taboo in Chinese tradition as funeral mourning colors), plain everyday basics. Avoid costume-like theatrical outfits.",
+            modesty: "Auspicious, festive colors only (red, ruby, burgundy, rose, coral, peach, gold, emerald green, royal blue). Wearing all-white or all-black is strictly forbidden in Chinese New Year tradition (mourning colors that bring bad luck).",
+            forbiddenColors: "white black"
+        ),
+        OccasionStyleGuide(
             name: "Christmas or new year",
-            keywords: ["christmas", "natal", "natalan", "xmas", "christmas eve", "malam natal", "new year", "tahun baru", "nye", "imlek", "chinese new year", "cny", "sincia"],
+            keywords: ["christmas", "natal", "natalan", "xmas", "christmas eve", "malam natal", "new year", "tahun baru", "nye"],
             formality: "Smart casual to dressy, festive.",
             setting: "Family dinner or party, lots of photos.",
             statementLevel: "Medium-high: festive.",
-            fabricsAndDetails: "Satin, velvet, sequins, a bow, pearl trim; for Imlek a modern mandarin collar or frog closure.",
+            fabricsAndDetails: "Satin, velvet, sequins, a bow, pearl trim.",
             dressOptions: [
-                "a velvet bow-detail mini dress",
+                "a velvet bow-detail dress",
                 "a satin wrap midi dress",
-                "a modern mandarin-collar satin midi dress"
+                "a pleated satin midi dress"
             ],
             separatesOptions: [
                 "a sequin top with satin wide-leg trousers",
-                "a velvet corset top with a pleated midi skirt"
+                "a velvet square-neck top with a pleated midi skirt"
             ],
             avoid: "Plain office wear, gym or loungewear. For a church service (misa or kebaktian natal), no bare shoulders, low necklines or very short lengths."
         ),
@@ -705,22 +730,22 @@ nonisolated enum OccasionStyleBank {
         OccasionStyleGuide(
             name: "Night out or party",
             keywords: ["party", "parties", "night out", "girls night", "clubbing", "club", "bar", "pesta", "dugem"],
-            formality: "Dressy going-out style.",
-            setting: "Bar, club, rooftop or party venue at night, standing and dancing.",
-            statementLevel: "High: bold and eye-catching.",
-            fabricsAndDetails: "Satin, sequins, metallic fabrics, faux leather, corset boning, ruching, feathers.",
+            formality: "Smart casual to dressy social style.",
+            setting: "Social party venue, lounge, cafe party or evening gathering.",
+            statementLevel: "Medium-high: stylish, modern and eye-catching.",
+            fabricsAndDetails: "Satin, metallic accents, sleek tailoring, ruching, asymmetric draping, textured knit.",
             dressOptions: [
-                "a sequin mini dress",
-                "a corset-bodice satin mini dress",
-                "a ruched one-shoulder bodycon dress",
-                "a feather-trimmed mini dress"
+                "a draped satin dress",
+                "a belted pleated satin midi dress",
+                "a ruched one-shoulder dress",
+                "an asymmetric tailored dress"
             ],
             separatesOptions: [
-                "a corset top with a faux-leather mini skirt",
+                "a tailored sleeveless top with a sleek pleated skirt",
                 "a halter-neck satin top with tailored wide-leg trousers",
-                "a sequin bustier with a cropped blazer and a mini skirt"
+                "a structured cropped blazer over a draped satin top and wide-leg trousers"
             ],
-            avoid: "Daytime office looks, loose tunics, plain tees, long shapeless pieces."
+            avoid: "Daytime office uniforms, loose tunics, plain tees, heavy shapeless pieces."
         ),
         OccasionStyleGuide(
             name: "Workout or sport",
@@ -851,22 +876,32 @@ nonisolated struct DresscodeRequirements: Sendable {
     ]
 
     init(dresscode: String) {
-        let text = " " + OccasionStyleBank.normalized(DresscodeText.affirmed(dresscode)) + " "
+        let normalized = OccasionStyleBank.normalized(DresscodeText.affirmed(dresscode))
+        let text = " " + normalized + " "
+        let tokens = Set(normalized.split(separator: " ").map(String.init))
         func has(_ word: String) -> Bool { text.contains(" \(word) ") }
+        func hasRoot(_ word: String) -> Bool {
+            tokens.contains { $0 == word || $0 == "ber\(word)" || $0 == "\(word)an" }
+        }
         var lines: [String] = []
         var termGroups: [[String]] = []
 
-        let textiles = Self.indonesianTextiles.filter(has)
+        let textiles = Self.indonesianTextiles.filter(hasRoot)
         termGroups += Set(textiles).sorted().map { [$0] }
         for textile in Set(textiles).sorted() {
-            lines.append("Textile \"\(textile)\": EVERY look includes at least one \(textile) piece, cut in a current silhouette (for example a corset top, a wrap or slip dress, a pleated or column skirt, a cropped jacket). Its base color comes from the allowed colors; the other pieces are solid and pick up one of its colors. Put \"\(textile)\" in that garment's \"name\" and \"playgroundPrompt\".")
+            lines.append("Textile \"\(textile)\": EVERY look includes at least one \(textile) piece, cut in a current silhouette (for example an asymmetric draped top, a wrap midi dress, a pleated or column skirt, a cropped jacket). Its base color comes from the allowed colors; the other pieces are solid and pick up one of its colors. Put \"\(textile) with prominent contrasting motif pattern\" in that garment's \"name\" and \"playgroundPrompt\" so the pattern renders with strong, vivid visual contrast.")
         }
-        if has("kebaya") {
+        if hasRoot("kebaya") {
             termGroups.append(["kebaya"])
-            lines.append("Kebaya: EVERY look has a modern kebaya top (a current neckline, sleeve or corset-style fit, lace or brocade) with a modern skirt or trousers, not a costume-like traditional set.")
+            lines.append("Kebaya: EVERY look has a modern kebaya top (a current neckline, sheer lace or embroidered brocade overlay with a sleek fitted silhouette) and a modern skirt or trousers, not a costume-like traditional set.")
         } else if textiles.isEmpty, Self.traditionalThemeWords.contains(where: has) {
             termGroups.append(["kebaya", "batik", "tenun", "songket", "ulos", "lurik", "endek", "sasirangan", "jumputan"])
-            lines.append("Traditional Indonesian: EVERY look includes a modern take on an Indonesian piece (a modern kebaya top, a batik, tenun or songket piece), styled in a current way, not like a costume.")
+            lines.append("Traditional Indonesian: EVERY look includes a modern take on an Indonesian piece (a modern kebaya top, or a batik, tenun or songket patterned piece), styled in a current way, not like a costume.")
+        }
+        let cheongsamWords = ["cheongsam", "chongsam", "qipao", "chipao"]
+        if cheongsamWords.contains(where: has) {
+            termGroups.append(["cheongsam", "chongsam", "qipao", "mandarin"])
+            lines.append("Cheongsam: EVERY look is a modern cheongsam / qipao dress (a mandarin collar, fitted or wrap silhouette, side closure or slit, with prominent contrasting embroidery or jacquard motif). Put \"cheongsam\" or \"mandarin-collar dress\" in that garment's \"name\" and \"playgroundPrompt\".")
         }
         for surface in Self.surfaceWords where surface.words.contains(where: has) {
             termGroups.append(surface.words + surface.label.components(separatedBy: " ").filter { $0.count > 3 })
@@ -890,11 +925,29 @@ nonisolated struct DresscodeRequirements: Sendable {
 extension DresscodeColorRule {
     /// The colors this occasion requires: the dresscode's colors, or else the colors the occasion
     /// itself calls for (a funeral). The prompt and the parser both use this, so they always agree.
-    /// Palette colors the dresscode rules out ("no black", "jangan merah"), as uppercased hex.
-    static func excludedHexes(dresscode: String, palette: [ColorSeason.ColorSwatch]) -> Set<String> {
+    /// Palette colors the dresscode rules out ("no black", "jangan merah") or culturally forbidden (white/black for CNY), as uppercased hex.
+    static func excludedHexes(
+        dresscode: String,
+        occasionTitle: String = "",
+        note: String? = nil,
+        palette: [ColorSeason.ColorSwatch]
+    ) -> Set<String> {
+        var excluded: Set<String> = []
         let negated = DresscodeText.negatedSubjects(dresscode)
-        guard !negated.isEmpty, let rule = DresscodeColorRule(dresscode: negated, palette: palette) else { return [] }
-        return Set(rule.swatches.prefix(rule.paletteSwatchCount).map { $0.hex.uppercased() })
+        if !negated.isEmpty, let rule = DresscodeColorRule(dresscode: negated, palette: palette) {
+            excluded.formUnion(rule.swatches.prefix(rule.paletteSwatchCount).map { $0.hex.uppercased() })
+        }
+        // Cultural taboo colors (e.g. White and Black for Chinese New Year) unless dresscode explicitly overrides
+        if let guide = OccasionStyleBank.guide(forTitle: occasionTitle, dresscode: dresscode + " " + (note ?? "")),
+           let forbidden = guide.forbiddenColors {
+            let affirmed = DresscodeText.affirmed(dresscode).lowercased()
+            for word in forbidden.components(separatedBy: " ") where !word.isEmpty {
+                if !affirmed.contains(word), let rule = DresscodeColorRule(dresscode: word, palette: palette) {
+                    excluded.formUnion(rule.swatches.prefix(rule.paletteSwatchCount).map { $0.hex.uppercased() })
+                }
+            }
+        }
+        return excluded
     }
 
     static func forOccasion(title: String, dresscode: String, note: String?, palette: [ColorSeason.ColorSwatch]) -> DresscodeColorRule? {

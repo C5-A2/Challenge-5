@@ -27,9 +27,11 @@ struct OccasionOutputView: View {
     @State private var playgroundPackage: OutfitPlaygroundPackage? = nil
     @State private var isProcessingPlayground: Bool = false
     @State private var failedPlaygroundLookIDs: Set<UUID> = []
+    @State private var attemptedPlaygroundLookIDs: Set<UUID> = []
+    @State private var playgroundVariationByLookID: [UUID: Int] = [:]
     @State private var simulatorMockCycle: Int = 0
-    private let showVLMDebug: Bool = false
-    @State private var isVLMDebugExpanded: Bool = false
+    private let showVLMDebug: Bool = true
+    @State private var isVLMDebugExpanded: Bool = true
     
     
     var onDismiss: (() -> Void)? = nil
@@ -287,10 +289,11 @@ struct OccasionOutputView: View {
     /// The user's own front body photo, falling back to the mock body (`mock_result_1`) when none is set.
     private var activePlaygroundSourceImage: Image? {
         let activeProfile = userProfiles.first ?? viewModel.profile
+        let openArms = (playgroundPackage?.upperSleeveCoverage ?? .long) != .long
         // Full-body photo with her clothes painted plain, so Image Playground draws the recommended
         // outfit instead of copying what she wore in the profile photo.
         if let frontData = activeProfile?.frontBodyPhotoData,
-           let uiImage = OutfitAttributeMapper.playgroundSourceImage(fromPhotoData: frontData) {
+           let uiImage = OutfitAttributeMapper.playgroundSourceImage(fromPhotoData: frontData, openArms: openArms) {
             return Image(uiImage: uiImage)
         }
         return Image("mock_result_1")
@@ -337,7 +340,7 @@ struct OccasionOutputView: View {
                 }
                 
                 VStack(spacing: 6) {
-                    Text(isProcessingPlayground ? "Styling With AI" : viewModel.loadingStageTitle)
+                    Text(isProcessingPlayground ? "Styling Your Outfit" : viewModel.loadingStageTitle)
                         .font(AppTypography.sfProSemiboldExtended(size: 19))
                         .foregroundStyle(AppColors.espressoTitle)
                         .multilineTextAlignment(.center)
@@ -355,6 +358,10 @@ struct OccasionOutputView: View {
                         .padding(.horizontal, 16)
                 }
 
+                if !isProcessingPlayground && GenerationProgressEstimator.shared.isActive {
+                    predictiveProgressBar
+                }
+
                 if showVLMDebug && !isProcessingPlayground && !viewModel.vlmDebugDescriptions.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 5) {
@@ -365,6 +372,10 @@ struct OccasionOutputView: View {
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(AppColors.primaryBlue)
                         }
+
+                        Text("VLM: \(LLMResource.vlmModelFilename) • LLM: \(LLMResource.activeModelFilename)")
+                            .font(.system(size: 9.5, weight: .medium))
+                            .foregroundStyle(AppColors.mutedCaption)
 
                         ScrollView(.vertical, showsIndicators: true) {
                             VStack(alignment: .leading, spacing: 6) {
@@ -412,6 +423,33 @@ struct OccasionOutputView: View {
 
     // MARK: - VLM Debug Output Banner (Post-Submit Inspection)
 
+    /// Linear bar with the predicted completion and time left, refreshed twice a second.
+    private var predictiveProgressBar: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { context in
+            let estimator = GenerationProgressEstimator.shared
+            let fraction = estimator.fraction(at: context.date)
+            VStack(spacing: 6) {
+                ProgressView(value: fraction)
+                    .progressViewStyle(.linear)
+                    .tint(AppColors.espressoTitle)
+                    .animation(.linear(duration: 0.5), value: fraction)
+
+                HStack {
+                    Text("\(Int((fraction * 100).rounded()))%")
+                    Spacer()
+                    Text(estimator.remainingLabel(at: context.date))
+                }
+                .font(AppTypography.caption)
+                .monospacedDigit()
+                .foregroundStyle(AppColors.mutedCaption)
+            }
+            .padding(.horizontal, 8)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Generation progress")
+            .accessibilityValue("\(Int((fraction * 100).rounded())) percent, \(estimator.remainingLabel(at: context.date))")
+        }
+    }
+
     @ViewBuilder
     private var vlmDebugOverlay: some View {
         if isVLMDebugExpanded {
@@ -445,6 +483,10 @@ struct OccasionOutputView: View {
                     }
                     .buttonStyle(.plain)
                 }
+
+                Text("VLM: \(LLMResource.vlmModelFilename) • LLM: \(LLMResource.activeModelFilename)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AppColors.mutedCaption)
 
                 if viewModel.vlmDebugDescriptions.isEmpty {
                     Text("No VLM text description returned for the attached reference photo(s).")
@@ -526,10 +568,12 @@ struct OccasionOutputView: View {
     private func updatePlaygroundPackage() {
         guard let currentLook = viewModel.currentLook else { return }
         let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+        let variationIndex = playgroundVariationByLookID[currentLook.id, default: 0]
         self.playgroundPackage = OutfitAttributeMapper.mapOutfitLookToPlayground(
             look: currentLook,
             occasion: viewModel.occasion,
-            userProfile: activeProfile
+            userProfile: activeProfile,
+            variationIndex: variationIndex
         )
     }
     
@@ -541,6 +585,13 @@ struct OccasionOutputView: View {
         
         // Show loading indicator immediately when user taps Generate / Regenerate
         isProcessingPlayground = true
+        let isRegenerating = attemptedPlaygroundLookIDs.contains(currentLook.id)
+            || failedPlaygroundLookIDs.contains(currentLook.id)
+            || viewModel.hasGeneratedImage(currentLook)
+        if isRegenerating {
+            playgroundVariationByLookID[currentLook.id] = (playgroundVariationByLookID[currentLook.id, default: 0] + 1) % 4
+        }
+        attemptedPlaygroundLookIDs.insert(currentLook.id)
         updatePlaygroundPackage()
         
         #if targetEnvironment(simulator)

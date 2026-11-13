@@ -45,7 +45,7 @@ struct ProfileHubView: View {
     @State private var selectedTab: ProfileTab = .colorSeason
     @State private var activeSheet: ActiveProfileSheet? = nil
     @State private var activeColorSheet: ColorListSheet? = nil
-    private let showManualProfileDebug: Bool = false
+    private let showManualProfileDebug: Bool = true
     @State private var isShowingDebugSheet: Bool = false
     @State private var selectedBodyPhotoSide: Int = 0 // 0 = Front, 1 = Side
     @State private var showSkeleton: Bool = true
@@ -1010,60 +1010,40 @@ struct ProfileHubView: View {
     private func bodyTypeHighlightedText(for bodyType: BodyType) -> Text {
         switch bodyType {
         case .hourglass:
-            return Text("Your bust and hip proportions are ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("naturally balanced")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" with a ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("well-defined, narrower waistline.")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
+            return Text.highlighted([
+                ("Your bust and hip proportions are ", false),
+                ("naturally balanced", true),
+                (" with a ", false),
+                ("well-defined, narrower waistline.", true)
+            ])
         case .pear:
-            return Text("Your lower frame features ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("fuller hips and thighs")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" paired with a ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("defined waist and narrower shoulders.")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
+            return Text.highlighted([
+                ("Your lower frame features ", false),
+                ("fuller hips and thighs", true),
+                (" paired with a ", false),
+                ("defined waist and narrower shoulders.", true)
+            ])
         case .rectangle:
-            return Text("Your silhouette has ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("aligned shoulder, bust, and hip widths")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" with a ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("clean, athletic vertical frame.")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
+            return Text.highlighted([
+                ("Your silhouette has ", false),
+                ("aligned shoulder, bust, and hip widths", true),
+                (" with a ", false),
+                ("clean, athletic vertical frame.", true)
+            ])
         case .invertedTriangle:
-            return Text("Your upper frame features ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("broader shoulders and bust")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" tapering down to ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("narrower hips and sleek legs.")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
+            return Text.highlighted([
+                ("Your upper frame features ", false),
+                ("broader shoulders and bust", true),
+                (" tapering down to ", false),
+                ("narrower hips and sleek legs.", true)
+            ])
         case .apple:
-            return Text("Your silhouette carries ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("fullness around the bust and midsection")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" paired with ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("slender legs and narrow hips.")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
+            return Text.highlighted([
+                ("Your silhouette carries ", false),
+                ("fullness around the bust and midsection", true),
+                (" paired with ", false),
+                ("slender legs and narrow hips.", true)
+            ])
         }
     }
 

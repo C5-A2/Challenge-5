@@ -21,7 +21,8 @@ enum OutfitAttributeMapper {
     static func mapOutfitLookToPlayground(
         look: OutfitLook,
         occasion: OccasionItem? = nil,
-        userProfile: UserProfile? = nil
+        userProfile: UserProfile? = nil,
+        variationIndex: Int = 0
     ) -> OutfitPlaygroundPackage {
         let occasionTitle = occasion?.title ?? look.occasion?.title ?? "Occasion Outfit"
         let dresscode = occasion?.dresscode.isEmpty == false ? occasion!.dresscode : (look.occasion?.dresscode ?? "Smart Casual")
@@ -64,7 +65,8 @@ enum OutfitAttributeMapper {
             torsoBalanceName: torsoBalanceName,
             colorSeasonName: colorSeasonName,
             garments: mappedGarments,
-            compositeVisualPrompt: prompt
+            compositeVisualPrompt: prompt,
+            variationIndex: variationIndex
         )
     }
     
@@ -240,10 +242,18 @@ enum OutfitAttributeMapper {
 
     /// The last prepared photo, so it isn't recomputed on every view update.
     private static var sourceImageCache: (key: Int, image: UIImage)?
+
+    /// Drops the cached full-resolution source photo to reclaim memory.
+    static func clearSourceImageCache() {
+        sourceImageCache = nil
+    }
     /// Where the clothes start below the face, in face heights below the chin.
     private static let neckOffsetFaceRatio: CGFloat = 0.25
     /// The flat gray painted over her clothes.
     private static let plainClothesGray: CGFloat = 0.78
+    /// Near-white wash used when the recommended outfit has short/sleeveless cuts so wide
+    /// long-sleeve silhouettes from the original photo do not blur around the arms.
+    private static let openArmPlainClothesGray: CGFloat = 0.93
 
     /// The user's full-body photo for Image Playground, with her clothes painted plain gray.
     ///
@@ -251,16 +261,16 @@ enum OutfitAttributeMapper {
     /// bag and sneakers in every look). A head-only crop avoided that but made the result half-body.
     /// This keeps the full-body framing, pose and body shape, and only removes what she was wearing.
     /// Falls back to the original photo when no face or person is found.
-    static func playgroundSourceImage(fromPhotoData data: Data) -> UIImage? {
-        let key = data.count ^ data.prefix(256).hashValue
+    static func playgroundSourceImage(fromPhotoData data: Data, openArms: Bool = false) -> UIImage? {
+        let key = data.count ^ data.prefix(256).hashValue ^ (openArms ? 1 : 0)
         if let cached = sourceImageCache, cached.key == key { return cached.image }
         guard let photo = UIImage(data: data) else { return nil }
-        let image = photoWithPlainClothes(photo) ?? photo
+        let image = photoWithPlainClothes(photo, openArms: openArms) ?? photo
         sourceImageCache = (key, image)
         return image
     }
 
-    private static func photoWithPlainClothes(_ photo: UIImage) -> UIImage? {
+    private static func photoWithPlainClothes(_ photo: UIImage, openArms: Bool = false) -> UIImage? {
         // Redraw first so the pixels are upright, whatever the photo's EXIF orientation.
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -294,9 +304,19 @@ enum OutfitAttributeMapper {
         let bodyArea = CIImage(color: .white)
             .cropped(to: CGRect(x: 0, y: 0, width: extent.width, height: neckY))
             .composited(over: CIImage(color: .black).cropped(to: extent))
-        let clothesMask = personMask.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: bodyArea])
+        var clothesMask = personMask.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: bodyArea])
 
-        let gray = CIImage(color: CIColor(red: plainClothesGray, green: plainClothesGray, blue: plainClothesGray)).cropped(to: extent)
+        if openArms {
+            // Slightly expand the body mask so dark sleeve edges are cleanly washed out.
+            let dilationRadius = max(2.0, min(8.0, extent.width * 0.006))
+            clothesMask = clothesMask
+                .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: dilationRadius])
+                .cropped(to: extent)
+                .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: bodyArea])
+        }
+
+        let fillValue = openArms ? openArmPlainClothesGray : plainClothesGray
+        let gray = CIImage(color: CIColor(red: fillValue, green: fillValue, blue: fillValue)).cropped(to: extent)
         let result = gray.applyingFilter("CIBlendWithMask", parameters: [
             kCIInputBackgroundImageKey: original,
             kCIInputMaskImageKey: clothesMask

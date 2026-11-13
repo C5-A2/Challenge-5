@@ -133,40 +133,54 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
 
         // 2. Stage 1: describe the reference photos with the VLM (1 by 1, then the VLM is unloaded).
+        let progress = GenerationProgressEstimator.shared
+        let referenceCount = referenceImagesData(of: occasion).count
+        progress.start(referenceScans: referenceCount, includesRecap: referenceCount > 1, looks: Self.lookCount)
+        defer { progress.finish() }
+
         let referenceDescriptions = await scanReferencePhotos(of: occasion, onStageChange: onStageChange)
+        progress.skipRemaining(.referenceScan)
         let referenceAnalysis = ReferenceStyleAnalysis(
             descriptions: referenceDescriptions,
             recap: await recapReferenceStyle(referenceDescriptions, occasionID: occasion.id)
         )
+        progress.completeStep(.referenceRecap)
 
         // 3. Stage 2: one LLM call per look. Each look has its own direction, pieces and temperature,
         //    and gets the earlier looks so it doesn't repeat them.
         var generatedLooks: [OutfitLook] = []
         var previousSummaries: [GeneratedLookSummary] = []
 
-        for lookIndex in 0..<Self.lookCount {
-            let refStatusSuffix = referenceDescriptions.isEmpty
-                ? ""
-                : " (using Ref 1\(referenceDescriptions.count > 1 ? "–\(referenceDescriptions.count)" : ""))"
-            onStageChange?(
-                "Curating Your Looks",
-                "Generating Look \(lookIndex + 1) of \(Self.lookCount)\(refStatusSuffix) tailored to \(occasion.title)...",
-                referenceDescriptions
-            )
+        do {
+            for lookIndex in 0..<Self.lookCount {
+                let refStatusSuffix = referenceDescriptions.isEmpty
+                    ? ""
+                    : " (using Ref 1\(referenceDescriptions.count > 1 ? "–\(referenceDescriptions.count)" : ""))"
+                onStageChange?(
+                    "Curating Your Looks",
+                    "Generating Look \(lookIndex + 1) of \(Self.lookCount)\(refStatusSuffix) tailored to \(occasion.title)...",
+                    referenceDescriptions
+                )
 
-            let parsedLook = try await generateLook(
-                for: occasion,
-                profile: profile,
-                lookIndex: lookIndex,
-                previousLooks: previousSummaries,
-                referenceAnalysis: referenceAnalysis,
-                minimumTemperature: nil
-            )
-            generatedLooks.append(parsedLook)
-            previousSummaries.append(GeneratedLookSummary(from: parsedLook))
-            print("✅ [OutfitGenerationPipeline] Look \(lookIndex) accepted. \(generatedLooks.count)/\(Self.lookCount) complete.")
+                let parsedLook = try await generateLook(
+                    for: occasion,
+                    profile: profile,
+                    lookIndex: lookIndex,
+                    previousLooks: previousSummaries,
+                    referenceAnalysis: referenceAnalysis,
+                    minimumTemperature: nil
+                )
+                generatedLooks.append(parsedLook)
+                previousSummaries.append(GeneratedLookSummary(from: parsedLook))
+                progress.completeStep(.look)
+                print("✅ [OutfitGenerationPipeline] Look \(lookIndex) accepted. \(generatedLooks.count)/\(Self.lookCount) complete.")
+            }
+        } catch {
+            await releaseGenerationMemoryAndCaches()
+            throw error
         }
 
+        await releaseGenerationMemoryAndCaches()
         return generatedLooks
     }
 
@@ -210,14 +224,32 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         print("🔧 [OutfitGenerationPipeline] Generating extra look \(lookIndex) (previous looks appended: \(previousSummaries.count), refs: \(referenceDescriptions.count))…")
 
         // 3. Extra looks cycle through the 5 directions, at least as creative as `temperature`.
-        return try await generateLook(
-            for: occasion,
-            profile: profile,
-            lookIndex: lookIndex,
-            previousLooks: previousSummaries,
-            referenceAnalysis: referenceAnalysis,
-            minimumTemperature: temperature
-        )
+        do {
+            let look = try await generateLook(
+                for: occasion,
+                profile: profile,
+                lookIndex: lookIndex,
+                previousLooks: previousSummaries,
+                referenceAnalysis: referenceAnalysis,
+                minimumTemperature: temperature
+            )
+            await releaseGenerationMemoryAndCaches()
+            return look
+        } catch {
+            await releaseGenerationMemoryAndCaches()
+            throw error
+        }
+    }
+
+    /// Unloads VLM/LLM weights + Metal backend and clears in-memory caches after generation.
+    private func releaseGenerationMemoryAndCaches() async {
+        await VLMEngine.shared.unload()
+        await LLMEngine.shared.unloadModel()
+        ReferenceImageStyleAnalyzer.shared.clearCache()
+        OutfitAttributeMapper.clearSourceImageCache()
+        GarmentCropCache.shared.clearAll()
+        AsyncLookThumbnailView.clearCache()
+        URLCache.shared.removeAllCachedResponses()
     }
 
     /// Generates a single additional outfit look, taking into account all previously generated looks
@@ -263,12 +295,17 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let dresscodeColors = DresscodeColorRule.forOccasion(title: occasion.title, dresscode: occasion.dresscode, note: occasion.customNote, palette: profile.colorSeason?.outfitSwatches ?? [])
         let keepsReferenceColors = archetype == .referenceMatch && referenceAnalysis != nil
         let dresscodeRequirements = DresscodeRequirements(dresscode: occasion.dresscode)
-        let excludedHexes = DresscodeColorRule.excludedHexes(dresscode: occasion.dresscode, palette: profile.colorSeason?.outfitSwatches ?? [])
+        let excludedHexes = DresscodeColorRule.excludedHexes(
+            dresscode: occasion.dresscode,
+            occasionTitle: occasion.title,
+            note: occasion.customNote,
+            palette: profile.colorSeason?.outfitSwatches ?? []
+        )
         let allowsOffPalette = dresscodeColors == nil && keepsReferenceColors
 
-        // Rejected repeats are added to the "previous looks" list, so the next attempt avoids them too.
+        // Rejected repeats / style-check fallbacks are kept only when complete (never bottom-only / top-only).
         var avoidedLooks = previousLooks
-        var lastRepeatedLook: OutfitLook?
+        var bestCompleteFallback: OutfitLook?
         // Set when the prompt didn't fit the model's context: the next attempt uses the compact prompt.
         var forcesCompactPrompt = false
 
@@ -317,7 +354,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                     forcesCompactPrompt = true
                 }
                 if attempt == Self.maximumAttemptsPerLook - 1 {
-                    if let lastRepeatedLook { return lastRepeatedLook }
+                    if let bestCompleteFallback { return bestCompleteFallback }
                     throw error
                 }
                 continue
@@ -325,12 +362,17 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             // Enforce the intended index regardless of what the model output.
             parsedLook.lookIndex = lookIndex
 
-            // The pieces must match the structure: a dress when the dresscode or reference asks for one,
-            // separates otherwise. The parser keeps whatever came back when nothing matches, so check here.
-            let pieceCategories = Set(parsedLook.garments.map(\.category))
-            if !structure.categories.allSatisfy(pieceCategories.contains) {
-                print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) has \(pieceCategories.map(\.rawValue).sorted()) instead of \(structure.categories.map(\.rawValue)). Generating it again.")
-                if lastRepeatedLook == nil { lastRepeatedLook = parsedLook }
+            // Every required category for the structure (e.g. both Top and Bottom) must be present;
+            // never keep or return a partial look (such as Bottom-only when the Top failed JSON).
+            let missingCategories = Self.missingRequiredCategories(in: parsedLook, for: structure)
+            if !missingCategories.isEmpty {
+                let present = parsedLook.garments.map(\.category.rawValue)
+                let missing = missingCategories.map(\.rawValue)
+                print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) missing required categories \(missing) (got \(present) for \(structure.rawValue)). Generating it again.")
+                if attempt == Self.maximumAttemptsPerLook - 1 {
+                    if let bestCompleteFallback { return bestCompleteFallback }
+                    throw LLMError.invalidOutput("Look index \(lookIndex) is missing required garment category: \(missing.joined(separator: ", ")).")
+                }
                 continue
             }
 
@@ -342,14 +384,33 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 }
             }) {
                 print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) misses the dresscode's \(missing.first ?? ""). Generating it again.")
-                if lastRepeatedLook == nil { lastRepeatedLook = parsedLook }
+                if bestCompleteFallback == nil { bestCompleteFallback = parsedLook }
                 continue
+            }
+
+            // Culturally forbidden colors (e.g. white or black for Chinese New Year / Imlek)
+            if let guide = OccasionStyleBank.guide(forTitle: occasion.title, dresscode: occasion.dresscode + " " + (occasion.customNote ?? "")),
+               let forbidden = guide.forbiddenColors {
+                let affirmed = DresscodeText.affirmed(occasion.dresscode).lowercased()
+                let forbiddenWords = forbidden.components(separatedBy: " ").filter { !$0.isEmpty && !affirmed.contains($0) }
+                let hasForbidden = parsedLook.garments.contains { g in
+                    let name = g.colorName.lowercased()
+                    let hex = g.hexColor.uppercased()
+                    let isForbiddenName = forbiddenWords.contains { name.contains($0) }
+                    let isForbiddenHex = excludedHexes.contains(hex)
+                    return isForbiddenName || isForbiddenHex
+                }
+                if hasForbidden {
+                    print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) uses forbidden color for \(guide.name). Generating it again.")
+                    if bestCompleteFallback == nil { bestCompleteFallback = parsedLook }
+                    continue
+                }
             }
 
             // Without dresscode colors, a look mixing several bright colors is generated again (kept only as a last resort).
             if dresscodeColors == nil, !keepsReferenceColors, Self.isTooColorful(parsedLook) {
                 print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) mixes several bright colors. Generating it again.")
-                if lastRepeatedLook == nil { lastRepeatedLook = parsedLook }
+                if bestCompleteFallback == nil { bestCompleteFallback = parsedLook }
                 continue
             }
 
@@ -357,15 +418,21 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 return parsedLook
             }
             print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) repeats look \(repeatedIndex + 1). Generating it again.")
-            lastRepeatedLook = parsedLook
+            bestCompleteFallback = parsedLook
             avoidedLooks.append(GeneratedLookSummary(from: parsedLook))
         }
 
-        // Every attempt repeated an earlier look: keep the last one rather than failing the whole set.
-        guard let lastRepeatedLook else {
-            throw LLMError.invalidOutput("Could not generate look index \(lookIndex).")
+        // Every attempt repeated an earlier look or hit a soft check: keep the complete fallback rather than failing the whole set.
+        guard let bestCompleteFallback else {
+            throw LLMError.invalidOutput("Could not generate complete look index \(lookIndex).")
         }
-        return lastRepeatedLook
+        return bestCompleteFallback
+    }
+
+    /// Returns any categories required by `structure` that are absent from `look.garments`.
+    private static func missingRequiredCategories(in look: OutfitLook, for structure: OutfitStructure) -> [GarmentCategory] {
+        let present = Set(look.garments.map(\.category))
+        return structure.categories.filter { !present.contains($0) }
     }
 
     // MARK: - Color Check
@@ -458,22 +525,23 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let totalRefs = allImageData.count
         onStageChange?(
             "Analyzing References",
-            "Scanning 1 of \(totalRefs) reference photo\(totalRefs == 1 ? "" : "s") with Qwen 2.5 VL...",
+            "Scanning 1 of \(totalRefs) reference photo\(totalRefs == 1 ? "" : "s")...",
             []
         )
         let descriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(
             for: allImageData
         ) { completed, total, descriptionsSoFar in
+            GenerationProgressEstimator.shared.completeSteps(.referenceScan, upTo: completed)
             if completed < total {
                 onStageChange?(
                     "Analyzing References",
-                    "Scanning \(completed + 1) of \(total) reference photos with Qwen 2.5 VL...",
+                    "Scanning \(completed + 1) of \(total) reference photos...",
                     descriptionsSoFar
                 )
             } else {
                 onStageChange?(
                     "Analyzing References",
-                    "Scanned \(total) reference photo\(total == 1 ? "" : "s"). Preparing main LLM recommendation...",
+                    "Scanned \(total) reference photo\(total == 1 ? "" : "s"). Preparing your outfit recommendations...",
                     descriptionsSoFar
                 )
             }
@@ -594,21 +662,37 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             .replacingOccurrences(of: "```", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // The model sometimes opens the look object with `[` instead of `{` (e.g. `["lookIndex":2,...}`).
+        // Swap that bracket so the look's own keys are decoded instead of a nested garment object.
+        if cleanJSON.hasPrefix("[") {
+            let afterBracket = cleanJSON.dropFirst().drop(while: { $0.isWhitespace })
+            if afterBracket.first == "\"" {
+                cleanJSON = "{" + cleanJSON.dropFirst()
+            }
+        }
+
+        // A decode only counts when at least one look kept garments; otherwise a garment object
+        // picked up by the balanced-block search would decode as an empty look and stop the search.
+        func usable(_ looks: [OutfitLook]?) -> [OutfitLook]? {
+            guard let looks, looks.contains(where: { !$0.garments.isEmpty }) else { return nil }
+            return looks.filter { !$0.garments.isEmpty }
+        }
+
         // 1. Try to decode the cleaned string directly as-is (happy path)
-        if let looks = try? decodeLooks(from: cleanJSON, options: options), !looks.isEmpty {
+        if let looks = usable(try? decodeLooks(from: cleanJSON, options: options)) {
             return looks
         }
 
         // 2. Extract the first balanced { ... } block (cuts off trailing garbage like `}]` or extra tokens)
         if let balanced = extractFirstBalancedJSONObject(from: cleanJSON),
-           let looks = try? decodeLooks(from: balanced, options: options), !looks.isEmpty {
+           let looks = usable(try? decodeLooks(from: balanced, options: options)) {
             print("✅ [OutfitGenerationPipeline] Decoded look from balanced JSON block.")
             return looks
         }
 
         // 3. Extract the outermost { ... } blob from mixed prose+JSON output
         if let extracted = extractJSONObject(from: cleanJSON),
-           let looks = try? decodeLooks(from: extracted, options: options), !looks.isEmpty {
+           let looks = usable(try? decodeLooks(from: extracted, options: options)) {
             print("⚠️ [OutfitGenerationPipeline] Extracted JSON from mixed output.")
             return looks
         }
@@ -616,11 +700,11 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         // 4. Try wrapping with {"looks":[ ... ]} if it was an unnested look continuation
         if !cleanJSON.contains("\"looks\"") {
             let wrapped = "{\"looks\":[" + cleanJSON + "]}"
-            if let looks = try? decodeLooks(from: wrapped, options: options), !looks.isEmpty {
+            if let looks = usable(try? decodeLooks(from: wrapped, options: options)) {
                 return looks
             }
             if let balancedWrapped = extractFirstBalancedJSONObject(from: wrapped),
-               let looks = try? decodeLooks(from: balancedWrapped, options: options), !looks.isEmpty {
+               let looks = usable(try? decodeLooks(from: balancedWrapped, options: options)) {
                 return looks
             }
         }
@@ -628,11 +712,11 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         // 5. Auto-fix repeated `"garments": [` keys if present
         let sanitized = sanitizeMalformedLLMJSON(cleanJSON)
         if sanitized != cleanJSON {
-            if let looks = try? decodeLooks(from: sanitized, options: options), !looks.isEmpty {
+            if let looks = usable(try? decodeLooks(from: sanitized, options: options)) {
                 return looks
             }
             if let balanced = extractFirstBalancedJSONObject(from: sanitized),
-               let looks = try? decodeLooks(from: balanced, options: options), !looks.isEmpty {
+               let looks = usable(try? decodeLooks(from: balanced, options: options)) {
                 return looks
             }
         }
@@ -642,7 +726,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let repaired = repairTruncatedJSON(sanitized)
         do {
             let looks = try decodeLooks(from: repaired, options: options)
-            if !looks.isEmpty {
+            if let looks = usable(looks) {
                 print("⚠️ [OutfitGenerationPipeline] Decoded \(looks.count) looks from repaired truncated JSON.")
                 return looks
             }
@@ -710,14 +794,22 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         return nil
     }
 
-    /// Fixes common small-LLM JSON malformations (e.g. repeated `"garments":[` keys per item).
+    /// Fixes common small-LLM JSON malformations (e.g. repeated `"garments":[` keys per item,
+    /// raw newlines inside string literals, trailing commas, missing commas between objects).
     private func sanitizeMalformedLLMJSON(_ text: String) -> String {
-        var result = text
+        var result = escapeRawControlCharsInsideJSONStrings(in: text)
 
         // Fix: `},\n "garments":[{"category"` -> `},\n {"category"`
         // or `}],\n "garments":[{"category"` -> `},\n {"category"`
         let pattern1 = #"(?:\}\s*\]|\})\s*,\s*\"garments\"\s*:\s*\[\s*\{"#
         if let regex = try? NSRegularExpression(pattern: pattern1, options: []) {
+            let range = NSRange(result.startIndex..<result.endIndex, in: result)
+            result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "}, {")
+        }
+
+        // Fix missing comma between adjacent garment objects: `}\s*{` -> `}, {`
+        let missingObjectCommaPattern = #"\}\s*\{"#
+        if let regex = try? NSRegularExpression(pattern: missingObjectCommaPattern, options: []) {
             let range = NSRange(result.startIndex..<result.endIndex, in: result)
             result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "}, {")
         }
@@ -729,26 +821,75 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "$1\"hexColor\":$2")
         }
 
-        return result
+        return stripTrailingCommasInJSON(in: result)
     }
 
-    /// Scans text for individual `{ "category": ... }` garment JSON objects if outer wrapper is broken.
-    private func extractLooksFromMalformedText(_ text: String, options: ParseOptions) -> [OutfitLook]? {
-        // Find fitRationale if present
-        let fitRationale: String
-        let rationalePattern = #"\"fitRationale\"\s*:\s*\"([^\"]+)\""#
-        if let regex = try? NSRegularExpression(pattern: rationalePattern, options: []),
-           let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..<text.endIndex, in: text)),
-           let range = Range(match.range(at: 1), in: text) {
-            fitRationale = String(text[range])
-        } else {
-            fitRationale = "Harmonious ensemble tailored to your silhouette and seasonal palette."
+    /// Replaces raw literal newlines/tabs inside JSON strings with spaces so `JSONDecoder` does not fail on the whole array.
+    private func escapeRawControlCharsInsideJSONStrings(in text: String) -> String {
+        var output = ""
+        output.reserveCapacity(text.count)
+        var inString = false
+        var escaped = false
+
+        for ch in text {
+            if escaped {
+                output.append(ch)
+                escaped = false
+            } else if ch == "\\" && inString {
+                output.append(ch)
+                escaped = true
+            } else if ch == "\"" {
+                output.append(ch)
+                inString.toggle()
+            } else if inString && (ch == "\n" || ch == "\r" || ch == "\t") {
+                output.append(" ")
+            } else {
+                output.append(ch)
+            }
         }
+        return output
+    }
 
-        // Find all garment-like objects: { ... "category" ... }
-        var garments: [GarmentItem] = []
-        let palette = options.palette
+    /// Removes trailing commas directly before `}` or `]` outside strings (illegal in Foundation `JSONDecoder`).
+    private func stripTrailingCommasInJSON(in text: String) -> String {
+        var chars = Array(text)
+        var inString = false
+        var escaped = false
+        var lastCommaIndex: Int? = nil
 
+        var idx = 0
+        while idx < chars.count {
+            let ch = chars[idx]
+            if escaped {
+                escaped = false
+            } else if ch == "\\" && inString {
+                escaped = true
+            } else if ch == "\"" {
+                inString.toggle()
+                lastCommaIndex = nil
+            } else if !inString {
+                if ch == "," {
+                    lastCommaIndex = idx
+                } else if ch == "}" || ch == "]" {
+                    if let commaIdx = lastCommaIndex {
+                        chars[commaIdx] = " "
+                        lastCommaIndex = nil
+                    }
+                } else if !ch.isWhitespace {
+                    lastCommaIndex = nil
+                }
+            }
+            idx += 1
+        }
+        return String(chars)
+    }
+
+    /// Scans text for individual `{ "category": ... }` garment objects if the outer wrapper or one item is malformed.
+    private func extractLooksFromMalformedText(_ text: String, options: ParseOptions) -> [OutfitLook]? {
+        let fitRationale = Self.extractJSONStringField(named: ["fitRationale", "rationale", "description"], in: text)
+            ?? "Harmonious ensemble tailored to your silhouette and seasonal palette."
+
+        var dtos: [LLMOutfitGenerationResponse.GarmentDTO] = []
         var depth = 0
         var objStart: String.Index? = nil
         var inString = false
@@ -771,30 +912,10 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                     depth += 1
                 } else if ch == "}" {
                     depth = max(0, depth - 1)
-                    if let start = objStart, text[start...idx].contains("\"category\"") {
+                    if let start = objStart, Self.looksLikeGarmentBlock(text[start...idx]) {
                         let candidate = String(text[start...idx])
-                        if let data = candidate.data(using: .utf8),
-                           let dto = try? JSONDecoder().decode(LLMOutfitGenerationResponse.GarmentDTO.self, from: data) {
-                            // Pieces outside Outer / Top / Bottom (shoes, accessories) are skipped.
-                            if let cat = GarmentCategory(generatedLabel: dto.category)
-                                ?? GarmentCategory(generatedLabel: dto.name) {
-                                let color = resolveSeasonalColor(rawName: dto.colorName, rawHex: dto.hexColor, palette: palette,
-                                                                 allowsOffPalette: options.allowsOffPaletteAccent)
-                                let garment = GarmentItem(
-                                    category: cat,
-                                    name: dto.name,
-                                    material: dto.material,
-                                    colorName: color.name,
-                                    hexColor: color.hex,
-                                    rationale: dto.rationale,
-                                    playgroundPrompt: normalizePlaygroundPrompt(
-                                        dto.playgroundPrompt,
-                                        rawColorName: dto.colorName,
-                                        resolvedColorName: color.name
-                                    )
-                                )
-                                garments.append(garment)
-                            }
+                        if let dto = decodeOrRecoverGarmentDTO(from: candidate) {
+                            dtos.append(dto)
                         }
                         objStart = nil
                     } else if depth <= 1 {
@@ -805,6 +926,21 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             idx = text.index(after: idx)
         }
 
+        // If an unclosed quote inside one garment (often the Top) threw off brace matching
+        // so fewer blocks decoded than category headers present, recover missing chunks by header.
+        let headerSlices = Self.sliceGarmentChunksByCategoryHeader(from: text)
+        if headerSlices.count > dtos.count {
+            let recoveredByHeader = headerSlices.compactMap { decodeOrRecoverGarmentDTO(from: $0) }
+            let existingCategories = Set(dtos.compactMap { GarmentCategory(generatedLabel: $0.category) ?? GarmentCategory(generatedLabel: $0.name) })
+            for candidate in recoveredByHeader {
+                let candidateCategory = GarmentCategory(generatedLabel: candidate.category) ?? GarmentCategory(generatedLabel: candidate.name)
+                if let candidateCategory, !existingCategories.contains(candidateCategory) {
+                    dtos.append(candidate)
+                }
+            }
+        }
+
+        let garments = dtos.compactMap { makeGarmentItem(from: $0, options: options) }
         guard !garments.isEmpty else { return nil }
 
         let look = OutfitLook(
@@ -819,6 +955,93 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
         look.garments = trimmedGarments
         return [look]
+    }
+
+    private static func looksLikeGarmentBlock(_ slice: Substring) -> Bool {
+        slice.contains("\"category\"") || slice.contains("\"type\"") || slice.contains("\"garmentType\"")
+    }
+
+    /// Tries `JSONDecoder` first on a single garment block, then falls back to field-level regex extraction
+    /// so a syntax glitch inside one piece (like an unescaped quote in Top) does not drop it.
+    private func decodeOrRecoverGarmentDTO(from candidate: String) -> LLMOutfitGenerationResponse.GarmentDTO? {
+        let cleaned = sanitizeMalformedLLMJSON(candidate)
+        if let data = cleaned.data(using: .utf8),
+           let dto = try? JSONDecoder().decode(LLMOutfitGenerationResponse.GarmentDTO.self, from: data) {
+            return dto
+        }
+        return Self.recoverGarmentDTOFields(from: cleaned)
+    }
+
+    private static func sliceGarmentChunksByCategoryHeader(from text: String) -> [String] {
+        let pattern = #"\{\s*\"(?:category|type|garmentType)\"\s*:"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return [] }
+        let fullRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        let matches = regex.matches(in: text, options: [], range: fullRange)
+        guard !matches.isEmpty else { return [] }
+
+        var slices: [String] = []
+        for index in matches.indices {
+            guard let start = Range(matches[index].range, in: text)?.lowerBound else { continue }
+            let end: String.Index
+            if index + 1 < matches.count, let nextStart = Range(matches[index + 1].range, in: text)?.lowerBound {
+                end = nextStart
+            } else {
+                end = text.endIndex
+            }
+            slices.append(String(text[start..<end]))
+        }
+        return slices
+    }
+
+    private static func recoverGarmentDTOFields(from chunk: String) -> LLMOutfitGenerationResponse.GarmentDTO? {
+        let category = extractJSONStringField(named: ["category", "type", "garmentType"], in: chunk)
+        let name = extractJSONStringField(named: ["name", "itemName", "garment"], in: chunk)
+        guard category != nil || name != nil else { return nil }
+
+        let material = extractJSONStringField(named: ["material", "fabric"], in: chunk) ?? "Tailored Blend"
+        let colorName = extractJSONStringField(named: ["colorName", "color", "color_name"], in: chunk) ?? "Neutral"
+        let hexColor = extractJSONStringField(named: ["hexColor", "hex", "hex_color"], in: chunk)
+            ?? extractFirstHexColor(in: chunk)
+            ?? "#1A1A1A"
+        let rationale = extractJSONStringField(named: ["rationale", "bodyFitRationale", "fitRationale", "reason"], in: chunk)
+            ?? "Flattering cut tailored to your natural body line."
+        let playgroundPrompt = extractJSONStringField(named: ["playgroundPrompt", "visualPrompt", "visual_prompt", "playground_prompt"], in: chunk)
+
+        return LLMOutfitGenerationResponse.GarmentDTO(
+            category: category ?? "Top",
+            name: name ?? "Classic Piece",
+            material: material,
+            colorName: colorName,
+            hexColor: hexColor,
+            rationale: rationale,
+            playgroundPrompt: playgroundPrompt
+        )
+    }
+
+    private static func extractJSONStringField(named keys: [String], in text: String) -> String? {
+        for key in keys {
+            let escapedKey = NSRegularExpression.escapedPattern(for: key)
+            let pattern = "\"\(escapedKey)\"\\s*:\\s*\"(.*?)\"(?=\\s*(?:,|\\}|\\]|\"[A-Za-z_]+\"\\s*:|$))"
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]),
+               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..<text.endIndex, in: text)),
+               let range = Range(match.range(at: 1), in: text) {
+                let value = String(text[range])
+                    .replacingOccurrences(of: "\\\"", with: "\"")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !value.isEmpty {
+                    return value
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func extractFirstHexColor(in text: String) -> String? {
+        let pattern = #"#[0-9A-Fa-f]{6}\b"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
+              let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..<text.endIndex, in: text)),
+              let range = Range(match.range, in: text) else { return nil }
+        return String(text[range])
     }
 
     // MARK: - JSON Parsing Helpers
@@ -842,34 +1065,128 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         return outfit.sortedForOutfitDisplay()
     }
 
-    /// Syncs `playgroundPrompt` with the resolved swatch name and ensures the word "color" follows
-    /// the color name so Image Playground treats literal swatch names (e.g. "Sweet Corn") as colors.
-    private func normalizePlaygroundPrompt(_ rawPrompt: String?, rawColorName: String, resolvedColorName: String) -> String? {
+    /// Converts any `#RRGGBB` hex color mathematically via HSL into a standard visual color name
+    /// so Image Playground matches the actual UI swatch without confusing literal Pantone names or stale LLM colors.
+    private static func visualColorName(fromHex hex: String) -> String? {
+        let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
+        let r = Double((value >> 16) & 0xFF) / 255
+        let g = Double((value >> 8) & 0xFF) / 255
+        let b = Double(value & 0xFF) / 255
+
+        let maxC = max(r, g, b)
+        let minC = min(r, g, b)
+        let delta = maxC - minC
+        let lightness = (maxC + minC) / 2
+        let hsvSaturation = maxC == 0 ? 0 : delta / maxC
+
+        var hue = 0.0
+        if delta > 0 {
+            if maxC == r { hue = 60 * ((g - b) / delta).truncatingRemainder(dividingBy: 6) }
+            else if maxC == g { hue = 60 * ((b - r) / delta + 2) }
+            else { hue = 60 * ((r - g) / delta + 4) }
+            if hue < 0 { hue += 360 }
+        }
+
+        if lightness < 0.13 { return "black" }
+        if lightness > 0.88 && hsvSaturation < 0.16 {
+            return (hsvSaturation >= 0.06 && (15...75).contains(hue)) ? "cream" : "off-white"
+        }
+        if hsvSaturation < 0.16 {
+            if lightness < 0.32 { return "charcoal grey" }
+            if lightness > 0.68 { return "light grey" }
+            return "grey"
+        }
+        if hsvSaturation < 0.42 && (15...75).contains(hue) {
+            if lightness > 0.78 { return "cream" }
+            if lightness > 0.55 { return "beige" }
+            return "taupe brown"
+        }
+
+        let shade = lightness < 0.34 ? "deep " : (lightness > 0.74 ? "soft " : "")
+        let baseHue: String
+        switch hue {
+        case 345..., ..<15: baseHue = lightness < 0.34 ? "burgundy" : "red"
+        case 15..<42: baseHue = lightness < 0.45 ? "brown" : "terracotta"
+        case 42..<68: baseHue = (lightness < 0.48 || hsvSaturation < 0.45) ? "olive" : "gold"
+        case 68..<165: baseHue = hsvSaturation < 0.42 ? "sage green" : "green"
+        case 165..<200: baseHue = "teal"
+        case 200..<255: baseHue = lightness < 0.34 ? "navy blue" : "blue"
+        case 255..<305: baseHue = "purple"
+        default: baseHue = "pink"
+        }
+        // Avoid redundant "deep burgundy" / "deep navy blue"
+        if baseHue == "burgundy" || baseHue == "navy blue" || baseHue == "sage green" {
+            return baseHue
+        }
+        return "\(shade)\(baseHue)"
+    }
+
+    /// Syncs `playgroundPrompt` with the resolved `hexColor` using HSL math so the avatar color matches
+    /// the UI card even when the LLM outputs a conflicting color word or literal Pantone food name.
+    private func normalizePlaygroundPrompt(
+        _ rawPrompt: String?,
+        rawColorName: String,
+        resolvedColorName: String,
+        resolvedHex: String
+    ) -> String? {
         guard var prompt = rawPrompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty else {
             return nil
         }
-        let cleanRaw = rawColorName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanResolved = resolvedColorName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !cleanRaw.isEmpty, !cleanResolved.isEmpty,
-           cleanRaw.caseInsensitiveCompare(cleanResolved) != .orderedSame,
-           let range = prompt.range(of: cleanRaw, options: .caseInsensitive) {
-            prompt.replaceSubrange(range, with: cleanResolved.lowercased())
-        }
-        let lowerWords = prompt.lowercased()
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .filter { !$0.isEmpty }
-        if !lowerWords.contains("color") && !lowerWords.contains("colored") {
-            if !cleanResolved.isEmpty, let range = prompt.range(of: cleanResolved, options: .caseInsensitive) {
-                let matched = String(prompt[range])
-                prompt.replaceSubrange(range, with: "\(matched) color")
-            } else if !cleanRaw.isEmpty, let range = prompt.range(of: cleanRaw, options: .caseInsensitive) {
-                let matched = String(prompt[range])
-                prompt.replaceSubrange(range, with: "\(matched) color")
-            } else if !cleanResolved.isEmpty {
-                prompt = "\(cleanResolved.lowercased()) color \(prompt)"
+
+        let targetColor = Self.visualColorName(fromHex: resolvedHex)
+            ?? resolvedColorName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !targetColor.isEmpty else { return prompt }
+
+        // Strip any leading "<color words> color " prefix so the resolved hex color owns the color slot.
+        let leadingColorPrefixPattern = #"^\s*(?:[\p{L}'’\-]+\s+){1,3}?colou?r(?:ed)?\b\s*"#
+        if let regex = try? NSRegularExpression(pattern: leadingColorPrefixPattern, options: [.caseInsensitive]) {
+            let range = NSRange(prompt.startIndex..<prompt.endIndex, in: prompt)
+            prompt = regex.stringByReplacingMatches(in: prompt, options: [], range: range, withTemplate: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            let cleanRaw = rawColorName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cleanRaw.isEmpty, let range = prompt.range(of: cleanRaw, options: .caseInsensitive) {
+                prompt.removeSubrange(range)
+                prompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
             }
         }
-        return prompt
+
+        if prompt.isEmpty {
+            return "\(targetColor) color garment"
+        }
+        return "\(targetColor) color \(prompt)"
+    }
+
+    /// Converts one parsed `GarmentDTO` into a `GarmentItem`, snapping its color and playground prompt.
+    /// Returns `nil` for pieces outside the wardrobe categories (shoes, accessories).
+    private func makeGarmentItem(from dto: LLMOutfitGenerationResponse.GarmentDTO, options: ParseOptions) -> GarmentItem? {
+        guard let category = GarmentCategory(generatedLabel: dto.category)
+                ?? GarmentCategory(generatedLabel: dto.name) else {
+            return nil
+        }
+
+        let resolvedColor = resolveSeasonalColor(
+            rawName: dto.colorName,
+            rawHex: dto.hexColor,
+            palette: options.palette,
+            allowsOffPalette: options.allowsOffPaletteAccent
+        )
+
+        return GarmentItem(
+            category: category,
+            name: dto.name,
+            material: dto.material,
+            colorName: resolvedColor.name,
+            hexColor: resolvedColor.hex,
+            rationale: dto.rationale,
+            playgroundPrompt: normalizePlaygroundPrompt(
+                dto.playgroundPrompt,
+                rawColorName: dto.colorName,
+                resolvedColorName: resolvedColor.name,
+                resolvedHex: resolvedColor.hex
+            )
+        )
     }
 
     private func decodeLooks(from jsonString: String, options: ParseOptions) throws -> [OutfitLook] {
@@ -889,7 +1206,6 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             throw LLMError.invalidOutput("Unable to decode looks from JSON")
         }
 
-        let palette = options.palette
         var looks: [OutfitLook] = []
         for lookDTO in lookDTOs {
             let look = OutfitLook(
@@ -898,35 +1214,8 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 isBookmarked: false,
                 lookImageData: nil
             )
-            var garments: [GarmentItem] = []
             // Pieces outside Outer / Top / Bottom (shoes, accessories) are skipped instead of becoming a top.
-            for gDTO in lookDTO.garments {
-                guard let cat = GarmentCategory(generatedLabel: gDTO.category)
-                        ?? GarmentCategory(generatedLabel: gDTO.name) else { continue }
-
-                // Harmonize / snap color to the closest valid seasonal swatch if palette is available
-                let resolvedColor = resolveSeasonalColor(
-                    rawName: gDTO.colorName,
-                    rawHex: gDTO.hexColor,
-                    palette: palette,
-                    allowsOffPalette: options.allowsOffPaletteAccent
-                )
-
-                let garment = GarmentItem(
-                    category: cat,
-                    name: gDTO.name,
-                    material: gDTO.material,
-                    colorName: resolvedColor.name,
-                    hexColor: resolvedColor.hex,
-                    rationale: gDTO.rationale,
-                    playgroundPrompt: normalizePlaygroundPrompt(
-                        gDTO.playgroundPrompt,
-                        rawColorName: gDTO.colorName,
-                        resolvedColorName: resolvedColor.name
-                    )
-                )
-                garments.append(garment)
-            }
+            let garments = lookDTO.garments.compactMap { makeGarmentItem(from: $0, options: options) }
             // At most one garment per category, ordered inner top, outer, bottom.
             let outfitGarments = makeOutfitGarments(from: garments, structure: options.structure)
             for garment in outfitGarments {
@@ -1133,6 +1422,7 @@ public struct LLMOutfitGenerationResponse: Codable, Sendable {
             case garments
             case items
             case outfit
+            case pieces
         }
 
         public init(lookIndex: Int, fitRationale: String, garments: [GarmentDTO]) {
@@ -1164,12 +1454,14 @@ public struct LLMOutfitGenerationResponse: Codable, Sendable {
                 self.fitRationale = "Harmonious ensemble tailored to your silhouette and seasonal palette."
             }
 
-            // Flexible garments array: tries garments, items, outfit, or defaults to empty
+            // Flexible garments array: tries garments, items, outfit, pieces, or defaults to empty
             if let g = try? container.decode([GarmentDTO].self, forKey: .garments) {
                 self.garments = g
             } else if let g = try? container.decode([GarmentDTO].self, forKey: .items) {
                 self.garments = g
             } else if let g = try? container.decode([GarmentDTO].self, forKey: .outfit) {
+                self.garments = g
+            } else if let g = try? container.decode([GarmentDTO].self, forKey: .pieces) {
                 self.garments = g
             } else {
                 self.garments = []

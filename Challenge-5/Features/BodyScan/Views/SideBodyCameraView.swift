@@ -361,8 +361,8 @@ private final class SideBodyCameraPreviewUIView: UIView {
 
     func updateOrientationAndMirroring() {
         if let connection = previewLayer.connection {
-            if connection.isVideoOrientationSupported {
-                connection.videoOrientation = .portrait
+            if connection.isVideoRotationAngleSupported(90) { // 90° = portrait
+                connection.videoRotationAngle = 90
             }
             if connection.isVideoMirroringSupported {
                 connection.automaticallyAdjustsVideoMirroring = false

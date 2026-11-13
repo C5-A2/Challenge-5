@@ -8,7 +8,7 @@
 import Foundation
 
 /// Locates and inspects the on-device Qwen 3.5 GGUF model (`Qwen3.5-4B-Q3_K_M-00001-of-00002.gguf` + `-00002-of-00002.gguf`).
-public struct LLMResource: Sendable {
+nonisolated public struct LLMResource: Sendable {
 
     /// Text LLM candidate: exclusively uses Qwen 3.5 4B (Q3_K_M), split into 2 GGUF shards (<2 GiB each for Git LFS).
     public static let supportedModelFilenames = [
@@ -119,7 +119,7 @@ public struct LLMResource: Sendable {
     }
 
     /// Optional simulated error hook for testing error flows and alerts in UI previews.
-    public static var forceSimulatedError: LLMError? = nil
+    nonisolated(unsafe) public static var forceSimulatedError: LLMError? = nil
 
     /// True if the model file is found and accessible.
     public static var isModelAvailable: Bool {

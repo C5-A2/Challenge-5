@@ -31,7 +31,16 @@ public struct AsyncLookThumbnailView: View {
     @State private var isLoading: Bool = false
     
     // In-memory cache for decoded images
-    private static let imageCache = NSCache<NSString, UIImage>()
+    private static let imageCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 24
+        return cache
+    }()
+
+    /// Clears all cached thumbnail images from memory.
+    public static func clearCache() {
+        imageCache.removeAllObjects()
+    }
     
     // MARK: - Initializer
     

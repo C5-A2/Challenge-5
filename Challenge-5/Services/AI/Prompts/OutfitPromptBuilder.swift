@@ -459,10 +459,11 @@ struct OutfitPromptBuilder: Sendable {
     private static let garmentNamingRule = """
     GARMENT NAMES & VISUAL PROMPTS:
     - "name": the cut or detail, then the garment type (no "+" sign, no color words; the color goes only in "colorName"). Name the neckline, sleeve, waist, length or silhouette instead of vague words (tailored, structured, elegant, classic, chic, sophisticated, modern, refined).
-    - A textile, pattern or texture required by the dresscode or the reference goes in the "name" and "playgroundPrompt" of the garment that carries it, in every look. Do not invent a printed pattern (floral, batik, stripes) that nobody asked for. Textures and trims (lace, tulle, organza, feathers, pearls, beading, sequins, ruffles, bows, pleats, corset boning) are details, not patterns, and are welcome.
+    - A textile, pattern or texture required by the dresscode or the reference goes in the "name" and "playgroundPrompt" of the garment that carries it, in every look. Do not invent a printed pattern (floral, batik, stripes) that nobody asked for. Textures and trims (lace, tulle, organza, feathers, pearls, beading, sequins, ruffles, bows, pleats, draping, ruching) are details, not patterns, and are welcome when they fit the occasion.
+    - When a garment features batik, tenun, cheongsam, or cultural embroidery, write "playgroundPrompt" to highlight its visual contrast (e.g. "navy color cotton skirt with prominent contrasting batik motif print", "red color satin cheongsam dress with distinct contrasting gold floral embroidery") so the motif pops vividly instead of rendering as a faint tone-on-tone texture.
     - "material": the base fabric only (e.g. Silk, Satin, Linen), never a pattern word.
     - Use a different cut or detail than the previous looks.
-    - "playgroundPrompt": 5-9 words, "[color] color [fabric] [key detail, texture or textile] [clothing noun]" so the image shows the detail (e.g. "white color satin feather-trimmed corset mini dress", "navy color batik pleated midi skirt"). Never use "sheer", "translucent", "revealing" or body-part words. Outer layers always say "long-sleeve".
+    - "playgroundPrompt": 5-9 words, "[color] color [fabric] [key detail, texture or textile] [clothing noun]" so the image shows the detail (e.g. "ivory color silk pleated wrap blouse", "navy color batik pleated midi skirt"). Use safe, standard garment terms (top, blouse, knitwear, skirt, trousers, midi dress) and never use "sheer", "translucent", "revealing" or body-part words. Outer layers always say "long-sleeve".
     """
 
     // MARK: - Occasion & Setting
@@ -478,7 +479,7 @@ struct OutfitPromptBuilder: Sendable {
         if let guide = OccasionStyleBank.guide(forTitle: occasion.title, dresscode: cleanDresscode + " " + note) {
             lines.append(guide.promptText(lookIndex: lookIndex, hasDress: structure.hasDress))
         } else {
-            lines.append("Decide what this event needs: the likely venue, time of day, how formal it is and what she will do there. Then choose a striking, current outfit a stylish woman would really wear to it. Do not overdress a casual event or underdress a formal one.")
+            lines.append("Infer the real-world venue, activity, time of day, comfort level and formality from '\(occasion.title)'. Choose a modern, stylish outfit a fashionable woman would genuinely wear there: cozy/elevated silhouettes for relaxed or at-home moments, polished separates or dresses for outings, and eveningwear only for formal events.")
         }
 
         if cleanDresscode.isEmpty {
@@ -522,10 +523,11 @@ struct OutfitPromptBuilder: Sendable {
     /// The model tends to pick old-fashioned, heavily decorated pieces. This keeps every look current.
     private static let modernStyle = """
     MODERN STYLE (every look):
-    - Trend-forward and styled, not basic: dress her like a fashionable Indonesian woman in her 20s in 2026, the kind of outfit local fashion creators and stylists post for this occasion.
-    - NO plain basics: every outfit needs at least ONE statement detail or texture that suits the occasion, named in the garment "name" and "playgroundPrompt". Examples of details: lace panels or lace trim, tulle or organza layers, feathers, a corset or bustier bodice, pearl or bead embellishment, sequins, ruffles, a bow, pleats, ruching, draping, satin or jacquard. Dressier events take richer details (lace, corset, pearls, feathers, tulle); casual events take lighter ones (pleats, a bow, a ruffle hem, a textured knit).
-    - Shaped, not shapeless: show her silhouette with a fitted bodice, a defined waistline, a cropped length or a body-skimming fit. Avoid loose boxy tunics, peasant blouses, shapeless smocks and plain tees unless the dresscode is very casual.
-    - Avoid anything dated, matronly or costume-like, and long shapeless outers. Only a theme named in the dresscode (vintage, retro, Y2K...) or the occasion guide's modesty rule can override this section.
+    - Trend-forward and styled, not basic: dress her like a fashionable Indonesian woman in her 20s in 2026, the kind of outfit stylists post for this exact occasion.
+    - NO plain basics: every outfit needs at least ONE intentional cut, texture or detail named in the garment "name" and "playgroundPrompt", scaled to the occasion's formality:
+      * Relaxed, casual or at-home events: textured rib knit, contrast piping, asymmetric wrap or tie waist, ruched/gathered detail, scalloped or pointelle trim, clean tonal co-ord cuts (styled and current, never eveningwear).
+      * Smart, daytime or semi-formal/evening events: pleats, draping, bows, structured panels, satin/jacquard sheen, lace trim, tulle, beading or statement tailoring.
+    - Shaped, not shapeless: use intentional proportions (defined waist, draped neckline, crisp hem or body-skimming fit). Avoid dated, matronly or costume-like pieces and long shapeless outers.
     """
 
     // MARK: - Look Direction
@@ -678,19 +680,35 @@ struct OutfitPromptBuilder: Sendable {
 
         guard let colorSeason = profile?.colorSeason else { return nil }
         // The same colors as "Color suits you the most" on her profile, plus her neutrals.
-        // Colors the dresscode rules out ("no black") are removed from the list.
-        let excluded = DresscodeColorRule.excludedHexes(dresscode: occasion.dresscode, palette: colorSeason.outfitSwatches)
+        // Colors the dresscode rules out ("no black") or culturally forbidden (white/black for CNY) are removed from the list.
+        let excluded = DresscodeColorRule.excludedHexes(
+            dresscode: occasion.dresscode,
+            occasionTitle: occasion.title,
+            note: occasion.customNote,
+            palette: colorSeason.outfitSwatches
+        )
         let swatches = colorSeason.outfitSwatches.filter { !excluded.contains($0.hex.uppercased()) }
         let neutrals = colorSeason.neutralSwatches.filter { !excluded.contains($0.hex.uppercased()) }
         let neutralHexSet = Set(neutrals.map { $0.hex.uppercased() })
         let seasonColors = swatches.filter { !neutralHexSet.contains($0.hex.uppercased()) }
+        // Spread accent hues across the 5 looks by putting this look's rotating hue family first.
+        let leadFamily = PaletteColorFamily.leadFamily(forLookIndex: lookIndex, palette: seasonColors)
+        let orderedSeasonColors: [ColorSeason.ColorSwatch]
+        if let leadFamily {
+            let leadSwatches = seasonColors.filter { PaletteColorFamily(hex: $0.hex) == leadFamily }
+            let otherSwatches = seasonColors.filter { PaletteColorFamily(hex: $0.hex) != leadFamily }
+            orderedSeasonColors = leadSwatches + otherSwatches
+        } else {
+            orderedSeasonColors = seasonColors
+        }
         // Compact prompts list names only; the parser finds the hex from the name.
         func describe(_ list: [ColorSeason.ColorSwatch]) -> String {
             list.map { compactPalette ? $0.name : "\($0.name) (\($0.hex))" }.joined(separator: ", ")
         }
-        let palette = neutrals.isEmpty || seasonColors.isEmpty
+        let leadNote = leadFamily.map { " For variety across looks, prefer \($0.rawValue) when picking an accent color." } ?? ""
+        let palette = neutrals.isEmpty || orderedSeasonColors.isEmpty
             ? describe(swatches)
-            : "\nNeutrals (the base — prioritize first): \(describe(neutrals))\nSeason colors (the accent): \(describe(seasonColors))"
+            : "\nNeutrals (the base — prioritize first): \(describe(neutrals))\nSeason colors (the accent): \(describe(orderedSeasonColors))"
 
         let rule: String
         switch archetype {
@@ -738,7 +756,7 @@ struct OutfitPromptBuilder: Sendable {
             mixingRule = "Do not dress her all in the same earthy family (for example all brown and green). Mix neutrals with one season color instead."
         }
         return """
-        COLORS (\(colorSeason.rawValue)): \(rule)
+        COLORS (\(colorSeason.rawValue)): \(rule)\(leadNote)
         \(neutralPriority)
         \(mixingRule)
         CALM COLORS: build the outfit on neutrals and use at most ONE non-neutral color (two shades of it are fine). Prefer soft, muted shades. Never combine several bright colors: no rainbow, neon or clashing color mixes.
