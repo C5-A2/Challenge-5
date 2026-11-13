@@ -177,6 +177,64 @@ public final class CameraService: NSObject, CameraServiceProtocol {
         }
     }
 
+    // MARK: - Exposure, White Balance & Kelvin Telemetry
+
+    /// Reads the active camera's estimated ambient color temperature in Kelvin.
+    public var currentColorTemperatureKelvin: Float? {
+        #if targetEnvironment(simulator)
+        return nil
+        #else
+        guard let device = currentInput?.device else { return nil }
+        let gains = device.deviceWhiteBalanceGains
+        let maxGain = device.maxWhiteBalanceGain
+        guard maxGain >= 1.0 else { return nil }
+        let safeGains = AVCaptureDevice.WhiteBalanceGains(
+            redGain: min(maxGain, max(1.0, gains.redGain)),
+            greenGain: min(maxGain, max(1.0, gains.greenGain)),
+            blueGain: min(maxGain, max(1.0, gains.blueGain))
+        )
+        return device.temperatureAndTintValues(for: safeGains).temperature
+        #endif
+    }
+
+    /// Locks Auto Exposure (AE) and Auto White Balance (AWB) for consistent differential flash capture.
+    public func lockExposureAndWhiteBalance() {
+        #if !targetEnvironment(simulator)
+        guard let device = currentInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            if device.isExposureModeSupported(.locked) {
+                device.exposureMode = .locked
+            }
+            if device.isWhiteBalanceModeSupported(.locked) {
+                device.whiteBalanceMode = .locked
+            }
+            device.unlockForConfiguration()
+        } catch {
+            // Lock failed; proceed with current mode
+        }
+        #endif
+    }
+
+    /// Restores continuous Auto Exposure (AE) and Auto White Balance (AWB).
+    public func unlockExposureAndWhiteBalance() {
+        #if !targetEnvironment(simulator)
+        guard let device = currentInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                device.whiteBalanceMode = .continuousAutoWhiteBalance
+            }
+            device.unlockForConfiguration()
+        } catch {
+            // Unlock failed
+        }
+        #endif
+    }
+
     // MARK: - Still Photo Capture
 
     public func setZoomFactor(_ factor: CGFloat) {

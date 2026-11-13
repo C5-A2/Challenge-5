@@ -47,5 +47,22 @@ public protocol SkinColorAnalyzerProtocol: Sendable {
 
     /// Performs full colorimetric extraction returning both the season and numerical CIELAB metrics.
     func analyzeDetailedSkinTone(from faceImage: UIImage) async throws -> (season: ColorSeason, metrics: SkinAnalysisMetrics)
+
+    /// Performs differential white-screen-flash illuminant subtraction using paired flash & ambient photos.
+    func analyzeDetailedSkinTone(
+        flashImage: UIImage,
+        ambientImage: UIImage
+    ) async throws -> (season: ColorSeason, metrics: SkinAnalysisMetrics)
     #endif
 }
+
+#if canImport(UIKit)
+public extension SkinColorAnalyzerProtocol {
+    func analyzeDetailedSkinTone(
+        flashImage: UIImage,
+        ambientImage: UIImage
+    ) async throws -> (season: ColorSeason, metrics: SkinAnalysisMetrics) {
+        try await analyzeDetailedSkinTone(from: ambientImage)
+    }
+}
+#endif

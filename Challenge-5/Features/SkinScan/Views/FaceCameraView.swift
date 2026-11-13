@@ -20,6 +20,7 @@ struct FaceCameraView: View {
     @State private var cameraService = CameraService()
     @State private var lightingAnalyzer = LightingAnalyzer()
     @State private var isCapturing: Bool = false
+    @State private var showWhiteScreenFlash: Bool = false
     @State private var countdownRemaining: Int = 3
     @State private var selectedPickerItem: PhotosPickerItem? = nil
 
@@ -46,15 +47,24 @@ struct FaceCameraView: View {
 
             // 5. Bottom Shutter & Camera Controls
             bottomControlBar
+
+            // 6. Controlled D65 White Screen Flash Overlay for Differential Illuminant Capture
+            if showWhiteScreenFlash {
+                Color.white
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
         }
         .task {
             let vm = viewModel
             let analyzer = lightingAnalyzer
-            cameraService.onSampleBuffer = { [weak vm] sampleBuffer in
+            let cam = cameraService
+            cameraService.onSampleBuffer = { [weak vm, weak cam] sampleBuffer in
                 guard let vm else { return }
                 Task {
                     if let result = await analyzer.analyzeFrame(sampleBuffer) {
-                        vm.applyRealTimeAnalysis(result)
+                        let kelvin = cam?.currentColorTemperatureKelvin
+                        vm.applyRealTimeAnalysis(result, colorTemperatureKelvin: kelvin)
                     }
                 }
             }
@@ -395,15 +405,57 @@ struct FaceCameraView: View {
 
     private func executeCapture() {
         isCapturing = true
-        Task {
+        Task { @MainActor in
+            #if targetEnvironment(simulator)
             do {
                 let photo = try await cameraService.capturePhoto()
                 viewModel.setCapturedPhoto(photo)
-                isCapturing = false
             } catch {
                 viewModel.errorMessage = error.localizedDescription
+            }
+            isCapturing = false
+            #else
+            let shouldUseWhiteFlashPair = (cameraService.cameraPosition == .front && cameraService.permissionGranted)
+            let activeScreen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen
+            let originalBrightness = activeScreen?.brightness
+
+            defer {
+                showWhiteScreenFlash = false
+                if let originalBrightness, let activeScreen {
+                    activeScreen.brightness = originalBrightness
+                }
+                if shouldUseWhiteFlashPair {
+                    cameraService.unlockExposureAndWhiteBalance()
+                }
                 isCapturing = false
             }
+
+            do {
+                if shouldUseWhiteFlashPair {
+                    // 1. Lock AE & AWB so ambient and flash frames share identical sensor gain & white balance
+                    cameraService.lockExposureAndWhiteBalance()
+                    try? await Task.sleep(nanoseconds: 60_000_000)
+
+                    // 2. Capture ambient baseline frame
+                    let ambientPhoto = try await cameraService.capturePhoto()
+
+                    // 3. Emit pure white D65 screen illumination
+                    activeScreen?.brightness = 1.0
+                    showWhiteScreenFlash = true
+                    try? await Task.sleep(nanoseconds: 180_000_000)
+
+                    // 4. Capture white-screen-illuminated frame
+                    let flashPhoto = try await cameraService.capturePhoto()
+
+                    viewModel.setCapturedPhoto(ambientPhoto, flashImage: flashPhoto)
+                } else {
+                    let photo = try await cameraService.capturePhoto()
+                    viewModel.setCapturedPhoto(photo)
+                }
+            } catch {
+                viewModel.errorMessage = error.localizedDescription
+            }
+            #endif
         }
     }
 }
