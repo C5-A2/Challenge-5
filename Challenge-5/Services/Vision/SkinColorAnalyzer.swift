@@ -15,16 +15,16 @@ import UIKit
 /// Scientific skin color and personal color season analyzer (C5-2).
 ///
 /// Implements the colorimetric methodology from `C5_TechFeas_ColorAnalysis`:
-/// 1. Vision Landmark Extraction: Samples 4 key facial regions (Bilateral Cheeks/Jawline, Forehead, Perioral).
-/// 2. Trimmed-Mean Sampling: 15% outlier filtering to exclude specular oil shine and deep shadow pores.
+/// 1. Vision Landmark Extraction: Samples 4 key facial regions (Bilateral Malar Cheeks, Forehead, Perioral/Chin).
+/// 2. Symmetric Trimmed-Mean Sampling: 15% outlier filtering to exclude specular glare and dark pores.
 /// 3. Bilateral Illumination Balancing: Invariant to unilateral side lighting.
 /// 4. CIELAB D65 Transformation: Full gamma linearization from sRGB to standard Observer 2°, D65.
 /// 5. Colorimetric Calculations:
-///    - Hue Angle h° (Undertone: Warm > 52°, Cool < 44°, Neutral 44°–52°)
-///    - ITA° Individual Typology Angle (Depth: Light > 41°, Medium 15°–41°, Deep <= 15°)
-///    - Chroma C* (Purity: Clear >= 16.0, Soft < 16.0)
-/// 6. 12-Seasonal Flow Resolution: Resolves the exact `ColorSeason` matching the user's skin genetics.
-nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @unchecked Sendable {
+///    - Hue Angle h° (Undertone: Warm > 55.5°, Cool < 45.5°, Neutral 45.5°–55.5°)
+///    - ITA° Individual Typology Angle (Depth: Light > 38°, Medium 15°–38°, Deep <= 15°)
+///    - Chroma C* (Purity: Clear >= 23.0, Soft < 23.0)
+/// 6. 12-Seasonal Flow Resolution: Resolves the exact `ColorSeason` across all 12 seasonal flow families.
+public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @unchecked Sendable {
 
     // MARK: - Internal Types
 
@@ -106,16 +106,130 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
         }
 
         // 1. Extract 4-point facial skin RGB samples with Vision (with illuminant & exposure stabilization)
-        let samples = try await extractFaceSamples(from: cgImage)
+        let rawSamples = try await extractRawFaceSamples(from: cgImage)
+        let stabilized = Self.stabilizeSkinSamples(
+            left: rawSamples.leftCheekRGB,
+            right: rawSamples.rightCheekRGB,
+            forehead: rawSamples.foreheadRGB,
+            perioral: rawSamples.perioralRGB
+        )
+        return Self.classify(samples: stabilized)
+    }
 
+    public func analyzeDetailedSkinTone(
+        flashImage: UIImage,
+        ambientImage: UIImage
+    ) async throws -> (season: ColorSeason, metrics: SkinAnalysisMetrics) {
+        try await analyzeDetailedSkinTone(
+            flashImages: [flashImage],
+            ambientImages: [ambientImage]
+        )
+    }
+
+    public func analyzeDetailedSkinTone(
+        flashImages: [UIImage],
+        ambientImages: [UIImage]
+    ) async throws -> (season: ColorSeason, metrics: SkinAnalysisMetrics) {
+        try await analyzeDetailedSkinTone(
+            flashImages: flashImages,
+            ambientImages: ambientImages,
+            telemetry: nil
+        )
+    }
+
+    public func analyzeDetailedSkinTone(
+        flashImages: [UIImage],
+        ambientImages: [UIImage],
+        telemetry: CameraCalibrationTelemetry?
+    ) async throws -> (season: ColorSeason, metrics: SkinAnalysisMetrics) {
+        let flashCGs = flashImages.compactMap { $0.normalizedCGImage }
+        let ambientCGs = ambientImages.compactMap { $0.normalizedCGImage }
+        guard !ambientCGs.isEmpty else {
+            throw AnalyzerError.imageProcessingFailed
+        }
+
+        async let averagedAmbientTask = extractAveragedRawFaceSamples(from: ambientCGs)
+        async let averagedFlashTask = extractAveragedRawFaceSamples(from: flashCGs)
+        let rawAmbient = try await averagedAmbientTask
+        let rawFlash = try? await averagedFlashTask
+
+        let stabilizedAmbient = Self.stabilizeSkinSamples(
+            left: rawAmbient.leftCheekRGB,
+            right: rawAmbient.rightCheekRGB,
+            forehead: rawAmbient.foreheadRGB,
+            perioral: rawAmbient.perioralRGB
+        )
+
+        if let rawFlash {
+            let blended = Self.blendFlashAndAmbientIllumination(
+                flash: rawFlash,
+                stabilizedAmbient: stabilizedAmbient,
+                rawAmbient: rawAmbient,
+                telemetry: telemetry
+            )
+            return Self.classify(samples: blended)
+        }
+
+        return Self.classify(samples: stabilizedAmbient)
+    }
+
+    private func extractAveragedRawFaceSamples(from cgImages: [CGImage]) async throws -> FaceSamples {
+        guard !cgImages.isEmpty else {
+            throw AnalyzerError.imageProcessingFailed
+        }
+
+        var collected: [FaceSamples] = []
+        await withTaskGroup(of: FaceSamples?.self) { group in
+            for cg in cgImages {
+                group.addTask {
+                    try? await self.extractRawFaceSamples(from: cg)
+                }
+            }
+            for await sample in group {
+                if let sample {
+                    collected.append(sample)
+                }
+            }
+        }
+
+        guard !collected.isEmpty else {
+            throw AnalyzerError.faceNotFound
+        }
+
+        let count = Double(collected.count)
+        func avgRGB(_ keyPath: KeyPath<FaceSamples, RGBColor>) -> RGBColor {
+            RGBColor(
+                r: collected.map { $0[keyPath: keyPath].r }.reduce(0, +) / count,
+                g: collected.map { $0[keyPath: keyPath].g }.reduce(0, +) / count,
+                b: collected.map { $0[keyPath: keyPath].b }.reduce(0, +) / count
+            )
+        }
+
+        return FaceSamples(
+            leftCheekRGB: avgRGB(\.leftCheekRGB),
+            rightCheekRGB: avgRGB(\.rightCheekRGB),
+            foreheadRGB: avgRGB(\.foreheadRGB),
+            perioralRGB: avgRGB(\.perioralRGB)
+        )
+    }
+
+    private static func classify(
+        samples: FaceSamples
+    ) -> (season: ColorSeason, metrics: SkinAnalysisMetrics) {
         // 2. Convert stabilized RGB samples to CIELAB D65
         let leftCheekLab = Self.rgbToLab(r: samples.leftCheekRGB.r, g: samples.leftCheekRGB.g, b: samples.leftCheekRGB.b)
         let rightCheekLab = Self.rgbToLab(r: samples.rightCheekRGB.r, g: samples.rightCheekRGB.g, b: samples.rightCheekRGB.b)
         let foreheadLab = Self.rgbToLab(r: samples.foreheadRGB.r, g: samples.foreheadRGB.g, b: samples.foreheadRGB.b)
         let perioralLab = Self.rgbToLab(r: samples.perioralRGB.r, g: samples.perioralRGB.g, b: samples.perioralRGB.b)
 
-        // 3. Shadow-aware bilateral cheek fusion (favors the better-lit cheek to prevent side-shadow drift)
-        let leftWeight: Double = leftCheekLab.L >= rightCheekLab.L ? 0.65 : 0.35
+        // 3. Bilateral cheek fusion (adapts gently if one cheek is shadowed, otherwise evenly balances)
+        let cheekDeltaL = abs(leftCheekLab.L - rightCheekLab.L)
+        let leftWeight: Double
+        if cheekDeltaL > 4.0 {
+            leftWeight = leftCheekLab.L > rightCheekLab.L ? 0.60 : 0.40
+        } else {
+            leftWeight = 0.50
+        }
         let rightWeight: Double = 1.0 - leftWeight
         let bilateralCheekLab = LabColor(
             L: (leftCheekLab.L * leftWeight) + (rightCheekLab.L * rightWeight),
@@ -123,48 +237,50 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
             b: (leftCheekLab.b * leftWeight) + (rightCheekLab.b * rightWeight)
         )
 
-        // 4. Compute weighted zone metrics: Inner Malar Cheeks 55%, Forehead 25%, Chin/Perioral 20%
-        let rawL = (bilateralCheekLab.L * 0.55) + (foreheadLab.L * 0.25) + (perioralLab.L * 0.20)
-        let rawA = (bilateralCheekLab.a * 0.55) + (foreheadLab.a * 0.25) + (perioralLab.a * 0.20)
-        let rawB = (bilateralCheekLab.b * 0.55) + (foreheadLab.b * 0.25) + (perioralLab.b * 0.20)
+        // 4. Compute continuous weighted zone metrics: Inner Malar Cheeks 50%, Forehead 30%, Chin/Perioral 20%
+        let rawL = (bilateralCheekLab.L * 0.50) + (foreheadLab.L * 0.30) + (perioralLab.L * 0.20)
+        let rawA = (bilateralCheekLab.a * 0.50) + (foreheadLab.a * 0.30) + (perioralLab.a * 0.20)
+        let rawB = (bilateralCheekLab.b * 0.50) + (foreheadLab.b * 0.30) + (perioralLab.b * 0.20)
 
-        // Quantize to 0.5 Lab units to eliminate frame-to-frame sensor & AWB micro-jitter
+        let rawChroma = sqrt(pow(rawA, 2) + pow(rawB, 2))
+        var rawHueAngle = atan2(rawB, rawA) * 180.0 / .pi
+        if rawHueAngle < 0 { rawHueAngle += 360.0 }
+        let safeB = abs(rawB) < 0.001 ? 0.001 : rawB
+        let rawITA = atan((rawL - 50.0) / safeB) * 180.0 / .pi
+
+        // Round display metrics only after continuous parameter computation to prevent quantization jumps in atan2
         let avgL = (rawL * 2.0).rounded() / 2.0
-        let avgA = (rawA * 2.0).rounded() / 2.0
-        let avgB = (rawB * 2.0).rounded() / 2.0
+        let chroma = (rawChroma * 2.0).rounded() / 2.0
+        let hueAngle = (rawHueAngle * 2.0).rounded() / 2.0
+        let ita = (rawITA * 2.0).rounded() / 2.0
 
-        let chroma = (sqrt(pow(avgA, 2) + pow(avgB, 2)) * 2.0).rounded() / 2.0
-
-        var hueAngle = atan2(avgB, avgA) * 180.0 / .pi
-        if hueAngle < 0 { hueAngle += 360.0 }
-        hueAngle = (hueAngle * 2.0).rounded() / 2.0
-
-        let safeB = abs(avgB) < 0.001 ? 0.001 : avgB
-        let ita = ((atan((avgL - 50.0) / safeB) * 180.0 / .pi) * 2.0).rounded() / 2.0
-
-        // 5. Scientific boundary classification
+        // 5. Descriptive parameter labels
         let undertone: Undertone
-        if hueAngle > 52.0 {
+        if rawHueAngle > 55.5 {
             undertone = .warm
-        } else if hueAngle < 44.0 {
+        } else if rawHueAngle < 45.5 {
             undertone = .cool
         } else {
             undertone = .neutral
         }
 
         let depth: Depth
-        if ita > 41.0 {
+        if rawITA > 38.0 {
             depth = .light
-        } else if ita > 15.0 {
+        } else if rawITA > 15.0 {
             depth = .medium
         } else {
             depth = .deep
         }
 
-        let chromaType: ChromaType = chroma >= 16.0 ? .clear : .soft
+        let chromaType: ChromaType = rawChroma >= 23.0 ? .clear : .soft
 
-        // 6. 12-Seasonal Flow resolution
-        let season = Self.resolveSeason(undertone: undertone, depth: depth, chroma: chromaType)
+        // 6. Continuous 3D centroid-based 12-Season resolution (eliminates brittle threshold cliff-flipping)
+        let season = Self.resolveSeasonContinuous(
+            hueAngle: rawHueAngle,
+            ita: rawITA,
+            chroma: rawChroma
+        )
 
         let metrics = SkinAnalysisMetrics(
             luminance: avgL,
@@ -212,10 +328,53 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
         return LabColor(L: L, a: a, b: b)
     }
 
-    // MARK: - 12-Seasonal Flow Decision Table
+    // MARK: - 12-Seasonal Flow Decision Table & Continuous Centroid Resolver
+
+    /// Continuous 3D nearest-centroid resolver in normalized `(undertone, depth, chroma)` space.
+    /// Eliminates sudden jumps caused by hard threshold cliffs across repeated scans.
+    public static func resolveSeasonContinuous(
+        hueAngle: Double,
+        ita: Double,
+        chroma: Double
+    ) -> ColorSeason {
+        let u = (hueAngle - 50.5) / 5.0
+        let d = (ita - 26.5) / 11.5
+        let c = (chroma - 23.0) / 3.0
+
+        let prototypes: [(season: ColorSeason, u: Double, d: Double, c: Double)] = [
+            (.trueSpring,    1.2,  0.0,  1.0),
+            (.brightSpring,  0.6,  0.7,  1.3),
+            (.lightSpring,   0.8,  1.2,  0.2),
+            (.trueAutumn,    1.2,  0.0, -1.0),
+            (.softAutumn,    0.4,  0.1, -1.2),
+            (.darkAutumn,    0.8, -1.2, -0.2),
+            (.trueSummer,   -1.1,  0.3, -0.8),
+            (.lightSummer,  -0.8,  1.2,  0.0),
+            (.softSummer,   -0.4, -0.1, -1.2),
+            (.trueWinter,   -1.2,  0.0,  1.0),
+            (.brightWinter, -0.6, -0.3,  1.3),
+            (.darkWinter,   -0.8, -1.2,  0.2)
+        ]
+
+        var bestSeason: ColorSeason = .trueAutumn
+        var bestDist = Double.greatestFiniteMagnitude
+        for p in prototypes {
+            let dist = pow(u - p.u, 2) + pow(d - p.d, 2) + pow(c - p.c, 2)
+            if dist < bestDist {
+                bestDist = dist
+                bestSeason = p.season
+            }
+        }
+        return bestSeason
+    }
 
     /// Resolves the 12 Personal Color Seasons from objective scientific parameters.
-    public static func resolveSeason(undertone: Undertone, depth: Depth, chroma: ChromaType) -> ColorSeason {
+    public static func resolveSeason(
+        undertone: Undertone,
+        depth: Depth,
+        chroma: ChromaType,
+        hueAngle: Double? = nil
+    ) -> ColorSeason {
         switch undertone {
         case .warm:
             switch depth {
@@ -230,21 +389,28 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
         case .cool:
             switch depth {
             case .light:
-                return chroma == .clear ? .trueSummer : .lightSummer
+                return chroma == .clear ? .lightSummer : .trueSummer
             case .medium:
-                return chroma == .clear ? .trueWinter : .softSummer
+                return chroma == .clear ? .trueWinter : .trueSummer
             case .deep:
                 return chroma == .clear ? .brightWinter : .darkWinter
             }
 
         case .neutral:
+            let isWarmLeaning = (hueAngle ?? 50.5) >= 50.5
             switch depth {
             case .light:
-                return chroma == .clear ? .lightSpring : .lightSummer
+                return isWarmLeaning
+                    ? (chroma == .clear ? .lightSpring : .softAutumn)
+                    : (chroma == .clear ? .lightSummer : .softSummer)
             case .medium:
-                return chroma == .clear ? .trueSpring : .softAutumn
+                return isWarmLeaning
+                    ? (chroma == .clear ? .trueSpring : .softAutumn)
+                    : (chroma == .clear ? .trueSummer : .softSummer)
             case .deep:
-                return chroma == .clear ? .darkWinter : .darkAutumn
+                return isWarmLeaning
+                    ? (chroma == .clear ? .darkAutumn : .trueAutumn)
+                    : (chroma == .clear ? .darkWinter : .softSummer)
             }
         }
     }
@@ -258,7 +424,7 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
         let perioralRGB: RGBColor
     }
 
-    private func extractFaceSamples(from cgImage: CGImage) async throws -> FaceSamples {
+    private func extractRawFaceSamples(from cgImage: CGImage) async throws -> FaceSamples {
         return try await withCheckedThrowingContinuation { continuation in
             let request = VNDetectFaceLandmarksRequest { request, error in
                 if let error = error {
@@ -315,13 +481,14 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
                     let eyeCenterX = eyePts.map(\.x).reduce(0, +) / CGFloat(eyePts.count)
                     let eyeCenterY = eyePts.map(\.y).reduce(0, +) / CGFloat(eyePts.count)
                     let nosePts = nose.normalizedPoints
+                    let noseCenterX = nosePts.map(\.x).reduce(0, +) / CGFloat(nosePts.count)
                     let noseMinY = nosePts.map(\.y).min() ?? 0.42
-                    let malarX = eyeCenterX * 0.85 + 0.04
-                    let malarY = (eyeCenterY * 0.38) + (noseMinY * 0.62)
+                    let malarX = (eyeCenterX * 0.55) + (noseCenterX * 0.45)
+                    let malarY = (eyeCenterY * 0.40) + (noseMinY * 0.60)
                     leftCheekPt = toImagePixelPoint(landmarkPoint: CGPoint(x: malarX, y: malarY))
                 } else {
                     leftCheekPt = CGPoint(
-                        x: (box.origin.x + box.size.width * 0.31) * imgW,
+                        x: (box.origin.x + box.size.width * 0.32) * imgW,
                         y: (1.0 - (box.origin.y + box.size.height * 0.44)) * imgH
                     )
                 }
@@ -335,13 +502,14 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
                     let eyeCenterX = eyePts.map(\.x).reduce(0, +) / CGFloat(eyePts.count)
                     let eyeCenterY = eyePts.map(\.y).reduce(0, +) / CGFloat(eyePts.count)
                     let nosePts = nose.normalizedPoints
+                    let noseCenterX = nosePts.map(\.x).reduce(0, +) / CGFloat(nosePts.count)
                     let noseMinY = nosePts.map(\.y).min() ?? 0.42
-                    let malarX = eyeCenterX * 0.85 + 0.11
-                    let malarY = (eyeCenterY * 0.38) + (noseMinY * 0.62)
+                    let malarX = (eyeCenterX * 0.55) + (noseCenterX * 0.45)
+                    let malarY = (eyeCenterY * 0.40) + (noseMinY * 0.60)
                     rightCheekPt = toImagePixelPoint(landmarkPoint: CGPoint(x: malarX, y: malarY))
                 } else {
                     rightCheekPt = CGPoint(
-                        x: (box.origin.x + box.size.width * 0.69) * imgW,
+                        x: (box.origin.x + box.size.width * 0.68) * imgW,
                         y: (1.0 - (box.origin.y + box.size.height * 0.44)) * imgH
                     )
                 }
@@ -351,7 +519,7 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
                     let lipPts = outerLips.normalizedPoints
                     let lipMidX = lipPts.map(\.x).reduce(0, +) / CGFloat(lipPts.count)
                     let lipMinY = lipPts.map(\.y).min() ?? 0.25
-                    let chinY = max(0.08, lipMinY - 0.09)
+                    let chinY = max(0.06, lipMinY - 0.08)
                     perioralPt = toImagePixelPoint(landmarkPoint: CGPoint(x: lipMidX, y: chinY))
                 } else {
                     perioralPt = CGPoint(
@@ -372,14 +540,14 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
                     return
                 }
 
-                let stabilized = Self.stabilizeSkinSamples(
-                    left: rawLeft,
-                    right: rawRight,
-                    forehead: rawFore,
-                    perioral: rawPeri
+                let rawSamples = FaceSamples(
+                    leftCheekRGB: rawLeft,
+                    rightCheekRGB: rawRight,
+                    foreheadRGB: rawFore,
+                    perioralRGB: rawPeri
                 )
 
-                continuation.resume(returning: stabilized)
+                continuation.resume(returning: rawSamples)
             }
 
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
@@ -389,6 +557,94 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
                 continuation.resume(throwing: error)
             }
         }
+    }
+
+    /// Smoothly blends hardware-D65-calibrated white-screen-flash skin reflectance with EV-compensated ambient samples.
+    /// Corrects locked room-AWB gains out of `(Flash - Ambient)` and recovers dim-room luminance so good light vs dim light match.
+    private static func blendFlashAndAmbientIllumination(
+        flash: FaceSamples,
+        stabilizedAmbient: FaceSamples,
+        rawAmbient: FaceSamples,
+        telemetry: CameraCalibrationTelemetry?
+    ) -> FaceSamples {
+        let cal = telemetry ?? CameraCalibrationTelemetry()
+
+        func toLinear(_ c: Double) -> Double {
+            let norm = min(1.0, max(0.0, c / 255.0))
+            return (norm > 0.04045) ? pow((norm + 0.055) / 1.055, 2.4) : (norm / 12.92)
+        }
+
+        func toSRGB(_ lin: Double) -> Double {
+            let clamped = min(1.0, max(0.0, lin))
+            let srgb = (clamped > 0.0031308) ? (1.055 * pow(clamped, 1.0 / 2.4) - 0.055) : (12.92 * clamped)
+            return srgb * 255.0
+        }
+
+        // Recover camera underexposure (when AE hit shutter/ISO limits in dim rooms)
+        let underexposureStops = min(1.5, max(0.0, -cal.exposureTargetOffsetEV))
+        let evMultiplier = pow(2.0, underexposureStops)
+
+        func blendZone(flash f: RGBColor, rawAmb ra: RGBColor, stabAmb sa: RGBColor) -> RGBColor {
+            let fR = toLinear(f.r), fG = toLinear(f.g), fB = toLinear(f.b)
+            let raR = toLinear(ra.r), raG = toLinear(ra.g), raB = toLinear(ra.b)
+            let saR = toLinear(sa.r) * evMultiplier
+            let saG = toLinear(sa.g) * evMultiplier
+            let saB = toLinear(sa.b) * evMultiplier
+
+            let rawDR = max(0.0, fR - raR)
+            let rawDG = max(0.0, fG - raG)
+            let rawDB = max(0.0, fB - raB)
+
+            // Transform the flash delta from locked room-AWB gains back to factory-calibrated D65 white-point gains
+            let corrDR = rawDR * cal.flashRedGainCorrection
+            let corrDG = rawDG * cal.flashGreenGainCorrection
+            let corrDB = rawDB * cal.flashBlueGainCorrection
+
+            let yDiff = 0.2126 * corrDR + 0.7152 * corrDG + 0.0722 * corrDB
+            let yAmb  = 0.2126 * raR + 0.7152 * raG + 0.0722 * raB
+            let yStab = 0.2126 * saR + 0.7152 * saG + 0.0722 * saB
+
+            // Suppress flash blend if highlights clipped or flash signal is too weak
+            let maxFlashChannel = max(f.r, max(f.g, f.b))
+            let unclippedFactor = maxFlashChannel > 240.0 ? max(0.0, (254.0 - maxFlashChannel) / 14.0) : 1.0
+
+            guard yAmb > 0.008, yDiff > 0.005, corrDR > 0.002, corrDG > 0.002, corrDB > 0.002 else {
+                return RGBColor(r: toSRGB(saR), g: toSRGB(saG), b: toSRGB(saB))
+            }
+
+            // Smooth confidence weight for chromaticity from flash-to-ambient ratio (0 at <= 3%, max 0.85 at >= 25%)
+            let signalRatio = yDiff / yAmb
+            let chromaWeight = min(0.85, max(0.0, (signalRatio - 0.03) / 0.22 * 0.85)) * unclippedFactor
+            guard chromaWeight > 0.01 else {
+                return RGBColor(r: toSRGB(saR), g: toSRGB(saG), b: toSRGB(saB))
+            }
+
+            // Recover dim-room luminance smoothly using flash-illuminated skin luminance when ambient is dim
+            let yFlash = 0.2126 * (raR + corrDR) + 0.7152 * (raG + corrDG) + 0.0722 * (raB + corrDB)
+            let dimness = min(1.0, max(0.0, (0.20 - yStab) / 0.14))
+            let lumBlend = dimness * min(0.75, max(0.0, (signalRatio - 0.12) / 0.45 * 0.75)) * unclippedFactor
+            let targetY = (1.0 - lumBlend) * yStab + lumBlend * min(0.36, yFlash)
+
+            let ambScale = targetY / max(0.005, yStab)
+            let flashScale = targetY / yDiff
+
+            let outR = (1.0 - chromaWeight) * (saR * ambScale) + chromaWeight * (corrDR * flashScale)
+            let outG = (1.0 - chromaWeight) * (saG * ambScale) + chromaWeight * (corrDG * flashScale)
+            let outB = (1.0 - chromaWeight) * (saB * ambScale) + chromaWeight * (corrDB * flashScale)
+
+            return RGBColor(
+                r: toSRGB(outR),
+                g: toSRGB(outG),
+                b: toSRGB(outB)
+            )
+        }
+
+        return FaceSamples(
+            leftCheekRGB: blendZone(flash: flash.leftCheekRGB, rawAmb: rawAmbient.leftCheekRGB, stabAmb: stabilizedAmbient.leftCheekRGB),
+            rightCheekRGB: blendZone(flash: flash.rightCheekRGB, rawAmb: rawAmbient.rightCheekRGB, stabAmb: stabilizedAmbient.rightCheekRGB),
+            foreheadRGB: blendZone(flash: flash.foreheadRGB, rawAmb: rawAmbient.foreheadRGB, stabAmb: stabilizedAmbient.foreheadRGB),
+            perioralRGB: blendZone(flash: flash.perioralRGB, rawAmb: rawAmbient.perioralRGB, stabAmb: stabilizedAmbient.perioralRGB)
+        )
     }
 
     /// Stabilizes multi-zone skin RGB samples against ambient AWB color-temperature drift and auto-exposure shifts.
@@ -413,29 +669,42 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
             )
         }
 
-        // Canonical baseline skin-illuminant ratios under neutral D65 daylight
-        // Damped von Kries chromatic adaptation (35% damping) neutralizes extreme room-light casts
-        // while preserving 65% of the subject's natural genetic warm/cool undertone.
-        let canonicalRG = 1.18
-        let canonicalBG = 0.86
-        let observedRG = meanR / meanG
-        let observedBG = meanB / meanG
+        // Ambient lighting outlier guards:
+        // Preserves the user's natural genetic undertone (Warm, Neutral, Cool) under normal camera AWB.
+        // Only attenuates extreme unnatural room illuminant casts:
+        let observedRG = meanR / max(1.0, meanG)
+        let observedBG = meanB / max(1.0, meanG)
 
-        let damping = 0.35
-        let gainR = 1.0 + damping * ((canonicalRG / max(0.5, observedRG)) - 1.0)
-        let gainB = 1.0 + damping * ((canonicalBG / max(0.5, observedBG)) - 1.0)
+        var gainR: Double = 1.0
+        var gainB: Double = 1.0
 
-        // Soft auto-exposure anchoring toward canonical mid-skin luminance (162/255)
-        // Eliminates ITA° depth jumps when standing slightly closer/farther from light source
-        let targetLum = 162.0
-        let exposureDamping = 0.38
-        let exposureGain = 1.0 + exposureDamping * ((targetLum / meanLum) - 1.0)
-        let clampedExposure = min(1.22, max(0.82, exposureGain))
+        // Guard against heavy warm incandescent / tungsten cast (R/G > 1.55 or B/G < 0.55)
+        if observedRG > 1.55 {
+            gainR = 1.55 / observedRG
+        }
+        if observedBG < 0.55 {
+            gainB = 0.55 / observedBG
+        }
+
+        // Guard against heavy cool fluorescent / blue cast (B/G > 1.15)
+        if observedBG > 1.15 {
+            gainB = 1.15 / observedBG
+        }
+
+        // Gentle auto-exposure safety guard:
+        // Preserves natural skin reflectance (Light, Medium, Deep) without forcing deeper skin into lighter tiers.
+        // Only compensates if the image is severely underexposed (< 70) or overexposed (> 220).
+        var exposureGain: Double = 1.0
+        if meanLum < 70.0 {
+            exposureGain = min(1.20, 70.0 / max(35.0, meanLum))
+        } else if meanLum > 220.0 {
+            exposureGain = max(0.92, 220.0 / meanLum)
+        }
 
         func normalize(_ c: RGBColor) -> RGBColor {
-            let r = min(255.0, max(0.0, c.r * gainR * clampedExposure))
-            let g = min(255.0, max(0.0, c.g * clampedExposure))
-            let b = min(255.0, max(0.0, c.b * gainB * clampedExposure))
+            let r = min(255.0, max(0.0, c.r * gainR * exposureGain))
+            let g = min(255.0, max(0.0, c.g * exposureGain))
+            let b = min(255.0, max(0.0, c.b * gainB * exposureGain))
             return RGBColor(r: r, g: g, b: b)
         }
 
@@ -447,7 +716,7 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
         )
     }
 
-    /// Computes asymmetric trimmed-mean RGB (30% dark trim, 25% bright trim) to reject shadows, glasses, and glare.
+    /// Computes symmetric trimmed-mean RGB (15% dark trim, 15% bright trim) to reject shadows, pores, and specular shine.
     private static func getTrimmedAverageRGB(in cgImage: CGImage, center: CGPoint, radius: CGFloat) -> RGBColor? {
         let imgBounds = CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height)
         let rawRect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
@@ -495,11 +764,11 @@ nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @un
             pixels.append(Pixel(r: r, g: g, b: b, lum: lum))
         }
 
-        // Trim 30% lowest luminance (shadows, pores, hair strands, glasses frames)
-        // and 25% highest luminance (specular oil shine / screen glare)
+        // Trim 15% lowest luminance (shadows, pores, hair strands, glasses frames)
+        // and 15% highest luminance (specular oil shine / screen glare)
         pixels.sort { $0.lum < $1.lum }
-        let lowTrim = Int(Double(totalPixels) * 0.30)
-        let highTrim = Int(Double(totalPixels) * 0.25)
+        let lowTrim = Int(Double(totalPixels) * 0.15)
+        let highTrim = Int(Double(totalPixels) * 0.15)
         let endIdx = max(lowTrim + 1, totalPixels - highTrim)
         let validRange = lowTrim..<min(totalPixels, endIdx)
         let sampleSlice = validRange.isEmpty ? pixels : Array(pixels[validRange])

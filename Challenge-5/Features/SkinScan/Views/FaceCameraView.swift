@@ -20,7 +20,9 @@ struct FaceCameraView: View {
     @State private var cameraService = CameraService()
     @State private var lightingAnalyzer = LightingAnalyzer()
     @State private var isCapturing: Bool = false
+    @State private var showWhiteScreenFlash: Bool = false
     @State private var countdownRemaining: Int = 3
+    @State private var countdownTask: Task<Void, Never>? = nil
     @State private var selectedPickerItem: PhotosPickerItem? = nil
 
     // MARK: - Body
@@ -41,20 +43,31 @@ struct FaceCameraView: View {
 
             // 4. Countdown Animation Overlay
             if viewModel.isCountingDown {
-                countdownOverlay
+                CameraCountdownOverlay(remainingSeconds: countdownRemaining) {
+                    cancelCountdown()
+                }
             }
 
             // 5. Bottom Shutter & Camera Controls
             bottomControlBar
+
+            // 6. Controlled D65 White Screen Flash Overlay for Differential Illuminant Capture
+            if showWhiteScreenFlash {
+                Color.white
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
         }
         .task {
             let vm = viewModel
             let analyzer = lightingAnalyzer
-            cameraService.onSampleBuffer = { [weak vm] sampleBuffer in
+            let cam = cameraService
+            cameraService.onSampleBuffer = { [weak vm, weak cam] sampleBuffer in
                 guard let vm else { return }
                 Task {
                     if let result = await analyzer.analyzeFrame(sampleBuffer) {
-                        vm.applyRealTimeAnalysis(result)
+                        let kelvin = cam?.currentColorTemperatureKelvin
+                        vm.applyRealTimeAnalysis(result, colorTemperatureKelvin: kelvin)
                     }
                 }
             }
@@ -66,6 +79,7 @@ struct FaceCameraView: View {
             }
         }
         .onDisappear {
+            cancelCountdown()
             cameraService.onSampleBuffer = nil
             cameraService.stopSession()
             viewModel.stopCamera()
@@ -169,7 +183,7 @@ struct FaceCameraView: View {
     // MARK: - 3. Top Control Bar
 
     private var topControlBar: some View {
-        VStack {
+        VStack(spacing: 10) {
             HStack(alignment: .center) {
                 // Back Button
                 Button {
@@ -218,26 +232,16 @@ struct FaceCameraView: View {
             .padding(.horizontal, AppDimensions.screenHorizontalPadding)
             .padding(.top, 8)
 
+            CameraTimerSelectorPill(
+                selectedSeconds: $viewModel.countdownSeconds,
+                isDisabled: isCapturing || viewModel.isCountingDown
+            )
+
             Spacer()
         }
     }
 
-    // MARK: - 4. Countdown Overlay
-
-    private var countdownOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.35)
-                .ignoresSafeArea()
-
-            Text("\(countdownRemaining)")
-                .font(.system(size: 110, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.6), radius: 12)
-                .transition(.scale.combined(with: .opacity))
-        }
-    }
-
-    // MARK: - 5. Bottom Control Bar & Smart Real-Time HUD (C5-123)
+    // MARK: - 4. Bottom Control Bar & Smart Real-Time HUD (C5-123)
 
     private var canTriggerShutter: Bool {
         #if targetEnvironment(simulator)
@@ -364,46 +368,112 @@ struct FaceCameraView: View {
     // MARK: - Actions
 
     private func triggerCaptureFlow() {
-        guard !isCapturing, canTriggerShutter else { return }
+        guard !isCapturing, !viewModel.isCountingDown, canTriggerShutter else { return }
 
-        // Start 3-second countdown for steady posture
+        let duration = max(1, viewModel.countdownSeconds)
         viewModel.isCountingDown = true
-        countdownRemaining = 3
+        countdownRemaining = duration
 
-        Task { @MainActor in
+        countdownTask?.cancel()
+        countdownTask = Task { @MainActor in
             while countdownRemaining > 1 {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
                 #if !targetEnvironment(simulator)
-                if !viewModel.isReadyForOptimalCapture {
+                if !viewModel.isFaceInFrame || viewModel.obstructionReason != nil {
                     viewModel.isCountingDown = false
+                    countdownTask = nil
                     return
                 }
                 #endif
                 countdownRemaining -= 1
             }
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            try? await Task.sleep(for: .seconds(1))
+            if Task.isCancelled { return }
             #if !targetEnvironment(simulator)
-            if !viewModel.isReadyForOptimalCapture {
+            if !viewModel.isFaceInFrame || viewModel.obstructionReason != nil {
                 viewModel.isCountingDown = false
+                countdownTask = nil
                 return
             }
             #endif
             viewModel.isCountingDown = false
+            countdownTask = nil
             executeCapture()
         }
     }
 
+    private func cancelCountdown() {
+        countdownTask?.cancel()
+        countdownTask = nil
+        viewModel.isCountingDown = false
+    }
+
     private func executeCapture() {
         isCapturing = true
-        Task {
+        Task { @MainActor in
+            #if targetEnvironment(simulator)
             do {
                 let photo = try await cameraService.capturePhoto()
                 viewModel.setCapturedPhoto(photo)
-                isCapturing = false
             } catch {
                 viewModel.errorMessage = error.localizedDescription
+            }
+            isCapturing = false
+            #else
+            let shouldUseWhiteFlashPair = (cameraService.cameraPosition == .front && cameraService.permissionGranted)
+            let activeScreen = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first(where: { $0.activationState == .foregroundActive })?
+                .screen
+            let originalBrightness = activeScreen?.brightness
+
+            defer {
+                showWhiteScreenFlash = false
+                if let originalBrightness, let activeScreen {
+                    activeScreen.brightness = originalBrightness
+                }
+                if shouldUseWhiteFlashPair {
+                    cameraService.unlockExposureAndWhiteBalance()
+                }
                 isCapturing = false
             }
+
+            do {
+                if shouldUseWhiteFlashPair {
+                    // 1. Lock AE & AWB so ambient and flash frames share identical sensor gain & white balance
+                    cameraService.lockExposureAndWhiteBalance()
+                    try? await Task.sleep(nanoseconds: 60_000_000)
+                    let telemetry = cameraService.captureCalibrationTelemetry()
+
+                    // 2. Capture 3 consecutive ambient baseline frames (~90ms) to suppress sensor noise
+                    let ambientBurst = try await cameraService.captureFreshVideoFrames(count: 3)
+
+                    // 3. Emit pure white D65 screen illumination and wait for OLED ramp + ISP pipeline
+                    activeScreen?.brightness = 1.0
+                    showWhiteScreenFlash = true
+                    try? await Task.sleep(nanoseconds: 320_000_000)
+
+                    // 4. Capture 3 consecutive white-screen-illuminated frames (~90ms) from the same locked stream
+                    let flashBurst = try await cameraService.captureFreshVideoFrames(count: 3)
+
+                    if let primaryFlash = flashBurst.last ?? flashBurst.first {
+                        viewModel.setCapturedPhoto(
+                            primaryFlash,
+                            ambientImage: ambientBurst.first,
+                            flashBurst: flashBurst,
+                            ambientBurst: ambientBurst,
+                            telemetry: telemetry
+                        )
+                    }
+                } else {
+                    let photo = try await cameraService.capturePhoto()
+                    viewModel.setCapturedPhoto(photo)
+                }
+            } catch {
+                viewModel.errorMessage = error.localizedDescription
+            }
+            #endif
         }
     }
 }

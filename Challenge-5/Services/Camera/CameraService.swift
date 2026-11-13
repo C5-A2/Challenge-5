@@ -37,7 +37,11 @@ public final class CameraService: NSObject, CameraServiceProtocol {
     private let sampleQueue = DispatchQueue(label: "com.challenge5.camera.sampleQueue")
 
     @ObservationIgnored nonisolated(unsafe) private var currentInput: AVCaptureDeviceInput?
+    @ObservationIgnored nonisolated(unsafe) private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
     private var photoContinuation: CheckedContinuation<UIImage, Error>?
+    private var frameBurstContinuation: CheckedContinuation<[UIImage], Error>?
+    private var frameBurstBuffer: [UIImage] = []
+    private var frameBurstTargetCount: Int = 0
 
     // MARK: - Initializer
 
@@ -177,6 +181,94 @@ public final class CameraService: NSObject, CameraServiceProtocol {
         }
     }
 
+    // MARK: - Exposure, White Balance & Kelvin Telemetry
+
+    /// Reads the active camera's estimated ambient color temperature in Kelvin.
+    public var currentColorTemperatureKelvin: Float? {
+        #if targetEnvironment(simulator)
+        return nil
+        #else
+        guard let device = currentInput?.device else { return nil }
+        let gains = device.deviceWhiteBalanceGains
+        let maxGain = device.maxWhiteBalanceGain
+        guard maxGain >= 1.0 else { return nil }
+        let safeGains = AVCaptureDevice.WhiteBalanceGains(
+            redGain: min(maxGain, max(1.0, gains.redGain)),
+            greenGain: min(maxGain, max(1.0, gains.greenGain)),
+            blueGain: min(maxGain, max(1.0, gains.blueGain))
+        )
+        return device.temperatureAndTintValues(for: safeGains).temperature
+        #endif
+    }
+
+    /// Locks Auto Exposure (AE) and Auto White Balance (AWB) for consistent differential flash capture.
+    public func lockExposureAndWhiteBalance() {
+        #if !targetEnvironment(simulator)
+        guard let device = currentInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            if device.isExposureModeSupported(.locked) {
+                device.exposureMode = .locked
+            }
+            if device.isWhiteBalanceModeSupported(.locked) {
+                device.whiteBalanceMode = .locked
+            }
+            device.unlockForConfiguration()
+        } catch {
+            // Lock failed; proceed with current mode
+        }
+        #endif
+    }
+
+    /// Reads the locked camera's D65 vs ambient white-balance gain ratios and exposure telemetry.
+    public func captureCalibrationTelemetry() -> CameraCalibrationTelemetry {
+        #if targetEnvironment(simulator)
+        return CameraCalibrationTelemetry()
+        #else
+        guard let device = currentInput?.device else {
+            return CameraCalibrationTelemetry()
+        }
+        let maxGain = max(1.0, device.maxWhiteBalanceGain)
+        let locked = device.deviceWhiteBalanceGains
+        let lockedR = Double(min(maxGain, max(1.0, locked.redGain)))
+        let lockedG = Double(min(maxGain, max(1.0, locked.greenGain)))
+        let lockedB = Double(min(maxGain, max(1.0, locked.blueGain)))
+
+        let d65Target = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(temperature: 6500, tint: 0)
+        let d65Raw = device.deviceWhiteBalanceGains(for: d65Target)
+        let d65R = Double(min(maxGain, max(1.0, d65Raw.redGain)))
+        let d65G = Double(min(maxGain, max(1.0, d65Raw.greenGain)))
+        let d65B = Double(min(maxGain, max(1.0, d65Raw.blueGain)))
+
+        return CameraCalibrationTelemetry(
+            flashRedGainCorrection: d65R / lockedR,
+            flashGreenGainCorrection: d65G / lockedG,
+            flashBlueGainCorrection: d65B / lockedB,
+            exposureTargetOffsetEV: Double(device.exposureTargetOffset),
+            iso: Double(device.iso)
+        )
+        #endif
+    }
+
+    /// Restores continuous Auto Exposure (AE) and Auto White Balance (AWB).
+    public func unlockExposureAndWhiteBalance() {
+        #if !targetEnvironment(simulator)
+        guard let device = currentInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                device.whiteBalanceMode = .continuousAutoWhiteBalance
+            }
+            device.unlockForConfiguration()
+        } catch {
+            // Unlock failed
+        }
+        #endif
+    }
+
     // MARK: - Still Photo Capture
 
     public func setZoomFactor(_ factor: CGFloat) {
@@ -191,6 +283,36 @@ public final class CameraService: NSObject, CameraServiceProtocol {
             // Configuration lock failed
         }
         #endif
+    }
+
+    /// Captures `count` consecutive fresh frames from the live video stream (for noise-reduced multi-frame averaging).
+    public func captureFreshVideoFrames(count: Int = 3) async throws -> [UIImage] {
+        let clampedCount = max(1, count)
+        #if targetEnvironment(simulator)
+        return [makeSimulatorTestImage()]
+        #else
+        guard session.isRunning else {
+            return [makeSimulatorTestImage()]
+        }
+        return try await withCheckedThrowingContinuation { continuation in
+            if let existing = self.frameBurstContinuation {
+                existing.resume(throwing: CancellationError())
+            }
+            self.frameBurstBuffer = []
+            self.frameBurstBuffer.reserveCapacity(clampedCount)
+            self.frameBurstTargetCount = clampedCount
+            self.frameBurstContinuation = continuation
+        }
+        #endif
+    }
+
+    /// Captures the next fresh frame arriving from the live video stream (identical ISP pipeline, zero shutter lag).
+    public func captureFreshVideoFrame() async throws -> UIImage {
+        let frames = try await captureFreshVideoFrames(count: 1)
+        if let first = frames.first {
+            return first
+        }
+        return makeSimulatorTestImage()
     }
 
     public func capturePhoto() async throws -> UIImage {
@@ -337,9 +459,31 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        // Hand off frame to real-time LightingAnalyzer service (C5-83)
+        // Hand off frame to real-time LightingAnalyzer service (C5-83) and any pending burst-frame capture
         nonisolated(unsafe) let buffer = sampleBuffer
         Task { @MainActor in
+            if let continuation = self.frameBurstContinuation {
+                if let pixelBuffer = CMSampleBufferGetImageBuffer(buffer),
+                   let cgImage = self.ciContext.createCGImage(CIImage(cvPixelBuffer: pixelBuffer), from: CIImage(cvPixelBuffer: pixelBuffer).extent) {
+                    self.frameBurstBuffer.append(UIImage(cgImage: cgImage))
+                    if self.frameBurstBuffer.count >= self.frameBurstTargetCount {
+                        let collected = self.frameBurstBuffer
+                        self.frameBurstBuffer = []
+                        self.frameBurstTargetCount = 0
+                        self.frameBurstContinuation = nil
+                        continuation.resume(returning: collected)
+                    }
+                } else {
+                    self.frameBurstBuffer = []
+                    self.frameBurstTargetCount = 0
+                    self.frameBurstContinuation = nil
+                    continuation.resume(throwing: NSError(
+                        domain: "com.challenge5.camera",
+                        code: -2,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to render video frame"]
+                    ))
+                }
+            }
             self.onSampleBuffer?(buffer)
         }
     }

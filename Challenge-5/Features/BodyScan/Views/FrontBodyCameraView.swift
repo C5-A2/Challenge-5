@@ -10,9 +10,8 @@ import AVFoundation
 import PhotosUI
 
 /// Live AVFoundation camera capture screen for Front Body shape analysis (C5-88).
-/// Features full-body level lines (shoulders, waist, hips, feet), device verticality
-/// alignment via CoreMotion, zoom toggle (0.5x, 1x, 2x), flash control, countdown timer,
-/// and high-resolution capture.
+/// Features device verticality alignment via CoreMotion, zoom toggle (0.5x, 1x, 2x),
+/// flash control, countdown timer, and high-resolution capture.
 struct FrontBodyCameraView: View {
 
     // MARK: - State & Dependencies
@@ -22,6 +21,7 @@ struct FrontBodyCameraView: View {
     @State private var motionManager = MotionLevelManager()
     @State private var isCapturing: Bool = false
     @State private var countdownRemaining: Int = 3
+    @State private var countdownTask: Task<Void, Never>? = nil
     @State private var selectedZoom: CGFloat = 1.0
     @State private var selectedPickerItem: PhotosPickerItem? = nil
 
@@ -35,21 +35,20 @@ struct FrontBodyCameraView: View {
             // 1. Live Camera Preview Layer
             cameraPreviewContent
 
-            // 2. Full-Body Level Lines & Alignment Grid
-            fullBodyLevelGrid
-
-            // 3. Top Control Bar (Back, Level Status Pill, Flash)
+            // 2. Top Control Bar (Back, Level Status Pill, Flash)
             topControlBar
 
-            // 4. Zoom Selector Pill (0.5x, 1x, 2x)
+            // 3. Zoom Selector Pill (0.5x, 1x, 2x)
             zoomSelectorBar
 
-            // 5. Countdown Overlay
+            // 4. Countdown Overlay
             if viewModel.isCountingDown {
-                countdownOverlay
+                CameraCountdownOverlay(remainingSeconds: countdownRemaining) {
+                    cancelCountdown()
+                }
             }
 
-            // 6. Bottom Shutter & Controls
+            // 5. Bottom Shutter & Controls
             bottomControlBar
         }
         .task {
@@ -62,6 +61,7 @@ struct FrontBodyCameraView: View {
             }
         }
         .onDisappear {
+            cancelCountdown()
             motionManager.stopMonitoring()
             cameraService.stopSession()
             viewModel.stopCamera()
@@ -108,75 +108,17 @@ struct FrontBodyCameraView: View {
                     .font(AppTypography.cardHeadline)
                     .foregroundStyle(Color.white.opacity(0.65))
 
-                Text("Position entire body inside alignment guidelines")
+                Text("Position entire body inside frame")
                     .font(AppTypography.caption)
                     .foregroundStyle(Color.white.opacity(0.45))
             }
         }
     }
 
-    // MARK: - 2. Full-Body Level Lines & Alignment Grid
-
-    private var fullBodyLevelGrid: some View {
-        GeometryReader { geometry in
-            let w = geometry.size.width
-            let h = geometry.size.height
-            let guideColor = motionManager.isLevel ? Color(hex: "#34C759") : Color.white
-
-            ZStack {
-                // Vertical Center Plumb Line (Alignment)
-                Path { path in
-                    path.move(to: CGPoint(x: w / 2, y: h * 0.12))
-                    path.addLine(to: CGPoint(x: w / 2, y: h * 0.92))
-                }
-                .stroke(guideColor.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
-
-                // Horizontal Level Lines across anatomical landmarks
-                levelLine(y: h * 0.18, label: "Head", width: w * 0.5, color: guideColor)
-                levelLine(y: h * 0.28, label: "Shoulders", width: w * 0.76, color: guideColor)
-                levelLine(y: h * 0.50, label: "Waist", width: w * 0.62, color: guideColor)
-                levelLine(y: h * 0.60, label: "Hips", width: w * 0.70, color: guideColor)
-                levelLine(y: h * 0.90, label: "Feet", width: w * 0.85, color: guideColor)
-
-                // Silhouette Outer Framing Bounding Box
-                RoundedRectangle(cornerRadius: 24)
-                    .stroke(guideColor.opacity(motionManager.isLevel ? 0.75 : 0.35), lineWidth: 1.5)
-                    .frame(width: w * 0.80, height: h * 0.78)
-                    .position(x: w / 2, y: h * 0.52)
-                    .animation(.easeInOut(duration: 0.25), value: motionManager.isLevel)
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func levelLine(y: CGFloat, label: String, width: CGFloat, color: Color) -> some View {
-        GeometryReader { geometry in
-            let xStart = (geometry.size.width - width) / 2
-            let xEnd = xStart + width
-
-            ZStack(alignment: .leading) {
-                Path { path in
-                    path.move(to: CGPoint(x: xStart, y: y))
-                    path.addLine(to: CGPoint(x: xEnd, y: y))
-                }
-                .stroke(color.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-
-                Text(label.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundStyle(color.opacity(0.65))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.black.opacity(0.45))
-                    .clipShape(Capsule())
-                    .position(x: xStart + 36, y: y - 10)
-            }
-        }
-    }
-
-    // MARK: - 3. Top Control Bar
+    // MARK: - 2. Top Control Bar
 
     private var topControlBar: some View {
-        VStack {
+        VStack(spacing: 10) {
             HStack(alignment: .center) {
                 // Back Button to Guide
                 Button {
@@ -224,6 +166,11 @@ struct FrontBodyCameraView: View {
             .padding(.horizontal, AppDimensions.screenHorizontalPadding)
             .padding(.top, 8)
 
+            CameraTimerSelectorPill(
+                selectedSeconds: $viewModel.countdownSeconds,
+                isDisabled: isCapturing || viewModel.isCountingDown
+            )
+
             Spacer()
         }
     }
@@ -259,22 +206,7 @@ struct FrontBodyCameraView: View {
         }
     }
 
-    // MARK: - 5. Countdown Overlay
-
-    private var countdownOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.35)
-                .ignoresSafeArea()
-
-            Text("\(countdownRemaining)")
-                .font(.system(size: 120, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.6), radius: 12)
-                .transition(.scale.combined(with: .opacity))
-        }
-    }
-
-    // MARK: - 6. Bottom Control Bar
+    // MARK: - 5. Bottom Control Bar
 
     private var bottomControlBar: some View {
         VStack {
@@ -346,22 +278,31 @@ struct FrontBodyCameraView: View {
     // MARK: - Capture Actions
 
     private func triggerCaptureFlow() {
-        guard !isCapturing else { return }
+        guard !isCapturing, !viewModel.isCountingDown else { return }
 
-        // Start 3-second countdown to allow user to take upright stance
+        let duration = max(1, viewModel.countdownSeconds)
         viewModel.isCountingDown = true
-        countdownRemaining = 3
+        countdownRemaining = duration
 
-        Task { @MainActor in
-            // Tick once a second: 3 → 2 → 1, then capture on the next tick.
+        countdownTask?.cancel()
+        countdownTask = Task { @MainActor in
             while countdownRemaining > 1 {
                 try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
                 countdownRemaining -= 1
             }
             try? await Task.sleep(for: .seconds(1))
+            if Task.isCancelled { return }
             viewModel.isCountingDown = false
+            countdownTask = nil
             executeCapture()
         }
+    }
+
+    private func cancelCountdown() {
+        countdownTask?.cancel()
+        countdownTask = nil
+        viewModel.isCountingDown = false
     }
 
     private func executeCapture() {
