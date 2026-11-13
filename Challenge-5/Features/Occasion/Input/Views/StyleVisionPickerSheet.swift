@@ -75,42 +75,36 @@ public struct StyleVisionPickerSheet: View {
     
     // MARK: - Subviews
     
-    /// Header bar with leading back button, centered title + subtitle, and trailing placeholder.
+    /// Header bar with leading back button and centered title + subtitle.
     private var headerBar: some View {
-        HStack {
-            // Leading Back Button
-            CircularIconButton(
-                systemName: "chevron.left",
-                action: { dismiss() }
-            )
-            
-            Spacer()
-            
-            // Centered Title and Subtitle
-            VStack(spacing: 4) {
-                Text("I Want to Look More")
-                    .font(AppTypography.sfProSemiboldExtended(size: 18))
-                    .foregroundStyle(AppColors.espressoTitle)
+        ZStack(alignment: .top) {
+            HStack {
+                CircularIconButton(
+                    systemName: "chevron.left",
+                    action: { dismiss() }
+                )
                 
-                Text("Pick Min. 1, Max 3")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.mutedCaption)
+                Spacer()
             }
             
-            Spacer()
-            
-            // Trailing Placeholder to keep title balanced
-            Color.clear
-                .frame(
-                    width: AppDimensions.circularIconSize,
-                    height: AppDimensions.circularIconSize
-                )
+            VStack(spacing: -6) {
+                Text("I Want to Look More")
+                    .font(AppTypography.bodySemiBoldExpanded)
+                    .foregroundStyle(AppColors.espressoTitle)
+                    .frame(height: AppDimensions.circularIconSize)
+                
+                Text("Pick Min. 1, Max 3")
+                    .font(AppTypography.bodyRegular)
+                    .foregroundStyle(AppColors.mutedCaption)
+            }
+            .multilineTextAlignment(.center)
         }
     }
     
     /// Row for a single `StyleVision` option.
     private func visionRow(_ vision: StyleVision) -> some View {
-        let isSelected = viewModel.isVisionSelected(vision)
+        let isSelected = viewModel.selectedVisions.contains(vision)
+        let isDisabled = viewModel.selectedVisions.count >= 3 && !isSelected
         
         return Button {
             viewModel.toggleVision(vision)
@@ -118,7 +112,11 @@ public struct StyleVisionPickerSheet: View {
             HStack {
                 Text(vision.rawValue)
                     .font(AppTypography.bodyRegular)
-                    .foregroundStyle(AppColors.espressoTitle)
+                    .foregroundStyle(
+                        isDisabled
+                            ? Color(hex: "#C7C7CC")
+                            : AppColors.espressoTitle
+                    )
                 
                 Spacer()
                 
@@ -134,6 +132,7 @@ public struct StyleVisionPickerSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
     }
 }
 
