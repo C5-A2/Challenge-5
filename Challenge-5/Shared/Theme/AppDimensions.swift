@@ -53,7 +53,7 @@ public enum AppDimensions {
     // MARK: - Component Dimensions
     public static let tabBarHeight: CGFloat = 48
     public static let floatingButtonSize: CGFloat = 56
-    public static let circularIconSize: CGFloat = 36
+    public static let circularIconSize: CGFloat = 44
     public static let circularButtonSize: CGFloat = 44
 
     // MARK: - Input & Modal Dimensions
