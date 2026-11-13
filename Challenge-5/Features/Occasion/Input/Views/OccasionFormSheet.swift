@@ -28,6 +28,7 @@ public struct OccasionFormSheet: View {
     // MARK: - Environment & State
     
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State public var viewModel: OccasionInputViewModel
     @State public var mode: Mode
     private let initialMode: Mode
@@ -35,6 +36,7 @@ public struct OccasionFormSheet: View {
     @State private var isShowingDeleteConfirmation: Bool = false
     @State private var isShowingSaveConfirmation: Bool = false
     @State private var isShowingDatePicker: Bool = false
+    @State private var didCompleteOrDiscard: Bool = false
     
     // MARK: - Callbacks
     
@@ -70,7 +72,7 @@ public struct OccasionFormSheet: View {
         onDelete: (() -> Void)? = nil,
         onDismiss: (() -> Void)? = nil
     ) {
-        _viewModel = State(initialValue: OccasionInputViewModel())
+        _viewModel = State(initialValue: OccasionInputViewModel(restoreDraft: initialMode == .create))
         _mode = State(initialValue: initialMode)
         self.initialMode = initialMode
         self.onSave = onSave
@@ -123,6 +125,8 @@ public struct OccasionFormSheet: View {
                             mode = .view
                         }
                     } else {
+                        didCompleteOrDiscard = true
+                        viewModel.clearDraft()
                         dismiss()
                         onDismiss?()
                     }
@@ -150,6 +154,16 @@ public struct OccasionFormSheet: View {
             }
         }
         .preferredColorScheme(.light)
+        .onDisappear {
+            if mode == .create && !didCompleteOrDiscard {
+                viewModel.saveDraft()
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase != .active && mode == .create && !didCompleteOrDiscard {
+                viewModel.saveDraft()
+            }
+        }
     }
     
     // MARK: - Subviews
@@ -485,6 +499,10 @@ public struct OccasionFormSheet: View {
     
     private func performSave() {
         guard viewModel.isValid else { return }
+        if mode == .create {
+            didCompleteOrDiscard = true
+            viewModel.clearDraft()
+        }
         let detail = viewModel.createOccasionDetail()
         onSave?(detail)
         dismiss()
