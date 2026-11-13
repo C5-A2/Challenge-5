@@ -34,6 +34,7 @@ public struct OccasionFormSheet: View {
     
     @State private var isShowingDeleteConfirmation: Bool = false
     @State private var isShowingSaveConfirmation: Bool = false
+    @State private var isShowingDatePicker: Bool = false
     
     // MARK: - Callbacks
     
@@ -148,6 +149,7 @@ public struct OccasionFormSheet: View {
                 StyleVisionPickerSheet(viewModel: viewModel)
             }
         }
+        .preferredColorScheme(.light)
     }
     
     // MARK: - Subviews
@@ -229,17 +231,11 @@ public struct OccasionFormSheet: View {
             HStack {
                 Text("Date")
                     .font(AppTypography.bodyRegular)
-                    .foregroundStyle(AppColors.espressoTitle)
+                    .foregroundStyle(AppColors.primaryBlack)
                 
                 Spacer()
                 
-                Text(viewModel.date.formatted(date: .long, time: .omitted))
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppColors.espressoTitle)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color(hex: "#E5E5EA").opacity(0.85))
-                    .clipShape(Capsule())
+                dateCapsuleBadge
             }
             .padding(.horizontal, 18)
             .frame(height: AppDimensions.inputFieldHeight)
@@ -290,6 +286,16 @@ public struct OccasionFormSheet: View {
         }
     }
     
+    private var dateCapsuleBadge: some View {
+        Text(viewModel.date.formatted(date: .long, time: .omitted))
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(AppColors.primaryBlack)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color(.tertiarySystemFill))
+            .clipShape(Capsule())
+    }
+
     private var editModeContent: some View {
         VStack(spacing: AppDimensions.elementSpacing + 4) {
             // 1. Occasion Title Field (Required, Max 50 Characters)
@@ -320,16 +326,36 @@ public struct OccasionFormSheet: View {
             }
             
             // 2. Date Picker Row (Defaults to tomorrow, past dates disabled)
-            DatePicker(
-                "Date",
-                selection: $viewModel.date,
-                in: min(Calendar.current.startOfDay(for: Date()), Calendar.current.startOfDay(for: viewModel.date))...,
-                displayedComponents: [.date]
-            )
-            .font(AppTypography.bodyRegular)
-            .foregroundStyle(AppColors.primaryBlack)
-            .tint(AppColors.primaryBlack)
+            Button {
+                isShowingDatePicker = true
+            } label: {
+                HStack {
+                    Text("Date")
+                        .font(AppTypography.bodyRegular)
+                        .foregroundStyle(AppColors.primaryBlack)
+                    
+                    Spacer()
+                    
+                    dateCapsuleBadge
+                }
+            }
+            .buttonStyle(.plain)
             .pillInputContainer()
+            .popover(isPresented: $isShowingDatePicker, arrowEdge: .top) {
+                CalendarPickerSheet(
+                    selectedDate: $viewModel.date,
+                    minimumDate: min(
+                        Calendar.current.startOfDay(for: Date()),
+                        Calendar.current.startOfDay(for: viewModel.date)
+                    ),
+                    showCardChrome: false
+                ) {
+                    isShowingDatePicker = false
+                }
+                .frame(width: 320)
+                .presentationCompactAdaptation(.popover)
+                .presentationBackground(Color.white)
+            }
             
             // 3. "I Want to Look More" Selector Row (Opens picker modal, shows chosen under)
             visionSelectorSection(isInteractive: true)
