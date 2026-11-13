@@ -406,12 +406,12 @@ struct OccasionsHomeView: View {
     OccasionsHomeView(
         selectedTab: .constant(.occasions)
     )
-    .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self, UserProfile.self], inMemory: true)
+    .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self, UserProfile.self, OccasionProfileSnapshot.self], inMemory: true)
 }
 
 #Preview("Occasions Home - With Sample Data") {
     let container = try! ModelContainer(
-        for: OccasionItem.self, OutfitLook.self, GarmentItem.self, UserProfile.self,
+        for: OccasionItem.self, OutfitLook.self, GarmentItem.self, UserProfile.self, OccasionProfileSnapshot.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
     

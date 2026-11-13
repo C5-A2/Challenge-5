@@ -206,7 +206,7 @@ final class OccasionOutputViewModel {
         }
         if refCount > 0 {
             loadingStageTitle = "Analyzing References"
-            loadingStageSubtitle = "Scanning 1 of \(refCount) reference photo\(refCount == 1 ? "" : "s") with Qwen 2.5 VL..."
+            loadingStageSubtitle = "Scanning 1 of \(refCount) reference photo\(refCount == 1 ? "" : "s")..."
         } else {
             loadingStageTitle = "Curating Your Looks"
             loadingStageSubtitle = "Styling ensembles tailored to your silhouette and \(occasion.title)..."
@@ -267,6 +267,7 @@ final class OccasionOutputViewModel {
                     look.occasion = self.occasion
                 }
             }
+            self.captureProfileSnapshot(from: activeProfile, for: newLooks, replaceExisting: true)
             let finalDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
             withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                 self.vlmDebugDescriptions = finalDescriptions
@@ -435,7 +436,9 @@ final class OccasionOutputViewModel {
         }
         
         Task {
-            let activeProfile = profile ?? self.profile ?? UserProfile.mockSample
+            let latestStoredProfile = try? self.occasion.modelContext?.fetch(UserProfile.primaryDescriptor).first
+            let activeProfile = profile ?? latestStoredProfile ?? self.profile ?? UserProfile.mockSample
+            self.profile = activeProfile
             do {
                 let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(
                     for: occasion,
@@ -454,6 +457,7 @@ final class OccasionOutputViewModel {
                         look.occasion = self.occasion
                     }
                 }
+                self.captureProfileSnapshot(from: activeProfile, for: newLooks, replaceExisting: true)
                 let finalDescriptions = ReferenceImageStyleAnalyzer.shared.savedDescriptions(forOccasionID: occasion.id)
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                     self.vlmDebugDescriptions = finalDescriptions
@@ -492,7 +496,9 @@ final class OccasionOutputViewModel {
         }
         
         Task {
-            let activeProfile = profile ?? self.profile ?? UserProfile.mockSample
+            let latestStoredProfile = try? self.occasion.modelContext?.fetch(UserProfile.primaryDescriptor).first
+            let activeProfile = profile ?? latestStoredProfile ?? self.profile ?? UserProfile.mockSample
+            self.profile = activeProfile
             do {
                 let newLook = try await OutfitGenerationPipeline.shared.generateSingleLook(
                     for: occasion,
@@ -507,6 +513,7 @@ final class OccasionOutputViewModel {
                         modelContext.insert(garment)
                     }
                 }
+                self.captureProfileSnapshot(from: activeProfile, for: [newLook], replaceExisting: false)
 
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                     newLook.occasion = self.occasion
@@ -538,6 +545,40 @@ final class OccasionOutputViewModel {
     /// Generates one additional outfit look and appends it to the right of existing looks.
     func generateAdditionalLook(profile: UserProfile? = nil) {
         generateMoreLooks(profile: profile)
+    }
+
+    /// Captures and persists a versioned `OccasionProfileSnapshot` for the occasion and its looks.
+    ///
+    /// When `replaceExisting` is `true` (initial generation or regeneration), any previous snapshot
+    /// on the occasion is detached (or deleted if no bookmarked looks still reference it), and a new
+    /// snapshot of `profile` is created. When `false` (appending an additional look), the occasion's
+    /// existing snapshot is reused if present.
+    private func captureProfileSnapshot(
+        from profile: UserProfile,
+        for looks: [OutfitLook],
+        replaceExisting: Bool
+    ) {
+        let snapshot: OccasionProfileSnapshot
+        if !replaceExisting, let existing = occasion.profileSnapshot {
+            snapshot = existing
+        } else {
+            if let oldSnapshot = occasion.profileSnapshot {
+                let hasBookmarkedLooks = oldSnapshot.looks.contains { $0.isBookmarked }
+                oldSnapshot.occasion = nil
+                occasion.profileSnapshot = nil
+                if !hasBookmarkedLooks, let context = occasion.modelContext {
+                    context.delete(oldSnapshot)
+                }
+            }
+            snapshot = OccasionProfileSnapshot(from: profile)
+            snapshot.occasion = occasion
+            occasion.profileSnapshot = snapshot
+            occasion.modelContext?.insert(snapshot)
+        }
+
+        for look in looks {
+            look.profileSnapshot = snapshot
+        }
     }
 }
 

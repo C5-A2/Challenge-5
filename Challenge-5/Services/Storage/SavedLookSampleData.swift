@@ -24,7 +24,7 @@ enum SavedLookSampleData {
         let container: ModelContainer
         do {
             container = try ModelContainer(
-                for: OccasionItem.self, OutfitLook.self, GarmentItem.self,
+                for: OccasionItem.self, OutfitLook.self, GarmentItem.self, OccasionProfileSnapshot.self,
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true)
             )
         } catch {

@@ -35,6 +35,10 @@ final class OutfitLook {
     /// The occasion this look was generated for. Lets the Library show the occasion title.
     var occasion: OccasionItem?
 
+    /// Versioned profile snapshot used when this look was generated.
+    /// Kept on the look so bookmarked looks in Library retain their profile version even if the occasion is deleted.
+    var profileSnapshot: OccasionProfileSnapshot?
+
     /// Cached metadata from the parent occasion so that if the occasion is deleted,
     /// the saved look in Library still retains its occasion title, dresscode, and date.
     var cachedOccasionTitle: String?

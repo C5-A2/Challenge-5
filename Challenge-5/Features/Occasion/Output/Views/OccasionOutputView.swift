@@ -337,7 +337,7 @@ struct OccasionOutputView: View {
                 }
                 
                 VStack(spacing: 6) {
-                    Text(isProcessingPlayground ? "Styling With AI" : viewModel.loadingStageTitle)
+                    Text(isProcessingPlayground ? "Styling Your Outfit" : viewModel.loadingStageTitle)
                         .font(AppTypography.sfProSemiboldExtended(size: 19))
                         .foregroundStyle(AppColors.espressoTitle)
                         .multilineTextAlignment(.center)
@@ -369,6 +369,10 @@ struct OccasionOutputView: View {
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(AppColors.primaryBlue)
                         }
+
+                        Text("VLM: \(LLMResource.vlmModelFilename) • LLM: \(LLMResource.activeModelFilename)")
+                            .font(.system(size: 9.5, weight: .medium))
+                            .foregroundStyle(AppColors.mutedCaption)
 
                         ScrollView(.vertical, showsIndicators: true) {
                             VStack(alignment: .leading, spacing: 6) {
@@ -476,6 +480,10 @@ struct OccasionOutputView: View {
                     }
                     .buttonStyle(.plain)
                 }
+
+                Text("VLM: \(LLMResource.vlmModelFilename) • LLM: \(LLMResource.activeModelFilename)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AppColors.mutedCaption)
 
                 if viewModel.vlmDebugDescriptions.isEmpty {
                     Text("No VLM text description returned for the attached reference photo(s).")

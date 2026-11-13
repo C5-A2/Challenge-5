@@ -222,7 +222,7 @@ struct OccasionsHistoryView: View {
 
 #Preview("History With Past Occasions") {
     let container = try! ModelContainer(
-        for: OccasionItem.self, OutfitLook.self, GarmentItem.self,
+        for: OccasionItem.self, OutfitLook.self, GarmentItem.self, OccasionProfileSnapshot.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
     
@@ -236,5 +236,5 @@ struct OccasionsHistoryView: View {
 
 #Preview("Empty History") {
     OccasionsHistoryView()
-        .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self], inMemory: true)
+        .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self, OccasionProfileSnapshot.self], inMemory: true)
 }
