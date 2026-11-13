@@ -146,32 +146,32 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
         var uncachedIndices: [Int] = []
         var uncachedData: [Data] = []
 
-        cacheLock.lock()
-        for (index, data) in imagesData.enumerated() {
-            var hasher = Hasher()
-            hasher.combine(data)
-            let hash = hasher.finalize()
-            if let cached = imageCache[hash] {
-                results.append(cached)
-            } else {
-                results.append("") // Placeholder to be filled
-                uncachedIndices.append(index)
-                uncachedData.append(data)
+        cacheLock.withLock {
+            for (index, data) in imagesData.enumerated() {
+                var hasher = Hasher()
+                hasher.combine(data)
+                let hash = hasher.finalize()
+                if let cached = imageCache[hash] {
+                    results.append(cached)
+                } else {
+                    results.append("") // Placeholder to be filled
+                    uncachedIndices.append(index)
+                    uncachedData.append(data)
+                }
             }
         }
-        cacheLock.unlock()
 
         if uncachedIndices.isEmpty {
             print("👁️ [ReferenceImageStyleAnalyzer] All \(imagesData.count) reference images retrieved from cache.")
             let finalResults = results.filter { !$0.isEmpty }
-            await onProgress?(finalResults.count, imagesData.count, finalResults)
+            onProgress?(finalResults.count, imagesData.count, finalResults)
             return finalResults
         }
 
         // Notify progress for any already-cached photos first
         let initialCached = results.filter { !$0.isEmpty }
         if !initialCached.isEmpty {
-            await onProgress?(initialCached.count, imagesData.count, initialCached)
+            onProgress?(initialCached.count, imagesData.count, initialCached)
         }
 
         print("👁️ [ReferenceImageStyleAnalyzer] Scanning \(uncachedIndices.count)/\(imagesData.count) reference images on-device via VLM (1-by-1)...")
@@ -198,12 +198,10 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
                 var hasher = Hasher()
                 hasher.combine(data)
                 let hash = hasher.finalize()
-                cacheLock.lock()
-                imageCache[hash] = description
-                cacheLock.unlock()
+                cacheLock.withLock { imageCache[hash] = description }
 
                 let snapshot = results.filter { !$0.isEmpty }
-                await onProgress?(snapshot.count, imagesData.count, snapshot)
+                onProgress?(snapshot.count, imagesData.count, snapshot)
             } catch {
                 print("⚠️ [ReferenceImageStyleAnalyzer] Reference Photo \(originalIndex + 1) VLM failed: \(error.localizedDescription)")
             }
@@ -211,7 +209,16 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
 
         // Unload VLM weights once at the end of the entire batch to free ~2.6 GB VRAM before main LLM runs
         await VLMEngine.shared.unload()
+        // Give iOS/Metal a brief window to reclaim freed VLM pages before LLM allocates ~2.14 GB.
+        try? await Task.sleep(for: .milliseconds(300))
         return results.filter { !$0.isEmpty }
+    }
+
+    /// Clears the in-memory reference image description cache.
+    public func clearCache() {
+        cacheLock.withLock {
+            imageCache.removeAll()
+        }
     }
 
     /// Analyzes reference photos and returns a formatted string descriptor combining all individual images.

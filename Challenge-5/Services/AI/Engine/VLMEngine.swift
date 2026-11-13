@@ -152,6 +152,10 @@ public actor VLMEngine {
             llama_model_free(mdl)
             model = nil
         }
+        if isBackendInitialized {
+            llama_backend_free()
+            isBackendInitialized = false
+        }
         #endif
         print("👁️ [VLMEngine] Unloaded VLM from memory.")
     }
@@ -265,7 +269,7 @@ public actor VLMEngine {
         }
 
         // 5. Sampler Chain setup
-        var samplerParams = llama_sampler_chain_default_params()
+        let samplerParams = llama_sampler_chain_default_params()
         let sampler = llama_sampler_chain_init(samplerParams)
         defer {
             llama_sampler_free(sampler)

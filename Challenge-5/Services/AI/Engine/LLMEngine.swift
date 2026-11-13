@@ -166,7 +166,7 @@ public actor LLMEngine {
     // MARK: - Lifecycle Management
     
     /// Initializes and loads the GGUF model weights into memory if not already loaded.
-    public func loadModelIfNeeded(customPath: String? = nil) throws {
+    public func loadModelIfNeeded(customPath: String? = nil) async throws {
         #if targetEnvironment(simulator)
         print("[LLMEngine] Simulator / Preview mode active: skipping C++ hardware initialization.")
         return
@@ -192,13 +192,13 @@ public actor LLMEngine {
         var modelParams = llama_model_default_params()
         modelParams.n_gpu_layers = 99 // Metal GPU acceleration on physical iPhone
         
-        // Right after the VLM reference scan, iOS may not have handed the VLM's ~2.7 GB back yet,
-        // so the first load can fail. Wait briefly and try again before giving up.
+        // Right after the VLM reference scan, iOS may not have handed the VLM's ~2.6 GB back yet,
+        // so the first load can fail. Yield and retry before giving up.
         var loadedModel = llama_model_load_from_file(path, modelParams)
         var attempt = 1
         while loadedModel == nil && attempt < Self.maximumModelLoadAttempts {
             print("⚠️ [LLMEngine] Model load attempt \(attempt) failed. Retrying in \(Self.modelLoadRetryDelay)s…")
-            Thread.sleep(forTimeInterval: Self.modelLoadRetryDelay)
+            try? await Task.sleep(for: .seconds(Self.modelLoadRetryDelay))
             attempt += 1
             loadedModel = llama_model_load_from_file(path, modelParams)
         }
@@ -207,24 +207,41 @@ public actor LLMEngine {
         }
         self.model = loadedModel
         
-        var contextParams = llama_context_default_params()
-        // Optimized context window: 4,096 tokens.
-        // Provides ample headroom for single-look prompts (~1,200 tokens) + output (~500 tokens),
-        // while keeping the KV cache footprint under ~150 MB to prevent iOS Jetsam memory kills on 3B models (Qwen 2.5 3B).
-        contextParams.n_ctx = 4096
-        contextParams.n_batch = 512
-        
-        guard let loadedContext = llama_init_from_model(loadedModel, contextParams) else {
-            llama_model_free(loadedModel)
-            self.model = nil
-            throw LLMEngineError.contextInitFailed
-        }
-        self.context = loadedContext
-        
         print("🎯 [LLMEngine] Successfully loaded model weights from: \(path)")
         print("🤖 [LLMEngine] Active on-device model: \(LLMResource.activeModelFilename)")
         #endif
     }
+
+    #if !targetEnvironment(simulator)
+    /// Returns the existing context or allocates one, retrying and stepping down `n_ctx` if memory is tight.
+    private func ensureContext(for model: OpaquePointer) async throws -> OpaquePointer {
+        if let existingContext = self.context {
+            return existingContext
+        }
+
+        let candidateContextSizes: [UInt32] = [4096, 3072, 2048]
+        for (index, nCtx) in candidateContextSizes.enumerated() {
+            var contextParams = llama_context_default_params()
+            contextParams.n_ctx = nCtx
+            contextParams.n_batch = 512
+
+            if let created = llama_init_from_model(model, contextParams) {
+                self.context = created
+                if nCtx < 4096 {
+                    print("⚠️ [LLMEngine] Allocated fallback context with n_ctx=\(nCtx) under memory pressure.")
+                }
+                return created
+            }
+
+            if index < candidateContextSizes.count - 1 {
+                print("⚠️ [LLMEngine] Context allocation failed for n_ctx=\(nCtx). Waiting before fallback…")
+                try? await Task.sleep(for: .seconds(Self.modelLoadRetryDelay))
+            }
+        }
+
+        throw LLMEngineError.contextInitFailed
+    }
+    #endif
     
     /// Releases loaded LLM model and context weights from RAM/VRAM without tearing down the shared llama backend,
     /// allowing `VLMEngine` to run multimodal reference analysis safely without simultaneous Metal VRAM contention.
@@ -383,36 +400,18 @@ public actor LLMEngine {
         }
         isGenerating = true
         defer {
-            if let ctx = self.context {
-                llama_free(ctx)
-                self.context = nil
-            }
             isGenerating = false
         }
 
-        try loadModelIfNeeded()
+        try await loadModelIfNeeded()
         
         guard let model = self.model else {
             throw LLMEngineError.modelInitFailed
         }
 
-        // Always recreate a fresh context per generation pass.
-        // Recreating context from the loaded model in RAM/VRAM takes under 5ms,
-        // but 100% guarantees the KV cache and sequence positions are pristine (0 tokens).
-        if let existingContext = self.context {
-            llama_free(existingContext)
-            self.context = nil
-        }
-
-        var contextParams = llama_context_default_params()
-        contextParams.n_ctx = 4096
-        contextParams.n_batch = 512
-
-        guard let freshContext = llama_init_from_model(model, contextParams) else {
-            throw LLMEngineError.contextInitFailed
-        }
-        self.context = freshContext
-        let context = freshContext
+        // Reuse the existing context across looks to avoid repeated Metal buffer allocation/fragmentation,
+        // and clear its KV cache so every look starts at 0 past tokens.
+        let context = try await ensureContext(for: model)
         
         if let mem = llama_get_memory(context) {
             llama_memory_seq_rm(mem, -1, -1, -1)
@@ -492,6 +491,8 @@ public actor LLMEngine {
             
             let res = llama_decode(context, batch)
             if res != 0 {
+                llama_free(context)
+                self.context = nil
                 throw LLMEngineError.decodingFailed(res)
             }
             i += n_eval

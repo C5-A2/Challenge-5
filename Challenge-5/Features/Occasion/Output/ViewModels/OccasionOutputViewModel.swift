@@ -440,10 +440,10 @@ final class OccasionOutputViewModel {
                 let newLooks = try await OutfitGenerationPipeline.shared.generateLooks(
                     for: occasion,
                     profile: activeProfile
-                ) { [weak self] stageTitle, stageSubtitle, descriptions in
-                    self?.loadingStageTitle = stageTitle
-                    self?.loadingStageSubtitle = stageSubtitle
-                    self?.vlmDebugDescriptions = descriptions
+                ) { stageTitle, stageSubtitle, descriptions in
+                    self.loadingStageTitle = stageTitle
+                    self.loadingStageSubtitle = stageSubtitle
+                    self.vlmDebugDescriptions = descriptions
                 }
                 if let modelContext = self.occasion.modelContext {
                     for look in newLooks {

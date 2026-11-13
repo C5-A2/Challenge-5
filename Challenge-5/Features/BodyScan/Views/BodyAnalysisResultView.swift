@@ -308,97 +308,55 @@ struct BodyAnalysisResultView: View {
     private func bodyTypeHighlightedDescription(for bodyType: BodyType) -> Text {
         switch bodyType {
         case .invertedTriangle:
-            return Text("Your ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("upper body")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" is naturally ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("wider")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" than your lower body, with ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("broader shoulders")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" and comparatively ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("narrower hips.")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
+            return Text.highlighted([
+                ("Your ", false),
+                ("upper body", true),
+                (" is naturally ", false),
+                ("wider", true),
+                (" than your lower body, with ", false),
+                ("broader shoulders", true),
+                (" and comparatively ", false),
+                ("narrower hips.", true)
+            ])
         case .hourglass:
-            return Text("Your ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("upper and lower body")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" are naturally ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("balanced")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(", with a ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("well-defined waistline")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" between your bust and hips.")
-                .foregroundColor(Color(hex: "#7A7A7A"))
+            return Text.highlighted([
+                ("Your ", false),
+                ("upper and lower body", true),
+                (" are naturally ", false),
+                ("balanced", true),
+                (", with a ", false),
+                ("well-defined waistline", true),
+                (" between your bust and hips.", false)
+            ])
         case .pear:
-            return Text("Your ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("lower body")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" is naturally ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("wider")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" than your upper body, with ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("fuller hips")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" and comparatively ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("narrower shoulders.")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
+            return Text.highlighted([
+                ("Your ", false),
+                ("lower body", true),
+                (" is naturally ", false),
+                ("wider", true),
+                (" than your upper body, with ", false),
+                ("fuller hips", true),
+                (" and comparatively ", false),
+                ("narrower shoulders.", true)
+            ])
         case .rectangle:
-            return Text("Your ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("bust, waist, and hips")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" are naturally ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("aligned")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(", creating a ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("balanced, straight silhouette.")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
+            return Text.highlighted([
+                ("Your ", false),
+                ("bust, waist, and hips", true),
+                (" are naturally ", false),
+                ("aligned", true),
+                (", creating a ", false),
+                ("balanced, straight silhouette.", true)
+            ])
         case .apple:
-            return Text("Your ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("upper body and midsection")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(" are naturally ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("fuller")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
-            + Text(", paired with ")
-                .foregroundColor(Color(hex: "#7A7A7A"))
-            + Text("slender hips and legs.")
-                .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "#1C1C1E"))
+            return Text.highlighted([
+                ("Your ", false),
+                ("upper body and midsection", true),
+                (" are naturally ", false),
+                ("fuller", true),
+                (", paired with ", false),
+                ("slender hips and legs.", true)
+            ])
         }
     }
 

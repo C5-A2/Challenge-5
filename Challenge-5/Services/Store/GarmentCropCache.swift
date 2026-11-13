@@ -35,4 +35,9 @@ final class GarmentCropCache {
             cropsByGarmentID[garmentID] = nil
         }
     }
+
+    /// Clears all cached garment crops from memory.
+    func clearAll() {
+        cropsByGarmentID.removeAll()
+    }
 }

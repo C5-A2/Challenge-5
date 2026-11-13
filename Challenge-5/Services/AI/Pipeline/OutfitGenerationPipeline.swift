@@ -133,40 +133,54 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
 
         // 2. Stage 1: describe the reference photos with the VLM (1 by 1, then the VLM is unloaded).
+        let progress = GenerationProgressEstimator.shared
+        let referenceCount = referenceImagesData(of: occasion).count
+        progress.start(referenceScans: referenceCount, includesRecap: referenceCount > 1, looks: Self.lookCount)
+        defer { progress.finish() }
+
         let referenceDescriptions = await scanReferencePhotos(of: occasion, onStageChange: onStageChange)
+        progress.skipRemaining(.referenceScan)
         let referenceAnalysis = ReferenceStyleAnalysis(
             descriptions: referenceDescriptions,
             recap: await recapReferenceStyle(referenceDescriptions, occasionID: occasion.id)
         )
+        progress.completeStep(.referenceRecap)
 
         // 3. Stage 2: one LLM call per look. Each look has its own direction, pieces and temperature,
         //    and gets the earlier looks so it doesn't repeat them.
         var generatedLooks: [OutfitLook] = []
         var previousSummaries: [GeneratedLookSummary] = []
 
-        for lookIndex in 0..<Self.lookCount {
-            let refStatusSuffix = referenceDescriptions.isEmpty
-                ? ""
-                : " (using Ref 1\(referenceDescriptions.count > 1 ? "–\(referenceDescriptions.count)" : ""))"
-            onStageChange?(
-                "Curating Your Looks",
-                "Generating Look \(lookIndex + 1) of \(Self.lookCount)\(refStatusSuffix) tailored to \(occasion.title)...",
-                referenceDescriptions
-            )
+        do {
+            for lookIndex in 0..<Self.lookCount {
+                let refStatusSuffix = referenceDescriptions.isEmpty
+                    ? ""
+                    : " (using Ref 1\(referenceDescriptions.count > 1 ? "–\(referenceDescriptions.count)" : ""))"
+                onStageChange?(
+                    "Curating Your Looks",
+                    "Generating Look \(lookIndex + 1) of \(Self.lookCount)\(refStatusSuffix) tailored to \(occasion.title)...",
+                    referenceDescriptions
+                )
 
-            let parsedLook = try await generateLook(
-                for: occasion,
-                profile: profile,
-                lookIndex: lookIndex,
-                previousLooks: previousSummaries,
-                referenceAnalysis: referenceAnalysis,
-                minimumTemperature: nil
-            )
-            generatedLooks.append(parsedLook)
-            previousSummaries.append(GeneratedLookSummary(from: parsedLook))
-            print("✅ [OutfitGenerationPipeline] Look \(lookIndex) accepted. \(generatedLooks.count)/\(Self.lookCount) complete.")
+                let parsedLook = try await generateLook(
+                    for: occasion,
+                    profile: profile,
+                    lookIndex: lookIndex,
+                    previousLooks: previousSummaries,
+                    referenceAnalysis: referenceAnalysis,
+                    minimumTemperature: nil
+                )
+                generatedLooks.append(parsedLook)
+                previousSummaries.append(GeneratedLookSummary(from: parsedLook))
+                progress.completeStep(.look)
+                print("✅ [OutfitGenerationPipeline] Look \(lookIndex) accepted. \(generatedLooks.count)/\(Self.lookCount) complete.")
+            }
+        } catch {
+            await releaseGenerationMemoryAndCaches()
+            throw error
         }
 
+        await releaseGenerationMemoryAndCaches()
         return generatedLooks
     }
 
@@ -210,14 +224,32 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         print("🔧 [OutfitGenerationPipeline] Generating extra look \(lookIndex) (previous looks appended: \(previousSummaries.count), refs: \(referenceDescriptions.count))…")
 
         // 3. Extra looks cycle through the 5 directions, at least as creative as `temperature`.
-        return try await generateLook(
-            for: occasion,
-            profile: profile,
-            lookIndex: lookIndex,
-            previousLooks: previousSummaries,
-            referenceAnalysis: referenceAnalysis,
-            minimumTemperature: temperature
-        )
+        do {
+            let look = try await generateLook(
+                for: occasion,
+                profile: profile,
+                lookIndex: lookIndex,
+                previousLooks: previousSummaries,
+                referenceAnalysis: referenceAnalysis,
+                minimumTemperature: temperature
+            )
+            await releaseGenerationMemoryAndCaches()
+            return look
+        } catch {
+            await releaseGenerationMemoryAndCaches()
+            throw error
+        }
+    }
+
+    /// Unloads VLM/LLM weights + Metal backend and clears in-memory caches after generation.
+    private func releaseGenerationMemoryAndCaches() async {
+        await VLMEngine.shared.unload()
+        await LLMEngine.shared.unloadModel()
+        ReferenceImageStyleAnalyzer.shared.clearCache()
+        OutfitAttributeMapper.clearSourceImageCache()
+        GarmentCropCache.shared.clearAll()
+        AsyncLookThumbnailView.clearCache()
+        URLCache.shared.removeAllCachedResponses()
     }
 
     /// Generates a single additional outfit look, taking into account all previously generated looks
@@ -464,6 +496,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let descriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(
             for: allImageData
         ) { completed, total, descriptionsSoFar in
+            GenerationProgressEstimator.shared.completeSteps(.referenceScan, upTo: completed)
             if completed < total {
                 onStageChange?(
                     "Analyzing References",
@@ -594,21 +627,37 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             .replacingOccurrences(of: "```", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // The model sometimes opens the look object with `[` instead of `{` (e.g. `["lookIndex":2,...}`).
+        // Swap that bracket so the look's own keys are decoded instead of a nested garment object.
+        if cleanJSON.hasPrefix("[") {
+            let afterBracket = cleanJSON.dropFirst().drop(while: { $0.isWhitespace })
+            if afterBracket.first == "\"" {
+                cleanJSON = "{" + cleanJSON.dropFirst()
+            }
+        }
+
+        // A decode only counts when at least one look kept garments; otherwise a garment object
+        // picked up by the balanced-block search would decode as an empty look and stop the search.
+        func usable(_ looks: [OutfitLook]?) -> [OutfitLook]? {
+            guard let looks, looks.contains(where: { !$0.garments.isEmpty }) else { return nil }
+            return looks.filter { !$0.garments.isEmpty }
+        }
+
         // 1. Try to decode the cleaned string directly as-is (happy path)
-        if let looks = try? decodeLooks(from: cleanJSON, options: options), !looks.isEmpty {
+        if let looks = usable(try? decodeLooks(from: cleanJSON, options: options)) {
             return looks
         }
 
         // 2. Extract the first balanced { ... } block (cuts off trailing garbage like `}]` or extra tokens)
         if let balanced = extractFirstBalancedJSONObject(from: cleanJSON),
-           let looks = try? decodeLooks(from: balanced, options: options), !looks.isEmpty {
+           let looks = usable(try? decodeLooks(from: balanced, options: options)) {
             print("✅ [OutfitGenerationPipeline] Decoded look from balanced JSON block.")
             return looks
         }
 
         // 3. Extract the outermost { ... } blob from mixed prose+JSON output
         if let extracted = extractJSONObject(from: cleanJSON),
-           let looks = try? decodeLooks(from: extracted, options: options), !looks.isEmpty {
+           let looks = usable(try? decodeLooks(from: extracted, options: options)) {
             print("⚠️ [OutfitGenerationPipeline] Extracted JSON from mixed output.")
             return looks
         }
@@ -616,11 +665,11 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         // 4. Try wrapping with {"looks":[ ... ]} if it was an unnested look continuation
         if !cleanJSON.contains("\"looks\"") {
             let wrapped = "{\"looks\":[" + cleanJSON + "]}"
-            if let looks = try? decodeLooks(from: wrapped, options: options), !looks.isEmpty {
+            if let looks = usable(try? decodeLooks(from: wrapped, options: options)) {
                 return looks
             }
             if let balancedWrapped = extractFirstBalancedJSONObject(from: wrapped),
-               let looks = try? decodeLooks(from: balancedWrapped, options: options), !looks.isEmpty {
+               let looks = usable(try? decodeLooks(from: balancedWrapped, options: options)) {
                 return looks
             }
         }
@@ -628,11 +677,11 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         // 5. Auto-fix repeated `"garments": [` keys if present
         let sanitized = sanitizeMalformedLLMJSON(cleanJSON)
         if sanitized != cleanJSON {
-            if let looks = try? decodeLooks(from: sanitized, options: options), !looks.isEmpty {
+            if let looks = usable(try? decodeLooks(from: sanitized, options: options)) {
                 return looks
             }
             if let balanced = extractFirstBalancedJSONObject(from: sanitized),
-               let looks = try? decodeLooks(from: balanced, options: options), !looks.isEmpty {
+               let looks = usable(try? decodeLooks(from: balanced, options: options)) {
                 return looks
             }
         }
@@ -642,7 +691,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let repaired = repairTruncatedJSON(sanitized)
         do {
             let looks = try decodeLooks(from: repaired, options: options)
-            if !looks.isEmpty {
+            if let looks = usable(looks) {
                 print("⚠️ [OutfitGenerationPipeline] Decoded \(looks.count) looks from repaired truncated JSON.")
                 return looks
             }
