@@ -119,10 +119,14 @@ struct BodyAnalysisResultView: View {
                     .padding(.top, 10)
                     .padding(.bottom, 32)
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
         }
         .environment(\.colorScheme, .light)
         .onAppear {
+            syncTextFieldsFromViewModel()
+        }
+        .onChange(of: focusedMetric) { _, _ in
             syncTextFieldsFromViewModel()
         }
         .toolbar {
@@ -417,12 +421,24 @@ struct BodyAnalysisResultView: View {
 
     private var measurementsListCard: some View {
         VStack(spacing: 0) {
-            measurementRow(
+            EditableMeasurementsCardHeader(
+                showReset: viewModel.isMeasurementsEdited,
+                onReset: {
+                    focusedMetric = nil
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        viewModel.resetMeasurementsToBaseline()
+                    }
+                    syncTextFieldsFromViewModel()
+                }
+            )
+
+            EditableMeasurementRow(
                 title: "Bust",
                 text: $bustText,
-                field: .bust
+                field: .bust,
+                focusedField: $focusedMetric
             ) { newValue in
-                if let val = parseDouble(newValue), val > 0 {
+                if let val = MeasurementTextFormatting.parse(newValue), val > 0 {
                     viewModel.updateMeasurement(bust: val)
                 }
             }
@@ -430,12 +446,13 @@ struct BodyAnalysisResultView: View {
             Divider()
                 .padding(.horizontal, 18)
 
-            measurementRow(
+            EditableMeasurementRow(
                 title: "Waist",
                 text: $waistText,
-                field: .waist
+                field: .waist,
+                focusedField: $focusedMetric
             ) { newValue in
-                if let val = parseDouble(newValue), val > 0 {
+                if let val = MeasurementTextFormatting.parse(newValue), val > 0 {
                     viewModel.updateMeasurement(waist: val)
                 }
             }
@@ -443,12 +460,13 @@ struct BodyAnalysisResultView: View {
             Divider()
                 .padding(.horizontal, 18)
 
-            measurementRow(
+            EditableMeasurementRow(
                 title: "Hips",
                 text: $hipsText,
-                field: .hips
+                field: .hips,
+                focusedField: $focusedMetric
             ) { newValue in
-                if let val = parseDouble(newValue), val > 0 {
+                if let val = MeasurementTextFormatting.parse(newValue), val > 0 {
                     viewModel.updateMeasurement(hip: val)
                 }
             }
@@ -456,17 +474,18 @@ struct BodyAnalysisResultView: View {
             Divider()
                 .padding(.horizontal, 18)
 
-            measurementRow(
+            EditableMeasurementRow(
                 title: "Torso",
                 text: $torsoText,
-                field: .torso
+                field: .torso,
+                focusedField: $focusedMetric
             ) { newValue in
-                if let val = parseDouble(newValue), val > 0 {
+                if let val = MeasurementTextFormatting.parse(newValue), val > 0 {
                     viewModel.updateMeasurement(torso: val)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.bottom, 6)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color.white)
@@ -478,52 +497,19 @@ struct BodyAnalysisResultView: View {
         )
     }
 
-    private func measurementRow(
-        title: String,
-        text: Binding<String>,
-        field: EditableField,
-        onChange: @escaping (String) -> Void
-    ) -> some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.black)
-
-            Spacer()
-
-            HStack(spacing: 4) {
-                TextField("0", text: text)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.black)
-                    .multilineTextAlignment(.trailing)
-                    .keyboardType(.decimalPad)
-                    .focused($focusedMetric, equals: field)
-                    .frame(width: 64)
-                    .onChange(of: text.wrappedValue) { _, newValue in
-                        onChange(newValue)
-                    }
-
-                Text("cm")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(Color(hex: "#8E8E93"))
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-    }
-
     private func syncTextFieldsFromViewModel() {
-        bustText = "\(Int(round(bustCm)))"
-        waistText = "\(Int(round(waistCm)))"
-        hipsText = "\(Int(round(hipCm)))"
-        torsoText = "\(Int(round(torsoLenCm)))"
-    }
-
-    private func parseDouble(_ text: String) -> Double? {
-        let normalized = text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: ",", with: ".")
-        return Double(normalized)
+        if focusedMetric != .bust {
+            bustText = MeasurementTextFormatting.format(bustCm)
+        }
+        if focusedMetric != .waist {
+            waistText = MeasurementTextFormatting.format(waistCm)
+        }
+        if focusedMetric != .hips {
+            hipsText = MeasurementTextFormatting.format(hipCm)
+        }
+        if focusedMetric != .torso {
+            torsoText = MeasurementTextFormatting.format(torsoLenCm)
+        }
     }
 
     // MARK: - 3. Torso Proportion & Height Percentage Card (Kept Below Body Type)

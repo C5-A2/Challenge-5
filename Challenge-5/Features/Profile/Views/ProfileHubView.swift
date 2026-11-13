@@ -57,6 +57,11 @@ struct ProfileHubView: View {
     @State private var torsoInputText: String = ""
     @State private var editedTorsoCm: Double? = nil
 
+    #if canImport(UIKit)
+    @State private var cachedFaceImage: UIImage? = nil
+    @State private var cachedFrontBodyImage: UIImage? = nil
+    @State private var cachedSideBodyImage: UIImage? = nil
+    #endif
     @State private var cachedFrontPose: PoseAnalysisResult? = nil
     @State private var cachedSidePose: PoseAnalysisResult? = nil
     @State private var cachedFrontBustY: Double? = nil
@@ -111,18 +116,15 @@ struct ProfileHubView: View {
 
     #if canImport(UIKit)
     private var faceUIImage: UIImage? {
-        guard let data = currentProfile?.facePhotoData else { return nil }
-        return UIImage(data: data)
+        cachedFaceImage
     }
 
     private var frontBodyUIImage: UIImage? {
-        guard let data = currentProfile?.frontBodyPhotoData else { return nil }
-        return UIImage(data: data)
+        cachedFrontBodyImage
     }
 
     private var sideBodyUIImage: UIImage? {
-        guard let data = currentProfile?.sideBodyPhotoData else { return nil }
-        return UIImage(data: data)
+        cachedSideBodyImage
     }
     #endif
 
@@ -167,12 +169,37 @@ struct ProfileHubView: View {
         }
         .environment(\.colorScheme, .light)
         .onAppear {
+            refreshCachedImages()
             syncProfileMetricInputs()
-            runOverlayPoseDetectionIfNeeded()
+            if selectedTab == .bodyType {
+                runOverlayPoseDetectionIfNeeded()
+            }
+        }
+        .onDisappear {
+            commitMetricField(focusedMetricField)
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            if newTab == .bodyType {
+                runOverlayPoseDetectionIfNeeded()
+            }
+        }
+        .onChange(of: currentProfile?.facePhotoData) { _, _ in
+            refreshCachedImages()
+        }
+        .onChange(of: currentProfile?.frontBodyPhotoData) { _, _ in
+            refreshCachedImages()
+            runOverlayPoseDetectionIfNeeded(force: true)
+        }
+        .onChange(of: currentProfile?.sideBodyPhotoData) { _, _ in
+            refreshCachedImages()
+            runOverlayPoseDetectionIfNeeded(force: true)
         }
         .onChange(of: currentProfile?.updatedAt) { _, _ in
             syncProfileMetricInputs()
-            runOverlayPoseDetectionIfNeeded()
+        }
+        .onChange(of: focusedMetricField) { oldField, _ in
+            commitMetricField(oldField)
+            syncProfileMetricInputs()
         }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -191,6 +218,8 @@ struct ProfileHubView: View {
     private var headerBar: some View {
         HStack {
             Button {
+                commitMetricField(focusedMetricField)
+                focusedMetricField = nil
                 if let onBack = onBack {
                     onBack()
                 } else {
@@ -333,6 +362,7 @@ struct ProfileHubView: View {
                 .padding(.top, 18)
                 .padding(.bottom, 24)
             }
+            .scrollDismissesKeyboard(.interactively)
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         }
         .padding(.bottom, 8)
@@ -532,52 +562,45 @@ struct ProfileHubView: View {
 
             // 2. Editable Bust, Waist, Hips, Torso Measurements Card
             VStack(spacing: 0) {
-                profileMeasurementRow(
+                EditableMeasurementsCardHeader()
+
+                EditableMeasurementRow(
                     title: "Bust",
                     text: $bustInputText,
-                    field: .bust
-                ) { newVal in
-                    if let v = parseDouble(newVal), v > 0 {
-                        applyProfileMeasurementUpdate(bust: v)
-                    }
-                }
+                    field: .bust,
+                    focusedField: $focusedMetricField
+                ) { _ in }
                 Divider().padding(.horizontal, 18)
-                profileMeasurementRow(
+                EditableMeasurementRow(
                     title: "Waist",
                     text: $waistInputText,
-                    field: .waist
-                ) { newVal in
-                    if let v = parseDouble(newVal), v > 0 {
-                        applyProfileMeasurementUpdate(waist: v)
-                    }
-                }
+                    field: .waist,
+                    focusedField: $focusedMetricField
+                ) { _ in }
                 Divider().padding(.horizontal, 18)
-                profileMeasurementRow(
+                EditableMeasurementRow(
                     title: "Hips",
                     text: $hipsInputText,
-                    field: .hips
-                ) { newVal in
-                    if let v = parseDouble(newVal), v > 0 {
-                        applyProfileMeasurementUpdate(hip: v)
-                    }
-                }
+                    field: .hips,
+                    focusedField: $focusedMetricField
+                ) { _ in }
                 Divider().padding(.horizontal, 18)
-                profileMeasurementRow(
+                EditableMeasurementRow(
                     title: "Torso",
                     text: $torsoInputText,
-                    field: .torso
-                ) { newVal in
-                    if let v = parseDouble(newVal), v > 0 {
-                        editedTorsoCm = v
-                        applyProfileMeasurementUpdate(torso: v)
-                    }
-                }
+                    field: .torso,
+                    focusedField: $focusedMetricField
+                ) { _ in }
             }
-            .padding(.vertical, 4)
+            .padding(.bottom, 6)
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(Color.white)
                     .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 3)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(Color.black.opacity(0.04), lineWidth: 1)
             )
 
             // 3. Torso Classification Card (Kept below Body Type)
@@ -615,52 +638,42 @@ struct ProfileHubView: View {
         }
     }
 
-    private func profileMeasurementRow(
-        title: String,
-        text: Binding<String>,
-        field: ProfileMetricField,
-        onChange: @escaping (String) -> Void
-    ) -> some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.black)
-
-            Spacer()
-
-            HStack(spacing: 4) {
-                TextField("0", text: text)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.black)
-                    .multilineTextAlignment(.trailing)
-                    .keyboardType(.decimalPad)
-                    .focused($focusedMetricField, equals: field)
-                    .frame(width: 64)
-                    .onChange(of: text.wrappedValue) { _, newValue in
-                        onChange(newValue)
-                    }
-
-                Text("cm")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(Color(hex: "#8E8E93"))
+    private func commitMetricField(_ field: ProfileMetricField?) {
+        guard let field else { return }
+        switch field {
+        case .bust:
+            if let v = MeasurementTextFormatting.parse(bustInputText), v > 0, v != profileBustCm {
+                applyProfileMeasurementUpdate(bust: v)
+            }
+        case .waist:
+            if let v = MeasurementTextFormatting.parse(waistInputText), v > 0, v != profileWaistCm {
+                applyProfileMeasurementUpdate(waist: v)
+            }
+        case .hips:
+            if let v = MeasurementTextFormatting.parse(hipsInputText), v > 0, v != profileHipCm {
+                applyProfileMeasurementUpdate(hip: v)
+            }
+        case .torso:
+            if let v = MeasurementTextFormatting.parse(torsoInputText), v > 0, v != profileTorsoCm {
+                editedTorsoCm = v
+                applyProfileMeasurementUpdate(torso: v)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 15)
     }
 
     private func syncProfileMetricInputs() {
-        bustInputText = "\(Int(round(profileBustCm)))"
-        waistInputText = "\(Int(round(profileWaistCm)))"
-        hipsInputText = "\(Int(round(profileHipCm)))"
-        torsoInputText = "\(Int(round(profileTorsoCm)))"
-    }
-
-    private func parseDouble(_ text: String) -> Double? {
-        let normalized = text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: ",", with: ".")
-        return Double(normalized)
+        if focusedMetricField != .bust {
+            bustInputText = MeasurementTextFormatting.format(profileBustCm)
+        }
+        if focusedMetricField != .waist {
+            waistInputText = MeasurementTextFormatting.format(profileWaistCm)
+        }
+        if focusedMetricField != .hips {
+            hipsInputText = MeasurementTextFormatting.format(profileHipCm)
+        }
+        if focusedMetricField != .torso {
+            torsoInputText = MeasurementTextFormatting.format(profileTorsoCm)
+        }
     }
 
     private func applyProfileMeasurementUpdate(
@@ -875,8 +888,17 @@ struct ProfileHubView: View {
         }
     }
 
-    private func runOverlayPoseDetectionIfNeeded() {
+    private func refreshCachedImages() {
         #if canImport(UIKit)
+        cachedFaceImage = currentProfile?.facePhotoData.flatMap { UIImage(data: $0) }
+        cachedFrontBodyImage = currentProfile?.frontBodyPhotoData.flatMap { UIImage(data: $0) }
+        cachedSideBodyImage = currentProfile?.sideBodyPhotoData.flatMap { UIImage(data: $0) }
+        #endif
+    }
+
+    private func runOverlayPoseDetectionIfNeeded(force: Bool = false) {
+        #if canImport(UIKit)
+        if !force, cachedFrontPose != nil { return }
         guard let frontImg = frontBodyUIImage else { return }
         let sideImg = sideBodyUIImage ?? frontImg
         let heightCm = currentProfile?.measurements?.heightCm ?? 170.0
