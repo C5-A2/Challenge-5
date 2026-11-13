@@ -49,11 +49,12 @@ public struct LibraryCardView: View {
                 AsyncLookThumbnailView(
                     imageData: look.lookImageData,
                     assetImageName: look.assetImageName,
-                    contentMode: .fit
+                    contentMode: .fill,
+                    alignment: .top
                 )
+                .padding(.top, 16)
                 .frame(maxWidth: .infinity)
                 .frame(height: cardHeight)
-                .padding(.vertical, 2)
                 .background(Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius, style: .continuous))
                 .overlay(

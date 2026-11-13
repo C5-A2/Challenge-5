@@ -61,7 +61,7 @@ public struct AsyncLookThumbnailView: View {
     // MARK: - Body
     
     public var body: some View {
-        ZStack {
+        ZStack(alignment: alignment) {
             if let loadedImage {
                 Image(uiImage: loadedImage)
                     .resizable()
@@ -75,6 +75,7 @@ public struct AsyncLookThumbnailView: View {
                 placeholderView
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
         .task(id: imageData) {
             await loadImage()
         }
