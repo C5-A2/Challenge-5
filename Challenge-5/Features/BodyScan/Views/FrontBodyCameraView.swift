@@ -21,6 +21,7 @@ struct FrontBodyCameraView: View {
     @State private var motionManager = MotionLevelManager()
     @State private var isCapturing: Bool = false
     @State private var countdownRemaining: Int = 3
+    @State private var countdownTask: Task<Void, Never>? = nil
     @State private var selectedZoom: CGFloat = 1.0
     @State private var selectedPickerItem: PhotosPickerItem? = nil
 
@@ -42,7 +43,9 @@ struct FrontBodyCameraView: View {
 
             // 4. Countdown Overlay
             if viewModel.isCountingDown {
-                countdownOverlay
+                CameraCountdownOverlay(remainingSeconds: countdownRemaining) {
+                    cancelCountdown()
+                }
             }
 
             // 5. Bottom Shutter & Controls
@@ -58,6 +61,7 @@ struct FrontBodyCameraView: View {
             }
         }
         .onDisappear {
+            cancelCountdown()
             motionManager.stopMonitoring()
             cameraService.stopSession()
             viewModel.stopCamera()
@@ -114,7 +118,7 @@ struct FrontBodyCameraView: View {
     // MARK: - 2. Top Control Bar
 
     private var topControlBar: some View {
-        VStack {
+        VStack(spacing: 10) {
             HStack(alignment: .center) {
                 // Back Button to Guide
                 Button {
@@ -162,6 +166,11 @@ struct FrontBodyCameraView: View {
             .padding(.horizontal, AppDimensions.screenHorizontalPadding)
             .padding(.top, 8)
 
+            CameraTimerSelectorPill(
+                selectedSeconds: $viewModel.countdownSeconds,
+                isDisabled: isCapturing || viewModel.isCountingDown
+            )
+
             Spacer()
         }
     }
@@ -197,22 +206,7 @@ struct FrontBodyCameraView: View {
         }
     }
 
-    // MARK: - 5. Countdown Overlay
-
-    private var countdownOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.35)
-                .ignoresSafeArea()
-
-            Text("\(countdownRemaining)")
-                .font(.system(size: 120, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.6), radius: 12)
-                .transition(.scale.combined(with: .opacity))
-        }
-    }
-
-    // MARK: - 6. Bottom Control Bar
+    // MARK: - 5. Bottom Control Bar
 
     private var bottomControlBar: some View {
         VStack {
@@ -284,23 +278,31 @@ struct FrontBodyCameraView: View {
     // MARK: - Capture Actions
 
     private func triggerCaptureFlow() {
-        guard !isCapturing else { return }
+        guard !isCapturing, !viewModel.isCountingDown else { return }
 
-        // Start 3-second countdown to allow user to take upright stance
+        let duration = max(1, viewModel.countdownSeconds)
         viewModel.isCountingDown = true
-        countdownRemaining = 3
+        countdownRemaining = duration
 
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
-            Task { @MainActor in
-                if countdownRemaining > 1 {
-                    countdownRemaining -= 1
-                } else {
-                    timer.invalidate()
-                    viewModel.isCountingDown = false
-                    executeCapture()
-                }
+        countdownTask?.cancel()
+        countdownTask = Task { @MainActor in
+            while countdownRemaining > 1 {
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
+                countdownRemaining -= 1
             }
+            try? await Task.sleep(for: .seconds(1))
+            if Task.isCancelled { return }
+            viewModel.isCountingDown = false
+            countdownTask = nil
+            executeCapture()
         }
+    }
+
+    private func cancelCountdown() {
+        countdownTask?.cancel()
+        countdownTask = nil
+        viewModel.isCountingDown = false
     }
 
     private func executeCapture() {

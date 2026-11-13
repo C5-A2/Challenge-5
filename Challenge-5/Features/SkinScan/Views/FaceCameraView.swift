@@ -22,6 +22,7 @@ struct FaceCameraView: View {
     @State private var isCapturing: Bool = false
     @State private var showWhiteScreenFlash: Bool = false
     @State private var countdownRemaining: Int = 3
+    @State private var countdownTask: Task<Void, Never>? = nil
     @State private var selectedPickerItem: PhotosPickerItem? = nil
 
     // MARK: - Body
@@ -42,7 +43,9 @@ struct FaceCameraView: View {
 
             // 4. Countdown Animation Overlay
             if viewModel.isCountingDown {
-                countdownOverlay
+                CameraCountdownOverlay(remainingSeconds: countdownRemaining) {
+                    cancelCountdown()
+                }
             }
 
             // 5. Bottom Shutter & Camera Controls
@@ -76,6 +79,7 @@ struct FaceCameraView: View {
             }
         }
         .onDisappear {
+            cancelCountdown()
             cameraService.onSampleBuffer = nil
             cameraService.stopSession()
             viewModel.stopCamera()
@@ -179,7 +183,7 @@ struct FaceCameraView: View {
     // MARK: - 3. Top Control Bar
 
     private var topControlBar: some View {
-        VStack {
+        VStack(spacing: 10) {
             HStack(alignment: .center) {
                 // Back Button
                 Button {
@@ -228,26 +232,16 @@ struct FaceCameraView: View {
             .padding(.horizontal, AppDimensions.screenHorizontalPadding)
             .padding(.top, 8)
 
+            CameraTimerSelectorPill(
+                selectedSeconds: $viewModel.countdownSeconds,
+                isDisabled: isCapturing || viewModel.isCountingDown
+            )
+
             Spacer()
         }
     }
 
-    // MARK: - 4. Countdown Overlay
-
-    private var countdownOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.35)
-                .ignoresSafeArea()
-
-            Text("\(countdownRemaining)")
-                .font(.system(size: 110, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.6), radius: 12)
-                .transition(.scale.combined(with: .opacity))
-        }
-    }
-
-    // MARK: - 5. Bottom Control Bar & Smart Real-Time HUD (C5-123)
+    // MARK: - 4. Bottom Control Bar & Smart Real-Time HUD (C5-123)
 
     private var canTriggerShutter: Bool {
         #if targetEnvironment(simulator)
@@ -374,33 +368,45 @@ struct FaceCameraView: View {
     // MARK: - Actions
 
     private func triggerCaptureFlow() {
-        guard !isCapturing, canTriggerShutter else { return }
+        guard !isCapturing, !viewModel.isCountingDown, canTriggerShutter else { return }
 
-        // Start 3-second countdown for steady posture
+        let duration = max(1, viewModel.countdownSeconds)
         viewModel.isCountingDown = true
-        countdownRemaining = 3
+        countdownRemaining = duration
 
-        Task { @MainActor in
+        countdownTask?.cancel()
+        countdownTask = Task { @MainActor in
             while countdownRemaining > 1 {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
                 #if !targetEnvironment(simulator)
                 if !viewModel.isFaceInFrame || viewModel.obstructionReason != nil {
                     viewModel.isCountingDown = false
+                    countdownTask = nil
                     return
                 }
                 #endif
                 countdownRemaining -= 1
             }
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            try? await Task.sleep(for: .seconds(1))
+            if Task.isCancelled { return }
             #if !targetEnvironment(simulator)
             if !viewModel.isFaceInFrame || viewModel.obstructionReason != nil {
                 viewModel.isCountingDown = false
+                countdownTask = nil
                 return
             }
             #endif
             viewModel.isCountingDown = false
+            countdownTask = nil
             executeCapture()
         }
+    }
+
+    private func cancelCountdown() {
+        countdownTask?.cancel()
+        countdownTask = nil
+        viewModel.isCountingDown = false
     }
 
     private func executeCapture() {
