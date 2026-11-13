@@ -168,13 +168,21 @@ public struct OccasionFormSheet: View {
             Spacer()
             
             switch mode {
-            case .create:
-                CircularIconButton(
-                    systemName: "arrow.up",
-                    isFilled: viewModel.isValid,
-                    isEnabled: viewModel.isValid,
-                    action: handleSave
-                )
+            case .create, .edit:
+                Button(action: handleSave) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(viewModel.isValid ? .white : AppColors.bodyText)
+                        .frame(
+                            width: AppDimensions.circularIconSize,
+                            height: AppDimensions.circularIconSize
+                        )
+                        .background(viewModel.isValid ? AppColors.primaryBlack : AppColors.circularButtonBackground)
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(viewModel.isValid ? 0.08 : 0.01), radius: 3, y: 1)
+                }
+                .disabled(!viewModel.isValid)
+                .opacity(viewModel.isValid ? 1.0 : 0.45)
             case .view:
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -189,21 +197,6 @@ public struct OccasionFormSheet: View {
                         .background(AppColors.primaryBlack)
                         .clipShape(Capsule())
                 }
-            case .edit:
-                Button(action: handleSave) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(
-                            width: AppDimensions.circularIconSize,
-                            height: AppDimensions.circularIconSize
-                        )
-                        .background(AppColors.primaryBlack)
-                        .clipShape(Circle())
-                        .shadow(color: .black.opacity(viewModel.isValid ? 0.08 : 0.02), radius: 3, y: 1)
-                }
-                .disabled(!viewModel.isValid)
-                .opacity(viewModel.isValid ? 1.0 : 0.45)
             }
         }
     }
