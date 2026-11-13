@@ -490,7 +490,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         let totalRefs = allImageData.count
         onStageChange?(
             "Analyzing References",
-            "Scanning 1 of \(totalRefs) reference photo\(totalRefs == 1 ? "" : "s") with Qwen 2.5 VL...",
+            "Scanning 1 of \(totalRefs) reference photo\(totalRefs == 1 ? "" : "s")...",
             []
         )
         let descriptions = await ReferenceImageStyleAnalyzer.shared.analyzeIndividualImages(
@@ -500,13 +500,13 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             if completed < total {
                 onStageChange?(
                     "Analyzing References",
-                    "Scanning \(completed + 1) of \(total) reference photos with Qwen 2.5 VL...",
+                    "Scanning \(completed + 1) of \(total) reference photos...",
                     descriptionsSoFar
                 )
             } else {
                 onStageChange?(
                     "Analyzing References",
-                    "Scanned \(total) reference photo\(total == 1 ? "" : "s"). Preparing main LLM recommendation...",
+                    "Scanned \(total) reference photo\(total == 1 ? "" : "s"). Preparing your outfit recommendations...",
                     descriptionsSoFar
                 )
             }

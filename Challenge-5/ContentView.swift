@@ -50,5 +50,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self, UserProfile.self], inMemory: true)
+        .modelContainer(for: [OccasionItem.self, OutfitLook.self, GarmentItem.self, UserProfile.self, OccasionProfileSnapshot.self], inMemory: true)
 }

@@ -30,6 +30,10 @@ final class OccasionItem {
     
     @Relationship(deleteRule: .nullify, inverse: \OutfitLook.occasion)
     var generatedLooks: [OutfitLook] = []
+
+    /// Versioned snapshot of the user's profile at the time outfits were generated for this occasion.
+    @Relationship(deleteRule: .nullify, inverse: \OccasionProfileSnapshot.occasion)
+    var profileSnapshot: OccasionProfileSnapshot?
     
     // MARK: - Computed Properties
     
@@ -182,6 +186,15 @@ extension OccasionItem {
             }
         }
         self.generatedLooks.removeAll()
+
+        if let snapshot = self.profileSnapshot {
+            let hasBookmarkedLooks = looksToProcess.contains { $0.isBookmarked }
+            snapshot.occasion = nil
+            self.profileSnapshot = nil
+            if !hasBookmarkedLooks {
+                context.delete(snapshot)
+            }
+        }
         
         context.delete(self)
         try? context.save()

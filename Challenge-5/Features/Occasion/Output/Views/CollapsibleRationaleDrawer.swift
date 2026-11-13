@@ -15,22 +15,26 @@ struct CollapsibleRationaleDrawer: View {
     @Query private var userProfiles: [UserProfile]
     var viewModel: OccasionOutputViewModel
     
-    // MARK: - Computed Active Profile Helpers
-    
+    // MARK: - Computed Profile / Snapshot Helpers
+
+    private var activeSnapshot: OccasionProfileSnapshot? {
+        viewModel.currentLook?.profileSnapshot ?? viewModel.occasion.profileSnapshot
+    }
+
     private var activeProfile: UserProfile {
         userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
     }
     
     private var activeBodyType: BodyType {
-        activeProfile.bodyType ?? .hourglass
+        activeSnapshot?.bodyType ?? activeProfile.bodyType ?? .hourglass
     }
     
     private var activeTorsoBalance: TorsoBalance {
-        activeProfile.torsoBalance ?? .balanced
+        activeSnapshot?.torsoBalance ?? activeProfile.torsoBalance ?? .balanced
     }
     
     private var activeColorSeason: ColorSeason {
-        activeProfile.colorSeason ?? .trueAutumn
+        activeSnapshot?.colorSeason ?? activeProfile.colorSeason ?? .trueAutumn
     }
 
     private var activeMeasurements: BodyMeasurements {
@@ -38,32 +42,42 @@ struct CollapsibleRationaleDrawer: View {
     }
 
     private var activeBustText: String {
-        "\(Int(round(activeMeasurements.resolvedBustCircumferenceCm))) Cm"
+        "\(Int(round(activeSnapshot?.bustCm ?? activeMeasurements.resolvedBustCircumferenceCm))) Cm"
     }
 
     private var activeWaistText: String {
-        "\(Int(round(activeMeasurements.resolvedWaistCircumferenceCm))) Cm"
+        "\(Int(round(activeSnapshot?.waistCm ?? activeMeasurements.resolvedWaistCircumferenceCm))) Cm"
     }
 
     private var activeHipsText: String {
-        "\(Int(round(activeMeasurements.resolvedHipCircumferenceCm))) Cm"
+        "\(Int(round(activeSnapshot?.hipsCm ?? activeMeasurements.resolvedHipCircumferenceCm))) Cm"
     }
 
     private var activeTorsoLengthText: String {
-        "\(Int(round(activeMeasurements.resolvedTorsoLengthCm))) Cm"
+        "\(Int(round(activeSnapshot?.upperBodyLengthCm ?? activeMeasurements.resolvedTorsoLengthCm))) Cm"
     }
 
     private var activeLegLengthText: String {
-        "\(Int(round(activeMeasurements.resolvedLegLengthCm))) Cm"
+        "\(Int(round(activeSnapshot?.legLengthCm ?? activeMeasurements.resolvedLegLengthCm))) Cm"
     }
 
     private var activeTorsoRatioText: String {
-        let pct = Int(round(activeMeasurements.torsoToHeightPercentage))
+        let pct = Int(round(activeSnapshot?.torsoRatioPercentage ?? activeMeasurements.torsoToHeightPercentage))
         return "\(pct)% (\(activeTorsoBalance.displayName))"
     }
 
+    private var activeColorAnalysisExplanation: String {
+        activeSnapshot?.colorAnalysisExplanation ?? activeColorSeason.definition
+    }
+
+    private var activeTorsoBalanceExplanation: String {
+        activeSnapshot?.torsoBalanceExplanation
+            ?? "\(activeTorsoBalance.suitableGarments.top) \(activeTorsoBalance.suitableGarments.bottom)"
+    }
+
     private var activeFaceImage: UIImage? {
-        guard let data = activeProfile.facePhotoData else { return nil }
+        let data = activeSnapshot != nil ? activeSnapshot?.facePhotoData : activeProfile.facePhotoData
+        guard let data else { return nil }
         return UIImage(data: data)
     }
     
@@ -116,9 +130,17 @@ struct CollapsibleRationaleDrawer: View {
     // MARK: - Subviews: Header
     
     private var headerSection: some View {
-        Text("Details")
-            .font(AppTypography.sfProSemiboldExtended(size: 18))
-            .foregroundStyle(AppColors.espressoTitle)
+        VStack(spacing: 2) {
+            Text("Details")
+                .font(AppTypography.sfProSemiboldExtended(size: 18))
+                .foregroundStyle(AppColors.espressoTitle)
+
+            if let snapshot = activeSnapshot {
+                Text("Profile from \(snapshot.capturedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AppColors.mutedCaption)
+            }
+        }
     }
     
     // MARK: - Subviews: Body Shape Tab
@@ -382,7 +404,7 @@ struct CollapsibleRationaleDrawer: View {
             
             garmentColorRationaleCard(
                 paletteName: "\(activeColorSeason.rawValue) Harmony",
-                rationale: activeColorSeason.definition
+                rationale: activeColorAnalysisExplanation
             )
         }
     }
@@ -494,7 +516,7 @@ struct CollapsibleRationaleDrawer: View {
             
             garmentTorsoRationaleCard(
                 proportionTitle: "Optimal Waist Placement",
-                rationale: "\(activeTorsoBalance.suitableGarments.top) \(activeTorsoBalance.suitableGarments.bottom)"
+                rationale: activeTorsoBalanceExplanation
             )
         }
     }
@@ -611,5 +633,5 @@ struct CollapsibleRationaleDrawer: View {
 #Preview("Details Drawer") {
     CollapsibleRationaleDrawer(viewModel: .mock())
         .background(Color.black.opacity(0.2))
-        .modelContainer(for: [UserProfile.self, OccasionItem.self], inMemory: true)
+        .modelContainer(for: [UserProfile.self, OccasionItem.self, OccasionProfileSnapshot.self], inMemory: true)
 }
