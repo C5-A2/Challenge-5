@@ -23,23 +23,23 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
 
     // MARK: - Configuration & Thresholds
 
-    /// Require bright natural daylight (>= 0.36 normalized luma) and avoid blown-out glare (<= 0.88).
-    private let minOptimalLuminance: Double = 0.36
-    private let maxOptimalLuminance: Double = 0.88
+    /// Require adequate daylight (>= 0.24 normalized luma) and avoid blown-out glare (<= 0.92).
+    private let minOptimalLuminance: Double = 0.24
+    private let maxOptimalLuminance: Double = 0.92
 
-    /// Strict 3-axis head pose thresholds (must be straight in front, not tilted up/down/sideways).
-    private let maxRollAngleDegrees: Double = 10.0
-    private let maxYawAngleDegrees: Double = 12.0
-    private let maxPitchAngleDegrees: Double = 11.0
+    /// Balanced 3-axis head pose thresholds (natural direct eye-level alignment without hyper-sensitive jitter).
+    private let maxRollAngleDegrees: Double = 15.0
+    private let maxYawAngleDegrees: Double = 18.0
+    private let maxPitchAngleDegrees: Double = 16.0
 
-    // High-accuracy geometric alignment targets matching the SwiftUI oval guide
+    // Geometric alignment targets matching the SwiftUI oval guide
     private let targetCenterX: CGFloat = 0.50
     private let targetCenterY: CGFloat = 0.54
-    private let maxHorizontalTolerance: CGFloat = 0.08
-    private let maxVerticalTolerance: CGFloat = 0.09
-    private let minFaceWidthRatio: CGFloat = 0.27
-    private let maxFaceWidthRatio: CGFloat = 0.58
-    private let minEyeNoseSymmetry: CGFloat = 0.62
+    private let maxHorizontalTolerance: CGFloat = 0.14
+    private let maxVerticalTolerance: CGFloat = 0.15
+    private let minFaceWidthRatio: CGFloat = 0.22
+    private let maxFaceWidthRatio: CGFloat = 0.68
+    private let minEyeNoseSymmetry: CGFloat = 0.50
 
     // Frame throttling (~8 FPS for smooth responsive UI and low thermal/battery load)
     private var isProcessing: Bool = false
@@ -294,17 +294,17 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
                 }
             }
 
-            // Detect Human Hand / Fingers via VNDetectHumanHandPoseRequest
+            // Detect Human Hand / Fingers via VNDetectHumanHandPoseRequest (only if hand is actually over the face)
             var isHandDetectedInFrame = false
-            let expandedFaceRect = box.insetBy(dx: -box.width * 0.35, dy: -box.height * 0.35)
+            let faceMaskRect = box.insetBy(dx: -box.width * 0.05, dy: -box.height * 0.05)
             if let handObservations = handPoseRequest.results, !handObservations.isEmpty {
                 for hand in handObservations {
                     if let points = try? hand.recognizedPoints(.all) {
-                        let confidentJoints = points.values.filter { $0.confidence >= 0.18 }
-                        let jointsNearFace = confidentJoints.filter { pt in
-                            expandedFaceRect.contains(CGPoint(x: pt.location.x, y: pt.location.y))
+                        let confidentJoints = points.values.filter { $0.confidence >= 0.35 }
+                        let jointsOnFace = confidentJoints.filter { pt in
+                            faceMaskRect.contains(CGPoint(x: pt.location.x, y: pt.location.y))
                         }
-                        if jointsNearFace.count >= 1 || confidentJoints.count >= 3 {
+                        if jointsOnFace.count >= 2 {
                             isHandDetectedInFrame = true
                             break
                         }
@@ -332,7 +332,7 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
                 return
             }
 
-            if landmarks.confidence < 0.68 {
+            if landmarks.confidence < 0.45 {
                 continuation.resume(returning: VisionFaceEvaluation(
                     isFaceDetected: true,
                     isFaceCentered: isCentered,
@@ -381,9 +381,9 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
             let noseToMouth = max(0.01, noseMinY - mouthCenter.y)
             let verticalPitchRatio = Double(eyeToNose / noseToMouth)
 
-            // Detect camera held too low (from below / chin tilted up) or too high (from above / chin tilted down)
-            let isLookingFromBelow = (hasVisionPitch && visionPitchDeg > self.maxPitchAngleDegrees) || (verticalPitchRatio < 1.08) || (eyeMidY > 0.75)
-            let isLookingFromAbove = (hasVisionPitch && visionPitchDeg < -self.maxPitchAngleDegrees) || (verticalPitchRatio > 2.25) || (eyeMidY < 0.52)
+            // Detect camera held steeply from below or above
+            let isLookingFromBelow = (hasVisionPitch && visionPitchDeg > self.maxPitchAngleDegrees) || (verticalPitchRatio < 0.78)
+            let isLookingFromAbove = (hasVisionPitch && visionPitchDeg < -self.maxPitchAngleDegrees) || (verticalPitchRatio > 2.75)
             let isPitchOK = !isLookingFromBelow && !isLookingFromAbove
 
             let isRollOK = (rollDeg <= self.maxRollAngleDegrees)
@@ -397,11 +397,11 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
             var isUnevenlyLit = false
             var computedFaceLuma: Double? = nil
 
-            if isHandDetectedInFrame || handClassifierConfidence >= 0.25 {
+            if isHandDetectedInFrame || handClassifierConfidence >= 0.60 {
                 obstructionReason = "Hand detected — please remove your hand from your face"
-            } else if maskClassifierConfidence >= 0.45 {
+            } else if maskClassifierConfidence >= 0.55 {
                 obstructionReason = "Mask or face cover detected — uncover your face"
-            } else if glassesClassifierConfidence >= 0.58 {
+            } else if glassesClassifierConfidence >= 0.65 {
                 obstructionReason = "Glasses detected — please remove eyewear"
             }
 
@@ -544,12 +544,12 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
             y: min(0.91, ((leftBrowCenter.y + rightBrowCenter.y) * 0.5) + 0.11)
         )
         let leftCheekNorm = CGPoint(
-            x: leftEyeCenter.x * 0.85 + 0.04,
-            y: (leftEyeCenter.y * 0.38) + (noseMinY * 0.62)
+            x: (leftEyeCenter.x * 0.55) + (noseCenter.x * 0.45),
+            y: (leftEyeCenter.y * 0.40) + (noseMinY * 0.60)
         )
         let rightCheekNorm = CGPoint(
-            x: rightEyeCenter.x * 0.85 + 0.11,
-            y: (rightEyeCenter.y * 0.38) + (noseMinY * 0.62)
+            x: (rightEyeCenter.x * 0.55) + (noseCenter.x * 0.45),
+            y: (rightEyeCenter.y * 0.40) + (noseMinY * 0.60)
         )
         let chinNorm = CGPoint(
             x: lipCenter.x,
@@ -603,36 +603,26 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
         let cheekCb = (leftCheek.cb + rightCheek.cb) * 0.5
         let avgFaceLuma = (cheekLuma * 0.55) + (forehead.luma * 0.25) + (chin.luma * 0.20)
 
-        // Check bilateral lighting symmetry (side shadow check)
-        let isUnevenlyLit = abs(leftCheek.luma - rightCheek.luma) > 0.17
+        // Check bilateral lighting symmetry (only flag strong one-sided shadow)
+        let isUnevenlyLit = abs(leftCheek.luma - rightCheek.luma) > 0.25
 
-        // A1. Check Skin-Colored Hand / Finger Occlusion Across Eyes, Mouth, Cheeks, Forehead, or Chin
-        // 1. Uncovered open eyes have dark iris/pupil + sclera contrast; a hand/finger over an eye turns it into skin or creates strong left-right eye mismatch
-        let leftEyeLooksLikeSkinCover = (leftEyePatch.luma > cheekLuma * 0.87 && leftEyePatch.stdDevLuma < 0.062)
-            || leftEyePatch.stdDevLuma < 0.042
-        let rightEyeLooksLikeSkinCover = (rightEyePatch.luma > cheekLuma * 0.87 && rightEyePatch.stdDevLuma < 0.062)
-            || rightEyePatch.stdDevLuma < 0.042
-        let eyeLumaAsymmetry = abs(leftEyePatch.luma - rightEyePatch.luma) > 0.135
+        // A1. Check Skin-Colored Hand / Finger Occlusion (requires strong evidence to avoid false alarms on natural features)
+        let leftEyeLooksLikeSkinCover = (leftEyePatch.luma > cheekLuma * 0.92 && leftEyePatch.stdDevLuma < 0.032)
+            || leftEyePatch.stdDevLuma < 0.024
+        let rightEyeLooksLikeSkinCover = (rightEyePatch.luma > cheekLuma * 0.92 && rightEyePatch.stdDevLuma < 0.032)
+            || rightEyePatch.stdDevLuma < 0.024
 
-        // 2. Uncovered mouth has natural lip redness/line contrast; a hand over the mouth flattens lip redness to skin or adds sharp finger-gap shadows
-        let lipRednessOverSkin = lips.cr - min(cheekCr, chin.cr)
-        let mouthCoveredByHand = (lipRednessOverSkin < 1.8 && abs(lips.luma - chin.luma) < 0.055 && lips.stdDevLuma < 0.058)
-            || lips.stdDevLuma > 0.135
-
-        // 3. Hand/fingers on cheek, forehead, nose, or chin introduce finger-gap shadow edges (high stdDevLuma) or unilateral cheek asymmetry
         let cheekLumaAsymmetry = abs(leftCheek.luma - rightCheek.luma)
-        let cheekColorAsymmetry = hypot(leftCheek.cr - rightCheek.cr, leftCheek.cb - rightCheek.cb)
         let cheekStdDevAsymmetry = abs(leftCheek.stdDevLuma - rightCheek.stdDevLuma)
-        let hasFingerOrEdgeOnSmoothSkin = leftCheek.stdDevLuma > 0.092
-            || rightCheek.stdDevLuma > 0.092
-            || forehead.stdDevLuma > 0.102
-            || chin.stdDevLuma > 0.102
-            || noseTip.stdDevLuma > 0.112
-        let hasUnilateralCheekCover = (cheekLumaAsymmetry > 0.105 && cheekStdDevAsymmetry > 0.025)
-            || cheekColorAsymmetry > 4.6
-            || cheekStdDevAsymmetry > 0.040
+        let hasSharpObstructionEdge = leftCheek.stdDevLuma > 0.155
+            || rightCheek.stdDevLuma > 0.155
+            || forehead.stdDevLuma > 0.165
+            || chin.stdDevLuma > 0.165
+        let hasUnilateralCheekCover = (cheekLumaAsymmetry > 0.24 && cheekStdDevAsymmetry > 0.075)
+            || (!leftCheek.isPlausibleHumanSkin && cheekLumaAsymmetry > 0.18)
+            || (!rightCheek.isPlausibleHumanSkin && cheekLumaAsymmetry > 0.18)
 
-        if leftEyeLooksLikeSkinCover || rightEyeLooksLikeSkinCover || eyeLumaAsymmetry || mouthCoveredByHand || hasFingerOrEdgeOnSmoothSkin || hasUnilateralCheekCover || handClassifierConfidence >= 0.15 {
+        if leftEyeLooksLikeSkinCover || rightEyeLooksLikeSkinCover || hasSharpObstructionEdge || hasUnilateralCheekCover || handClassifierConfidence >= 0.55 {
             return RegionalInspectionResult(
                 averageFaceLuminance: avgFaceLuma,
                 isUnevenlyLit: isUnevenlyLit,
@@ -715,7 +705,7 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
         // D. Check Bare Face (No Heavy Lipstick or Blush Makeup)
         let lipRednessDelta = lips.cr - cheekCr
         let cheekToForeheadRednessDelta = cheekCr - ((forehead.cr + chin.cr) * 0.5)
-        let hasHeavyMakeup = (lipRednessDelta > 22.5) || (cheekToForeheadRednessDelta > 9.5)
+        let hasHeavyMakeup = (lipRednessDelta > 30.0) || (cheekToForeheadRednessDelta > 16.0)
 
         return RegionalInspectionResult(
             averageFaceLuminance: avgFaceLuma,

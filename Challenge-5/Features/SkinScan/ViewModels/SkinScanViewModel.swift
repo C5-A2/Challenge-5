@@ -60,15 +60,15 @@ public final class SkinScanViewModel {
     public var obstructionReason: String? = nil
     public var dynamicGuidanceText: String = "Position face within the oval guide"
 
-    /// True when ambient light color temperature is within neutral indoor/daylight bounds (3400K–7500K).
+    /// True when ambient light color temperature is within reasonable indoor/daylight bounds (2600K–8500K).
     public var isColorTemperatureBalanced: Bool {
         guard let kelvin = ambientColorTemperatureKelvin else { return true }
-        return kelvin >= 3400 && kelvin <= 7500
+        return kelvin >= 2600 && kelvin <= 8500
     }
 
-    /// Indicates whether lighting is bright natural daylight without uneven shadows or extreme color casts (C5-123).
+    /// Indicates whether lighting is adequate without blown-out glare or extreme color casts (C5-123).
     public var isLightingAdequate: Bool {
-        luminanceLevel >= 0.36 && luminanceLevel <= 0.88 && lightingStatus == .optimal && isColorTemperatureBalanced
+        luminanceLevel >= 0.24 && luminanceLevel <= 0.92 && lightingStatus == .optimal && isColorTemperatureBalanced
     }
 
     /// True when face is centered, directly facing camera at eye level, unobstructed (no glasses/mask/hair), bare face, and brightly lit (C5-123).
@@ -176,11 +176,11 @@ public final class SkinScanViewModel {
         self.obstructionReason = result.obstructionReason
 
         if let kelvin = colorTemperatureKelvin, result.isReadyForOptimalCapture {
-            if kelvin < 3400 {
-                self.dynamicGuidanceText = "Warm yellow light (\(Int(kelvin))K) — move toward neutral daylight"
+            if kelvin < 2600 {
+                self.dynamicGuidanceText = "Extreme yellow light (\(Int(kelvin))K) — move toward brighter light"
                 return
-            } else if kelvin > 7500 {
-                self.dynamicGuidanceText = "Cool blue light (\(Int(kelvin))K) — move toward neutral daylight"
+            } else if kelvin > 8500 {
+                self.dynamicGuidanceText = "Extreme blue light (\(Int(kelvin))K) — move toward neutral light"
                 return
             }
         }
@@ -201,7 +201,7 @@ public final class SkinScanViewModel {
             let check = await analyzer.analyzeStaticImage(image)
             await MainActor.run {
                 self.isPhotoValidating = false
-                self.isLightingConfirmed = (check.lightingStatus == .optimal && check.luminance >= 0.36 && check.luminance <= 0.88)
+                self.isLightingConfirmed = (check.lightingStatus == .optimal && check.luminance >= 0.24 && check.luminance <= 0.92)
                 self.isDirectAngleConfirmed = (check.isFaceDetected && check.isHeadPoseDirect)
                 self.isBareFaceConfirmed = (check.isFaceDetected && check.isFaceUnobstructed && check.isBareFace)
 

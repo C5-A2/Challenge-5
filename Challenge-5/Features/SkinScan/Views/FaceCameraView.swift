@@ -384,7 +384,7 @@ struct FaceCameraView: View {
             while countdownRemaining > 1 {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 #if !targetEnvironment(simulator)
-                if !viewModel.isReadyForOptimalCapture {
+                if !viewModel.isFaceInFrame || viewModel.obstructionReason != nil {
                     viewModel.isCountingDown = false
                     return
                 }
@@ -393,7 +393,7 @@ struct FaceCameraView: View {
             }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             #if !targetEnvironment(simulator)
-            if !viewModel.isReadyForOptimalCapture {
+            if !viewModel.isFaceInFrame || viewModel.obstructionReason != nil {
                 viewModel.isCountingDown = false
                 return
             }
