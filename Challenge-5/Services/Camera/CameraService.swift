@@ -37,7 +37,9 @@ public final class CameraService: NSObject, CameraServiceProtocol {
     private let sampleQueue = DispatchQueue(label: "com.challenge5.camera.sampleQueue")
 
     @ObservationIgnored nonisolated(unsafe) private var currentInput: AVCaptureDeviceInput?
+    @ObservationIgnored nonisolated(unsafe) private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
     private var photoContinuation: CheckedContinuation<UIImage, Error>?
+    private var frameContinuation: CheckedContinuation<UIImage, Error>?
 
     // MARK: - Initializer
 
@@ -251,6 +253,23 @@ public final class CameraService: NSObject, CameraServiceProtocol {
         #endif
     }
 
+    /// Captures the next fresh frame arriving from the live video stream (identical ISP pipeline, zero shutter lag).
+    public func captureFreshVideoFrame() async throws -> UIImage {
+        #if targetEnvironment(simulator)
+        return makeSimulatorTestImage()
+        #else
+        guard session.isRunning else {
+            return makeSimulatorTestImage()
+        }
+        return try await withCheckedThrowingContinuation { continuation in
+            if let existing = self.frameContinuation {
+                existing.resume(throwing: CancellationError())
+            }
+            self.frameContinuation = continuation
+        }
+        #endif
+    }
+
     public func capturePhoto() async throws -> UIImage {
         // If running in simulator or without physical camera, generate simulated photo
         #if targetEnvironment(simulator)
@@ -395,9 +414,30 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        // Hand off frame to real-time LightingAnalyzer service (C5-83)
+        // Hand off frame to real-time LightingAnalyzer service (C5-83) and any pending fresh-frame capture
         nonisolated(unsafe) let buffer = sampleBuffer
         Task { @MainActor in
+            if let continuation = self.frameContinuation {
+                self.frameContinuation = nil
+                if let pixelBuffer = CMSampleBufferGetImageBuffer(buffer) {
+                    let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+                    if let cgImage = self.ciContext.createCGImage(ciImage, from: ciImage.extent) {
+                        continuation.resume(returning: UIImage(cgImage: cgImage))
+                    } else {
+                        continuation.resume(throwing: NSError(
+                            domain: "com.challenge5.camera",
+                            code: -2,
+                            userInfo: [NSLocalizedDescriptionKey: "Failed to render video frame"]
+                        ))
+                    }
+                } else {
+                    continuation.resume(throwing: NSError(
+                        domain: "com.challenge5.camera",
+                        code: -2,
+                        userInfo: [NSLocalizedDescriptionKey: "Missing pixel buffer"]
+                    ))
+                }
+            }
             self.onSampleBuffer?(buffer)
         }
     }

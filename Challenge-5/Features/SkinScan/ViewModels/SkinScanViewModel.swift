@@ -38,7 +38,7 @@ public final class SkinScanViewModel {
 
     #if canImport(UIKit)
     public var capturedFaceImage: UIImage?
-    public var capturedFlashImage: UIImage?
+    public var capturedAmbientImage: UIImage?
     #endif
     public var capturedFaceData: Data?
 
@@ -188,9 +188,9 @@ public final class SkinScanViewModel {
     }
 
     #if canImport(UIKit)
-    public func setCapturedPhoto(_ image: UIImage, flashImage: UIImage? = nil) {
+    public func setCapturedPhoto(_ image: UIImage, ambientImage: UIImage? = nil) {
         self.capturedFaceImage = image
-        self.capturedFlashImage = flashImage
+        self.capturedAmbientImage = ambientImage
         self.capturedFaceData = image.jpegData(compressionQuality: 0.85)
         self.isPhotoValidating = true
         self.reviewValidationMessage = nil
@@ -224,7 +224,7 @@ public final class SkinScanViewModel {
     public func retakePhoto() {
         #if canImport(UIKit)
         capturedFaceImage = nil
-        capturedFlashImage = nil
+        capturedAmbientImage = nil
         #endif
         capturedFaceData = nil
         isBareFaceConfirmed = false
@@ -249,15 +249,15 @@ public final class SkinScanViewModel {
 
         do {
             #if canImport(UIKit)
-            if let ambientImage = capturedFaceImage {
+            if let primaryImage = capturedFaceImage {
                 let result: (season: ColorSeason, metrics: SkinAnalysisMetrics)
-                if let flashImage = capturedFlashImage {
+                if let ambientImage = capturedAmbientImage {
                     result = try await colorAnalyzer.analyzeDetailedSkinTone(
-                        flashImage: flashImage,
+                        flashImage: primaryImage,
                         ambientImage: ambientImage
                     )
                 } else {
-                    result = try await colorAnalyzer.analyzeDetailedSkinTone(from: ambientImage)
+                    result = try await colorAnalyzer.analyzeDetailedSkinTone(from: primaryImage)
                 }
                 self.predictedColorSeason = result.season
                 self.selectedColorSeason = result.season

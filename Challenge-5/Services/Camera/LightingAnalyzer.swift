@@ -37,7 +37,7 @@ public final class LightingAnalyzer: LightingAnalyzerProtocol {
     private let targetCenterY: CGFloat = 0.54
     private let maxHorizontalTolerance: CGFloat = 0.14
     private let maxVerticalTolerance: CGFloat = 0.15
-    private let minFaceWidthRatio: CGFloat = 0.22
+    private let minFaceWidthRatio: CGFloat = 0.32
     private let maxFaceWidthRatio: CGFloat = 0.68
     private let minEyeNoseSymmetry: CGFloat = 0.50
 
