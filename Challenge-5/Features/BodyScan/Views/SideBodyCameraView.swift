@@ -10,8 +10,7 @@ import AVFoundation
 import PhotosUI
 
 /// Live AVFoundation camera capture screen for Side Body posture and silhouette analysis (C5-88).
-/// Features vertical posture plumb line, horizontal level lines (head, chest, waist, feet),
-/// CoreMotion device verticality tracking, zoom toggles, and countdown capture.
+/// Features CoreMotion device verticality tracking, zoom toggles, and countdown capture.
 struct SideBodyCameraView: View {
 
     // MARK: - State & Dependencies
@@ -34,21 +33,18 @@ struct SideBodyCameraView: View {
             // 1. Live Camera Preview Layer
             cameraPreviewContent
 
-            // 2. Side-Body Posture Plumb Line & Level Grid
-            sideBodyLevelGrid
-
-            // 3. Top Control Bar (Back, Level Status Pill, Flash)
+            // 2. Top Control Bar (Back, Level Status Pill, Flash)
             topControlBar
 
-            // 4. Zoom Selector Bar (0.5x, 1x, 2x)
+            // 3. Zoom Selector Bar (0.5x, 1x, 2x)
             zoomSelectorBar
 
-            // 5. Countdown Overlay
+            // 4. Countdown Overlay
             if viewModel.isCountingDown {
                 countdownOverlay
             }
 
-            // 6. Bottom Shutter & Controls
+            // 5. Bottom Shutter & Controls
             bottomControlBar
         }
         .task {
@@ -107,72 +103,14 @@ struct SideBodyCameraView: View {
                     .font(AppTypography.cardHeadline)
                     .foregroundStyle(Color.white.opacity(0.65))
 
-                Text("Align vertical spine against center plumb line")
+                Text("Position entire side profile inside frame")
                     .font(AppTypography.caption)
                     .foregroundStyle(Color.white.opacity(0.45))
             }
         }
     }
 
-    // MARK: - 2. Side-Body Posture Plumb Line & Level Grid
-
-    private var sideBodyLevelGrid: some View {
-        GeometryReader { geometry in
-            let w = geometry.size.width
-            let h = geometry.size.height
-            let guideColor = motionManager.isLevel ? Color(hex: "#34C759") : Color.white
-
-            ZStack {
-                // Vertical Center Spine Plumb Line (for posture alignment)
-                Path { path in
-                    path.move(to: CGPoint(x: w / 2, y: h * 0.12))
-                    path.addLine(to: CGPoint(x: w / 2, y: h * 0.92))
-                }
-                .stroke(guideColor.opacity(0.75), style: StrokeStyle(lineWidth: 1.5, dash: [8, 4]))
-
-                // Horizontal Level Lines across side profile landmarks
-                levelLine(y: h * 0.18, label: "Eye Level", width: w * 0.45, color: guideColor)
-                levelLine(y: h * 0.30, label: "Chest", width: w * 0.55, color: guideColor)
-                levelLine(y: h * 0.50, label: "Waist", width: w * 0.50, color: guideColor)
-                levelLine(y: h * 0.60, label: "Hips", width: w * 0.55, color: guideColor)
-                levelLine(y: h * 0.90, label: "Feet", width: w * 0.70, color: guideColor)
-
-                // Narrower Silhouette Bounding Box for Side Profile
-                RoundedRectangle(cornerRadius: 24)
-                    .stroke(guideColor.opacity(motionManager.isLevel ? 0.70 : 0.35), lineWidth: 1.5)
-                    .frame(width: w * 0.55, height: h * 0.78)
-                    .position(x: w / 2, y: h * 0.52)
-                    .animation(.easeInOut(duration: 0.25), value: motionManager.isLevel)
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func levelLine(y: CGFloat, label: String, width: CGFloat, color: Color) -> some View {
-        GeometryReader { geometry in
-            let xStart = (geometry.size.width - width) / 2
-            let xEnd = xStart + width
-
-            ZStack(alignment: .leading) {
-                Path { path in
-                    path.move(to: CGPoint(x: xStart, y: y))
-                    path.addLine(to: CGPoint(x: xEnd, y: y))
-                }
-                .stroke(color.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-
-                Text(label.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundStyle(color.opacity(0.65))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.black.opacity(0.45))
-                    .clipShape(Capsule())
-                    .position(x: xStart + 36, y: y - 10)
-            }
-        }
-    }
-
-    // MARK: - 3. Top Control Bar
+    // MARK: - 2. Top Control Bar
 
     private var topControlBar: some View {
         VStack {
