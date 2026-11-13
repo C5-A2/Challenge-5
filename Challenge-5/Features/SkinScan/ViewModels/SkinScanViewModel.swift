@@ -39,7 +39,10 @@ public final class SkinScanViewModel {
     #if canImport(UIKit)
     public var capturedFaceImage: UIImage?
     public var capturedAmbientImage: UIImage?
+    public var capturedFlashBurst: [UIImage] = []
+    public var capturedAmbientBurst: [UIImage] = []
     #endif
+    public var capturedCalibrationTelemetry: CameraCalibrationTelemetry? = nil
     public var capturedFaceData: Data?
 
     // MARK: - Camera Session & Lighting State
@@ -188,9 +191,18 @@ public final class SkinScanViewModel {
     }
 
     #if canImport(UIKit)
-    public func setCapturedPhoto(_ image: UIImage, ambientImage: UIImage? = nil) {
+    public func setCapturedPhoto(
+        _ image: UIImage,
+        ambientImage: UIImage? = nil,
+        flashBurst: [UIImage] = [],
+        ambientBurst: [UIImage] = [],
+        telemetry: CameraCalibrationTelemetry? = nil
+    ) {
         self.capturedFaceImage = image
-        self.capturedAmbientImage = ambientImage
+        self.capturedAmbientImage = ambientImage ?? ambientBurst.first
+        self.capturedFlashBurst = flashBurst.isEmpty ? [image] : flashBurst
+        self.capturedAmbientBurst = ambientBurst.isEmpty ? (ambientImage.map { [$0] } ?? []) : ambientBurst
+        self.capturedCalibrationTelemetry = telemetry
         self.capturedFaceData = image.jpegData(compressionQuality: 0.85)
         self.isPhotoValidating = true
         self.reviewValidationMessage = nil
@@ -225,7 +237,10 @@ public final class SkinScanViewModel {
         #if canImport(UIKit)
         capturedFaceImage = nil
         capturedAmbientImage = nil
+        capturedFlashBurst = []
+        capturedAmbientBurst = []
         #endif
+        capturedCalibrationTelemetry = nil
         capturedFaceData = nil
         isBareFaceConfirmed = false
         isLightingConfirmed = false
@@ -251,10 +266,12 @@ public final class SkinScanViewModel {
             #if canImport(UIKit)
             if let primaryImage = capturedFaceImage {
                 let result: (season: ColorSeason, metrics: SkinAnalysisMetrics)
-                if let ambientImage = capturedAmbientImage {
+                if !capturedAmbientBurst.isEmpty {
+                    let flashes = capturedFlashBurst.isEmpty ? [primaryImage] : capturedFlashBurst
                     result = try await colorAnalyzer.analyzeDetailedSkinTone(
-                        flashImage: primaryImage,
-                        ambientImage: ambientImage
+                        flashImages: flashes,
+                        ambientImages: capturedAmbientBurst,
+                        telemetry: capturedCalibrationTelemetry
                     )
                 } else {
                     result = try await colorAnalyzer.analyzeDetailedSkinTone(from: primaryImage)

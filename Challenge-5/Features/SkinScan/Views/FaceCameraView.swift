@@ -438,19 +438,28 @@ struct FaceCameraView: View {
                     // 1. Lock AE & AWB so ambient and flash frames share identical sensor gain & white balance
                     cameraService.lockExposureAndWhiteBalance()
                     try? await Task.sleep(nanoseconds: 60_000_000)
+                    let telemetry = cameraService.captureCalibrationTelemetry()
 
-                    // 2. Capture ambient baseline frame from the live video stream (zero shutter lag)
-                    let ambientPhoto = try await cameraService.captureFreshVideoFrame()
+                    // 2. Capture 3 consecutive ambient baseline frames (~90ms) to suppress sensor noise
+                    let ambientBurst = try await cameraService.captureFreshVideoFrames(count: 3)
 
                     // 3. Emit pure white D65 screen illumination and wait for OLED ramp + ISP pipeline
                     activeScreen?.brightness = 1.0
                     showWhiteScreenFlash = true
                     try? await Task.sleep(nanoseconds: 320_000_000)
 
-                    // 4. Capture fresh white-screen-illuminated frame from the same locked ISP stream
-                    let flashPhoto = try await cameraService.captureFreshVideoFrame()
+                    // 4. Capture 3 consecutive white-screen-illuminated frames (~90ms) from the same locked stream
+                    let flashBurst = try await cameraService.captureFreshVideoFrames(count: 3)
 
-                    viewModel.setCapturedPhoto(flashPhoto, ambientImage: ambientPhoto)
+                    if let primaryFlash = flashBurst.last ?? flashBurst.first {
+                        viewModel.setCapturedPhoto(
+                            primaryFlash,
+                            ambientImage: ambientBurst.first,
+                            flashBurst: flashBurst,
+                            ambientBurst: ambientBurst,
+                            telemetry: telemetry
+                        )
+                    }
                 } else {
                     let photo = try await cameraService.capturePhoto()
                     viewModel.setCapturedPhoto(photo)
