@@ -24,7 +24,7 @@ import UIKit
 ///    - ITA° Individual Typology Angle (Depth: Light > 41°, Medium 15°–41°, Deep <= 15°)
 ///    - Chroma C* (Purity: Clear >= 16.0, Soft < 16.0)
 /// 6. 12-Seasonal Flow Resolution: Resolves the exact `ColorSeason` matching the user's skin genetics.
-public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @unchecked Sendable {
+nonisolated public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @unchecked Sendable {
 
     // MARK: - Internal Types
 

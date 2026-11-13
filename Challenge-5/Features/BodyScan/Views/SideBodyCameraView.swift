@@ -351,16 +351,15 @@ struct SideBodyCameraView: View {
         viewModel.isCountingDown = true
         countdownRemaining = 3
 
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
-            Task { @MainActor in
-                if countdownRemaining > 1 {
-                    countdownRemaining -= 1
-                } else {
-                    timer.invalidate()
-                    viewModel.isCountingDown = false
-                    executeCapture()
-                }
+        Task { @MainActor in
+            // Tick once a second: 3 → 2 → 1, then capture on the next tick.
+            while countdownRemaining > 1 {
+                try? await Task.sleep(for: .seconds(1))
+                countdownRemaining -= 1
             }
+            try? await Task.sleep(for: .seconds(1))
+            viewModel.isCountingDown = false
+            executeCapture()
         }
     }
 
@@ -421,8 +420,8 @@ private final class SideBodyCameraPreviewUIView: UIView {
 
     func updateOrientationAndMirroring() {
         if let connection = previewLayer.connection {
-            if connection.isVideoOrientationSupported {
-                connection.videoOrientation = .portrait
+            if connection.isVideoRotationAngleSupported(90) { // 90° = portrait
+                connection.videoRotationAngle = 90
             }
             if connection.isVideoMirroringSupported {
                 connection.automaticallyAdjustsVideoMirroring = false

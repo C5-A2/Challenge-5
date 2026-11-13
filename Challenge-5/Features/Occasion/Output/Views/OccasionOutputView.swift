@@ -28,8 +28,8 @@ struct OccasionOutputView: View {
     @State private var isProcessingPlayground: Bool = false
     @State private var failedPlaygroundLookIDs: Set<UUID> = []
     @State private var simulatorMockCycle: Int = 0
-    private let showVLMDebug: Bool = false
-    @State private var isVLMDebugExpanded: Bool = false
+    private let showVLMDebug: Bool = true
+    @State private var isVLMDebugExpanded: Bool = true
     
     
     var onDismiss: (() -> Void)? = nil
@@ -355,6 +355,10 @@ struct OccasionOutputView: View {
                         .padding(.horizontal, 16)
                 }
 
+                if !isProcessingPlayground && GenerationProgressEstimator.shared.isActive {
+                    predictiveProgressBar
+                }
+
                 if showVLMDebug && !isProcessingPlayground && !viewModel.vlmDebugDescriptions.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 5) {
@@ -411,6 +415,33 @@ struct OccasionOutputView: View {
     }
 
     // MARK: - VLM Debug Output Banner (Post-Submit Inspection)
+
+    /// Linear bar with the predicted completion and time left, refreshed twice a second.
+    private var predictiveProgressBar: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { context in
+            let estimator = GenerationProgressEstimator.shared
+            let fraction = estimator.fraction(at: context.date)
+            VStack(spacing: 6) {
+                ProgressView(value: fraction)
+                    .progressViewStyle(.linear)
+                    .tint(AppColors.espressoTitle)
+                    .animation(.linear(duration: 0.5), value: fraction)
+
+                HStack {
+                    Text("\(Int((fraction * 100).rounded()))%")
+                    Spacer()
+                    Text(estimator.remainingLabel(at: context.date))
+                }
+                .font(AppTypography.caption)
+                .monospacedDigit()
+                .foregroundStyle(AppColors.mutedCaption)
+            }
+            .padding(.horizontal, 8)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Generation progress")
+            .accessibilityValue("\(Int((fraction * 100).rounded())) percent, \(estimator.remainingLabel(at: context.date))")
+        }
+    }
 
     @ViewBuilder
     private var vlmDebugOverlay: some View {

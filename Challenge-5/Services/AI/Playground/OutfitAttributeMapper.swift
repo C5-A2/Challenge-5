@@ -240,6 +240,11 @@ enum OutfitAttributeMapper {
 
     /// The last prepared photo, so it isn't recomputed on every view update.
     private static var sourceImageCache: (key: Int, image: UIImage)?
+
+    /// Drops the cached full-resolution source photo to reclaim memory.
+    static func clearSourceImageCache() {
+        sourceImageCache = nil
+    }
     /// Where the clothes start below the face, in face heights below the chin.
     private static let neckOffsetFaceRatio: CGFloat = 0.25
     /// The flat gray painted over her clothes.

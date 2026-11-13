@@ -11,7 +11,7 @@ import Foundation
 ///
 /// Combines the 4 primary seasonal families (Spring, Summer, Autumn, Winter) with
 /// 3 tonal dimensions (Hue, Value, Chroma) to determine optimal skin-tone-flattering color palettes.
-public enum ColorSeason: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated public enum ColorSeason: String, Codable, CaseIterable, Identifiable, Sendable {
     case brightSpring = "Bright Spring"
     case trueSpring = "True Spring"
     case lightSpring = "Light Spring"
