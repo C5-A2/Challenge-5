@@ -71,7 +71,7 @@ protocol OutfitGenerationPipelineProtocol {
 /// looks differ in style and pieces, not only in color.
 ///
 /// Reference photos are first described one by one by the on-device vision-language model
-/// (Qwen 2.5 VL, `ReferenceImageStyleAnalyzer`), because the text model can't see images.
+/// (Apple PCC vision model, `ReferenceImageStyleAnalyzer`), because the text model can't see images.
 /// The descriptions are recapped into one paragraph and passed to every look's prompt.
 @MainActor
 final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
@@ -243,8 +243,6 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
     /// Unloads VLM/LLM weights + Metal backend and clears in-memory caches after generation.
     private func releaseGenerationMemoryAndCaches() async {
-        await VLMEngine.shared.unload()
-        await LLMEngine.shared.unloadModel()
         ReferenceImageStyleAnalyzer.shared.clearCache()
         OutfitAttributeMapper.clearSourceImageCache()
         GarmentCropCache.shared.clearAll()
@@ -324,11 +322,12 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
             let parsedLook: OutfitLook
             do {
-                let rawOutput = try await LLMEngine.shared.generate(
-                    prompt: prompt,
+                let rawOutput = try await PCCEngine.shared.generate(
+                    system: prompt.system,
+                    user: prompt.user,
+                    jsonPrefix: prompt.prefill,
                     maxTokens: Self.maximumTokensPerLook,
                     temperature: temperature,
-                    topP: archetype.topP
                 )
                 print("✅ [OutfitGenerationPipeline] Look \(lookIndex) raw output (\(rawOutput.count) chars):\n\(rawOutput)")
 
@@ -350,7 +349,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 parsedLook = first
             } catch {
                 print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) attempt \(attempt + 1) failed: \(error.localizedDescription)")
-                if let engineError = error as? LLMEngineError, case .promptTooLong = engineError {
+                if let engineError = error as? PCCEngineError, case .promptTooLong = engineError {
                     forcesCompactPrompt = true
                 }
                 if attempt == Self.maximumAttemptsPerLook - 1 {
@@ -574,15 +573,8 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         Merge the photo descriptions below into ONE paragraph of 3 to 4 sentences.
         Keep every concrete garment name, cut, fabric, surface pattern and main color exactly as written. Only mention a pattern if a photo description states it. Do not invent anything. No lists, no JSON.
         """
-        let prompt: String
-        if LLMResource.isQwenActive {
-            prompt = "<|im_start|>system\n\(system)<|im_end|>\n<|im_start|>user\n\(numbered)<|im_end|>\n<|im_start|>assistant\n"
-        } else {
-            prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n\(system)<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n\(numbered)<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-        }
-
         do {
-            let raw = try await LLMEngine.shared.generate(prompt: prompt, maxTokens: 220, temperature: 0.2)
+            let raw = try await PCCEngine.shared.generate(system: system, user: numbered, maxTokens: 220, temperature: 0.2)
             let recap = raw.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
             if !recap.isEmpty {
                 print("📝 [OutfitGenerationPipeline] Reference recap (\(cleaned.count) → 1 paragraph): \(recap)")
@@ -650,7 +642,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         )
         var cleanJSON = jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Strip any <think>...</think> reasoning block (Qwen 3 / 3.5) and markdown code fences
+        // Strip any <think>...</think> reasoning block and markdown code fences
         if let thinkRegex = try? NSRegularExpression(pattern: "<think>[\\s\\S]*?</think>", options: []) {
             let range = NSRange(cleanJSON.startIndex..<cleanJSON.endIndex, in: cleanJSON)
             cleanJSON = thinkRegex.stringByReplacingMatches(in: cleanJSON, options: [], range: range, withTemplate: "")

@@ -293,19 +293,28 @@ struct OutfitPromptBuilder: Sendable {
         return lines.joined(separator: "\n")
     }
 
-    // MARK: - LLaMA / Qwen Formatted Chat Prompt
+    // MARK: - Chat Prompt
+
+    /// A system + user prompt pair plus the JSON prefix the answer must start with.
+    struct ChatPrompt: Sendable {
+        let system: String
+        let user: String
+        let prefill: String
+        /// Total size, for logging.
+        var count: Int { system.count + user.count }
+    }
 
     /// The JSON prefix that pre-fills the assistant turn for a **single-look** generation.
     /// Forces the model to output just one look object: `{"looks":[{...}]}`
     public static let assistantPrefill = "{\"looks\":["
 
-    /// Produces a ready-to-run chat-templated prompt for one look, formatted for Qwen (ChatML) or Llama 3.2.
+    /// Produces the system + user prompt for one look, sent to Apple Private Cloud Compute.
     ///
     /// - Parameters:
     ///   - lookIndex: The 0-based index of the look. It picks the look's `OutfitArchetype` (creative direction).
     ///   - structure: The pieces of this look (outer + top + bottom, top + bottom, dress, dress + outer).
     ///   - previousLooks: Looks already generated, so this one differs in style, pieces and colors.
-    ///   - referenceAnalysis: What the user's reference photos show, described by the on-device VLM (Qwen 2.5 VL).
+    ///   - referenceAnalysis: What the user's reference photos show, described by the vision model (Apple PCC).
     func buildFormattedPrompt(
         occasion: OccasionItem,
         profile: UserProfile?,
@@ -314,7 +323,7 @@ struct OutfitPromptBuilder: Sendable {
         previousLooks: [GeneratedLookSummary] = [],
         referenceAnalysis: ReferenceStyleAnalysis? = nil,
         forcesCompact: Bool = false
-    ) -> String {
+    ) -> ChatPrompt {
         let system = buildSingleLookSystemPrompt(
             occasion: occasion,
             profile: profile,
@@ -330,29 +339,7 @@ struct OutfitPromptBuilder: Sendable {
             lookIndex: lookIndex
         )
 
-        // Qwen 2.5 / Qwen 3.5 uses ChatML tokens (<|im_start|> ... <|im_end|>)
-        if LLMResource.isQwenActive {
-            let thinkingBypass = LLMResource.isQwen3Active ? "<think>\n\n</think>\n\n" : ""
-            return """
-            <|im_start|>system
-            \(system)<|im_end|>
-            <|im_start|>user
-            \(user)<|im_end|>
-            <|im_start|>assistant
-            \(thinkingBypass)\(OutfitPromptBuilder.assistantPrefill)
-            """
-        }
-
-        // Default Llama 3.2 chat tokens (<|begin_of_text|><|start_header_id|> ...)
-        return """
-        <|begin_of_text|><|start_header_id|>system<|end_header_id|>
-
-        \(system)<|eot_id|><|start_header_id|>user<|end_header_id|>
-
-        \(user)<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-
-        \(OutfitPromptBuilder.assistantPrefill)
-        """
+        return ChatPrompt(system: system, user: user, prefill: OutfitPromptBuilder.assistantPrefill)
     }
 
     // MARK: - Single-Look System Prompt

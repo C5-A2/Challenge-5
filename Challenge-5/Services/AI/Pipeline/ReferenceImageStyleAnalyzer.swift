@@ -57,7 +57,7 @@ public struct ReferenceImageStyleProfile: Sendable, Codable, Equatable {
         self.colors = colors
     }
 
-    /// Formats the profile into a high-density structured context block for the Qwen 2.5 3B prompt.
+    /// Formats the profile into a high-density structured context block for the LLM prompt.
     public var formattedPromptContext: String {
         if !textDescription.isEmpty {
             return textDescription
@@ -73,7 +73,7 @@ public struct ReferenceImageStyleProfile: Sendable, Codable, Equatable {
 }
 
 /// Analyzes user reference photos to extract detailed fashion styling descriptions
-/// using the on-device Qwen 2.5 VL 3B Vision-Language Model exclusively.
+/// using the Apple Private Cloud Compute vision model.
 ///
 /// Features:
 /// - Post-submit 1-by-1 image scanning: Runs in the loading state right after form submission before main LLM generation.
@@ -174,23 +174,19 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
             onProgress?(initialCached.count, imagesData.count, initialCached)
         }
 
-        print("👁️ [ReferenceImageStyleAnalyzer] Scanning \(uncachedIndices.count)/\(imagesData.count) reference images on-device via VLM (1-by-1)...")
+        print("👁️ [ReferenceImageStyleAnalyzer] Scanning \(uncachedIndices.count)/\(imagesData.count) reference images via PCC (1-by-1)...")
 
-        // Ensure text LLM weights are released before loading VLM into Metal GPU memory
-        await LLMEngine.shared.releaseModelWeights()
-
-        // Pre-load VLM once for the entire batch
         do {
-            try await VLMEngine.shared.loadIfNeeded()
+            try PCCEngine.validateAvailability()
         } catch {
-            print("⚠️ [ReferenceImageStyleAnalyzer] Failed to pre-load VLM: \(error.localizedDescription)")
+            print("⚠️ [ReferenceImageStyleAnalyzer] PCC unavailable: \(error.localizedDescription)")
             return results.filter { !$0.isEmpty }
         }
 
         for (uIdx, data) in uncachedData.enumerated() {
             let originalIndex = uncachedIndices[uIdx]
             do {
-                let description = try await VLMEngine.shared.analyzeImage(data: data)
+                let description = try await PCCEngine.shared.describeImage(data: data)
                 print("✅ [ReferenceImageStyleAnalyzer] Reference Photo \(originalIndex + 1) VLM description: \(description)")
                 results[originalIndex] = description
 
@@ -207,10 +203,6 @@ public final class ReferenceImageStyleAnalyzer: Sendable {
             }
         }
 
-        // Unload VLM weights once at the end of the entire batch to free ~2.6 GB VRAM before main LLM runs
-        await VLMEngine.shared.unload()
-        // Give iOS/Metal a brief window to reclaim freed VLM pages before LLM allocates ~2.14 GB.
-        try? await Task.sleep(for: .milliseconds(300))
         return results.filter { !$0.isEmpty }
     }
 
