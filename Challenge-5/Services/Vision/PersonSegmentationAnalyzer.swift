@@ -354,7 +354,8 @@ public final class PersonSegmentationAnalyzer: Sendable {
         leftLimitNorm: Double?,
         rightLimitNorm: Double?
     ) -> SliceExtractionResult? {
-        let offsets = [-0.025, -0.012, 0.0, 0.012, 0.025]
+        // Ordered from anatomical center outward so ties stay centered rather than biasing upward.
+        let offsets = [0.0, 0.009, -0.009, 0.018, -0.018]
         var candidateSlices: [SliceExtractionResult] = []
 
         for offset in offsets {

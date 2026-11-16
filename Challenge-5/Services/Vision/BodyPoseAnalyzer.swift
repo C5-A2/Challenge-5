@@ -169,8 +169,9 @@ public final class BodyPoseAnalyzer: BodyPoseAnalyzerProtocol, Sendable {
         // Chest level: ~25% down the torso from shoulders
         let chestLevelUIKitY = shoulderY + (torsoHeight * 0.25)
 
-        // Waist level: ~60% down the torso from shoulders (narrowest region between ribcage and pelvis)
-        let waistLevelUIKitY = shoulderY + (torsoHeight * 0.60)
+        // Waist level: ~70% down the torso from shoulders toward hip joints
+        // (natural waistline between lower ribcage and iliac crest, balanced between bust ~0.25 and hips ~1.16)
+        let waistLevelUIKitY = shoulderY + (torsoHeight * 0.70)
 
         // Hip level: apex of pelvis / greater trochanter (~16% of torso height below hip joints)
         let hipLevelUIKitY = hipY + (torsoHeight * 0.16)
