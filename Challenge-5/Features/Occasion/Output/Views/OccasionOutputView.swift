@@ -242,7 +242,7 @@ struct OccasionOutputView: View {
     private var navigationHeader: some View {
         VStack(spacing: 8) {
             HStack(alignment: .center) {
-                CircularIconButton(systemName: "chevron.left") {
+                LiquidGlassCircularButton(systemName: "chevron.left") {
                     dismiss()
                     onDismiss?()
                 }
@@ -250,24 +250,24 @@ struct OccasionOutputView: View {
                 Spacer()
 
                 HStack(spacing: 8) {
-    if !viewModel.isCallerSuppliedLooks {
-        CircularIconButton(
-            systemName: "plus.app",
-            isEnabled: !viewModel.isGeneratingMore && !viewModel.isLoading
-        ) {
-            let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
-            viewModel.generateMoreLooks(profile: activeProfile)
-        }
-        .accessibilityLabel("Generate More Looks")
-    }
-    CircularIconButton(
-        systemName: "info.bubble",
-        isEnabled: !viewModel.isLoading
-    ) {
-        isShowingOccasionDetailSheet = true
-    }
-    .accessibilityLabel("Occasion Details")
-}
+                    if !viewModel.isCallerSuppliedLooks {
+                        LiquidGlassCircularButton(
+                            systemName: "plus.app",
+                            isEnabled: !viewModel.isGeneratingMore && !viewModel.isLoading
+                        ) {
+                            let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+                            viewModel.generateMoreLooks(profile: activeProfile)
+                        }
+                        .accessibilityLabel("Generate More Looks")
+                    }
+                    LiquidGlassCircularButton(
+                        systemName: "info.bubble",
+                        isEnabled: !viewModel.isLoading
+                    ) {
+                        isShowingOccasionDetailSheet = true
+                    }
+                    .accessibilityLabel("Occasion Details")
+                }
             }
             
             VStack(spacing: 3) {
