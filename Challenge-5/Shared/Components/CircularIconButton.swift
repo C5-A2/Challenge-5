@@ -7,6 +7,9 @@
 
 import SwiftUI
 
+/// Deprecated / Unified: All circular icon buttons across the app now use the liquid glass visual style.
+/// This alias delegates directly to `LiquidGlassCircularButton` to preserve API compatibility
+/// while standardizing on the reflective, translucent liquid glass material design.
 public struct CircularIconButton: View {
     
     // MARK: - Properties
@@ -33,20 +36,12 @@ public struct CircularIconButton: View {
     
     // MARK: - Body
     public var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(isFilled ? AppColors.primaryBlack : AppColors.bodyText)
-                .frame(
-                    width: AppDimensions.circularIconSize,
-                    height: AppDimensions.circularIconSize
-                )
-                .background(backgroundColor ?? AppColors.circularButtonBackground)
-                .clipShape(Circle())
-                .shadow(color: .black.opacity(isEnabled ? 0.04 : 0.01), radius: 3, y: 1)
-        }
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1.0 : 0.45)
+        LiquidGlassCircularButton(
+            systemName: systemName,
+            isFilled: isFilled,
+            isEnabled: isEnabled,
+            action: action
+        )
     }
 }
 
@@ -59,5 +54,6 @@ public struct CircularIconButton: View {
         CircularIconButton(systemName: "arrow.up") { }
         CircularIconButton(systemName: "bookmark.fill", isFilled: true) { }
     }
-    .padding()
+    .padding(24)
+    .background(Color.gray.opacity(0.2))
 }

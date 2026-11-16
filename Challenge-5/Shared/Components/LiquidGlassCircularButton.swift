@@ -86,14 +86,15 @@ extension LiquidGlassCircularButton where Content == AnyView {
         systemName: String,
         size: CGFloat = AppDimensions.circularIconSize,
         iconSize: CGFloat = 16,
+        isFilled: Bool = false,
         isEnabled: Bool = true,
         action: @escaping () -> Void
     ) {
         self.init(size: size, isEnabled: isEnabled, action: action) {
             AnyView(
                 Image(systemName: systemName)
-                    .font(.system(size: iconSize, weight: .semibold))
-                    .foregroundStyle(Color(hex: "#1A1A1A"))
+                    .font(.system(size: iconSize, weight: isFilled ? .bold : .semibold))
+                    .foregroundStyle(isFilled ? AppColors.primaryBlack : Color(hex: "#1A1A1A"))
             )
         }
     }
