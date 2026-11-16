@@ -190,35 +190,63 @@ public final class PersonSegmentationAnalyzer: Sendable {
             rightLimitNorm: chestArmBounds?.right
         )
 
-        // 2. Extract Waist slice (scans narrowest contour around waist level)
-        let waistSlice = extractNarrowestWaistSlice(
-            centerWaistY: waistY,
-            torsoCenterX: effectiveCenterX,
-            baseAddress: baseAddress,
-            maskWidth: maskWidth,
-            maskHeight: maskHeight,
-            bytesPerRow: bytesPerRow,
-            threshold: threshold,
-            originalWidth: originalWidth,
-            leftLimitNorm: waistArmBounds?.left,
-            rightLimitNorm: waistArmBounds?.right
-        )
+        // 2. Extract Waist slice (Front scans narrowest contour; Side measures directly at the Front-mapped waist Y)
+        let waistSlice: SliceExtractionResult?
+        if isFrontView {
+            waistSlice = extractNarrowestWaistSlice(
+                centerWaistY: waistY,
+                torsoCenterX: effectiveCenterX,
+                baseAddress: baseAddress,
+                maskWidth: maskWidth,
+                maskHeight: maskHeight,
+                bytesPerRow: bytesPerRow,
+                threshold: threshold,
+                originalWidth: originalWidth,
+                leftLimitNorm: waistArmBounds?.left,
+                rightLimitNorm: waistArmBounds?.right
+            )
+        } else {
+            waistSlice = extractSlice(
+                atNormalizedY: waistY,
+                torsoCenterX: effectiveCenterX,
+                baseAddress: baseAddress,
+                maskWidth: maskWidth,
+                maskHeight: maskHeight,
+                bytesPerRow: bytesPerRow,
+                threshold: threshold,
+                originalWidth: originalWidth
+            )
+        }
 
-        // 3. Extract Hip slice (scans widest contour around hip level with bilateral crotch gap detection)
-        let hipSlice = extractWidestHipSlice(
-            centerHipY: hipY,
-            torsoCenterX: effectiveCenterX,
-            baseAddress: baseAddress,
-            maskWidth: maskWidth,
-            maskHeight: maskHeight,
-            bytesPerRow: bytesPerRow,
-            threshold: threshold,
-            originalWidth: originalWidth,
-            leftLimitNorm: hipArmBounds?.left,
-            rightLimitNorm: hipArmBounds?.right,
-            poseResult: poseResult,
-            isFrontView: isFrontView
-        )
+        // 3. Extract Hip slice (Front scans widest contour with crotch-gap bridge; Side measures directly at the Front-mapped hip Y)
+        let hipSlice: SliceExtractionResult?
+        if isFrontView {
+            hipSlice = extractWidestHipSlice(
+                centerHipY: hipY,
+                torsoCenterX: effectiveCenterX,
+                baseAddress: baseAddress,
+                maskWidth: maskWidth,
+                maskHeight: maskHeight,
+                bytesPerRow: bytesPerRow,
+                threshold: threshold,
+                originalWidth: originalWidth,
+                leftLimitNorm: hipArmBounds?.left,
+                rightLimitNorm: hipArmBounds?.right,
+                poseResult: poseResult,
+                isFrontView: isFrontView
+            )
+        } else {
+            hipSlice = extractSlice(
+                atNormalizedY: hipY,
+                torsoCenterX: effectiveCenterX,
+                baseAddress: baseAddress,
+                maskWidth: maskWidth,
+                maskHeight: maskHeight,
+                bytesPerRow: bytesPerRow,
+                threshold: threshold,
+                originalWidth: originalWidth
+            )
+        }
 
         var warnings: [String] = []
         if chestSlice == nil || waistSlice == nil || hipSlice == nil {

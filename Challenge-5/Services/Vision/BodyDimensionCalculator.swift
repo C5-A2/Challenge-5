@@ -167,7 +167,6 @@ public final class BodyDimensionCalculator: BodyDimensionCalculatorProtocol, Sen
         let hipDepthCm: Double
 
         var sideSegResult: SegmentationAnalysisResult? = nil
-        var actualSideHipY = effectiveSideHipY
 
         if let sideImg = sideImage {
             let sideFixed = ImageOrientationHelper.fixOrientation(image: sideImg)
@@ -183,10 +182,6 @@ public final class BodyDimensionCalculator: BodyDimensionCalculatorProtocol, Sen
             )
             sideSegResult = sideSeg
             warnings.append(contentsOf: sideSeg.warnings)
-
-            if let sHip = sideSeg.hipSlice {
-                actualSideHipY = sHip.normalizedY
-            }
 
             // Use the same front-derived pixelsPerCm scale exactly like CobaBodyScan
             if let cdPx = sideSeg.chestSlice?.widthPx, cdPx > 0 {
@@ -272,7 +267,7 @@ public final class BodyDimensionCalculator: BodyDimensionCalculatorProtocol, Sen
             frontHipY: actualFrontHipY,
             sideChestY: effectiveSideChestY,
             sideWaistY: effectiveSideWaistY,
-            sideHipY: actualSideHipY,
+            sideHipY: effectiveSideHipY,
             frontChestSlice: frontSeg.chestSlice,
             frontWaistSlice: frontSeg.waistSlice,
             frontHipSlice: frontSeg.hipSlice,

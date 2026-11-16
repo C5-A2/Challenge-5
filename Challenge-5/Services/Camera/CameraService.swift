@@ -78,15 +78,10 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                     // Configure Photo Output
                     if self.session.canAddOutput(self.photoOutput) {
                         self.session.addOutput(self.photoOutput)
-
-                        if let photoConnection = self.photoOutput.connection(with: .video) {
-                            if photoConnection.isVideoRotationAngleSupported(90) { // 90° = portrait
-                                photoConnection.videoRotationAngle = 90
-                            }
-                            if photoConnection.isVideoMirroringSupported && targetPosition == .front {
-                                photoConnection.isVideoMirrored = true
-                            }
-                        }
+                        self.configureOutputConnection(
+                            self.photoOutput.connection(with: .video),
+                            for: targetPosition
+                        )
                     }
 
                     // Configure Video Output for Lighting Analysis
@@ -97,15 +92,10 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                         ]
                         self.videoOutput.setSampleBufferDelegate(self, queue: self.sampleQueue)
                         self.session.addOutput(self.videoOutput)
-
-                        if let connection = self.videoOutput.connection(with: .video) {
-                            if connection.isVideoRotationAngleSupported(90) { // 90° = portrait
-                                connection.videoRotationAngle = 90
-                            }
-                            if connection.isVideoMirroringSupported && targetPosition == .front {
-                                connection.isVideoMirrored = true
-                            }
-                        }
+                        self.configureOutputConnection(
+                            self.videoOutput.connection(with: .video),
+                            for: targetPosition
+                        )
                     }
 
                     self.session.commitConfiguration()
@@ -149,22 +139,14 @@ public final class CameraService: NSObject, CameraServiceProtocol {
                 do {
                     self.session.beginConfiguration()
                     try self.configureDeviceInput(position: newPosition)
-                    if let photoConnection = self.photoOutput.connection(with: .video) {
-                        if photoConnection.isVideoRotationAngleSupported(90) { // 90° = portrait
-                            photoConnection.videoRotationAngle = 90
-                        }
-                        if photoConnection.isVideoMirroringSupported {
-                            photoConnection.isVideoMirrored = (newPosition == .front)
-                        }
-                    }
-                    if let connection = self.videoOutput.connection(with: .video) {
-                        if connection.isVideoRotationAngleSupported(90) { // 90° = portrait
-                            connection.videoRotationAngle = 90
-                        }
-                        if connection.isVideoMirroringSupported {
-                            connection.isVideoMirrored = (newPosition == .front)
-                        }
-                    }
+                    self.configureOutputConnection(
+                        self.photoOutput.connection(with: .video),
+                        for: newPosition
+                    )
+                    self.configureOutputConnection(
+                        self.videoOutput.connection(with: .video),
+                        for: newPosition
+                    )
                     self.session.commitConfiguration()
 
                     Task { @MainActor in
@@ -382,6 +364,30 @@ public final class CameraService: NSObject, CameraServiceProtocol {
         if session.canAddInput(input) {
             session.addInput(input)
             self.currentInput = input
+        }
+    }
+
+    nonisolated private func configureOutputConnection(
+        _ connection: AVCaptureConnection?,
+        for position: AVCaptureDevice.Position
+    ) {
+        guard let connection = connection else { return }
+
+        if connection.isVideoOrientationSupported {
+            connection.videoOrientation = .portrait
+        }
+
+        if let device = currentInput?.device {
+            let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
+            let captureAngle = coordinator.videoRotationAngleForHorizonLevelCapture
+            if connection.isVideoRotationAngleSupported(captureAngle) {
+                connection.videoRotationAngle = captureAngle
+            }
+        }
+
+        if connection.isVideoMirroringSupported {
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = (position == .front)
         }
     }
 

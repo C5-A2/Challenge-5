@@ -79,7 +79,7 @@ struct FrontBodyCameraView: View {
         simulatorPreviewPlaceholder
         #else
         if cameraService.permissionGranted && cameraService.isRunning {
-            BodyCameraPreviewRepresentable(
+            CameraPreviewRepresentable(
                 session: cameraService.session,
                 isFrontCamera: cameraService.cameraPosition == .front
             )
@@ -315,59 +315,6 @@ struct FrontBodyCameraView: View {
             } catch {
                 isCapturing = false
                 viewModel.errorMessage = error.localizedDescription
-            }
-        }
-    }
-}
-
-// MARK: - UIKit Camera Preview Layer Representable
-
-private struct BodyCameraPreviewRepresentable: UIViewRepresentable {
-    let session: AVCaptureSession
-    let isFrontCamera: Bool
-
-    func makeUIView(context: Context) -> BodyCameraPreviewUIView {
-        let view = BodyCameraPreviewUIView()
-        view.previewLayer.session = session
-        view.previewLayer.videoGravity = .resizeAspectFill
-        view.isFrontCamera = isFrontCamera
-        return view
-    }
-
-    func updateUIView(_ uiView: BodyCameraPreviewUIView, context: Context) {
-        if uiView.previewLayer.session != session {
-            uiView.previewLayer.session = session
-        }
-        uiView.isFrontCamera = isFrontCamera
-        uiView.updateOrientationAndMirroring()
-    }
-}
-
-private final class BodyCameraPreviewUIView: UIView {
-    var isFrontCamera: Bool = false
-
-    override class var layerClass: AnyClass {
-        AVCaptureVideoPreviewLayer.self
-    }
-
-    var previewLayer: AVCaptureVideoPreviewLayer {
-        layer as! AVCaptureVideoPreviewLayer
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        previewLayer.frame = bounds
-        updateOrientationAndMirroring()
-    }
-
-    func updateOrientationAndMirroring() {
-        if let connection = previewLayer.connection {
-            if connection.isVideoRotationAngleSupported(90) { // 90° = portrait
-                connection.videoRotationAngle = 90
-            }
-            if connection.isVideoMirroringSupported {
-                connection.automaticallyAdjustsVideoMirroring = false
-                connection.isVideoMirrored = isFrontCamera
             }
         }
     }
