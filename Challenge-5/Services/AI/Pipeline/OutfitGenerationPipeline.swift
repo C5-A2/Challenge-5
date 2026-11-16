@@ -6,8 +6,47 @@
 //
 
 import Foundation
+import FoundationModels
 import SwiftData
 import UIKit
+
+/// Guided-generation schema returned directly by Apple Private Cloud Compute for one look.
+@Generable
+public struct GenerableLook: Sendable {
+    @Guide(description: "0-based index of this look.")
+    public var lookIndex: Int
+
+    @Guide(description: "1 short sentence explaining why this look flatters the user's silhouette, occasion, and style vision.")
+    public var fitRationale: String
+
+    @Guide(description: "The garment items in this look.")
+    public var garments: [GenerableGarment]
+}
+
+/// Guided-generation schema for a single garment inside a `GenerableLook`.
+@Generable
+public struct GenerableGarment: Sendable {
+    @Guide(description: "Garment category: Top, Bottom, Outer, or Dress.", .anyOf(["Top", "Bottom", "Outer", "Dress"]))
+    public var category: String
+
+    @Guide(description: "Specific garment name including key cut or detail.")
+    public var name: String
+
+    @Guide(description: "Fabric or material only (e.g. silk, linen, cotton, wool).")
+    public var material: String
+
+    @Guide(description: "Color name chosen from the allowed palette.")
+    public var colorName: String
+
+    @Guide(description: "Hex color code in #RRGGBB format matching colorName.")
+    public var hexColor: String
+
+    @Guide(description: "Concise body-fit rationale under 15 words.")
+    public var rationale: String
+
+    @Guide(description: "5 to 9 words for image generation: '[color] color [fabric] [detail] [garment noun]'.")
+    public var playgroundPrompt: String
+}
 
 /// Decodable schema matching the structured LLM output for an outfit look.
 public struct GeneratedLookDTO: Codable, Sendable {
@@ -322,31 +361,28 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
             let parsedLook: OutfitLook
             do {
-                let rawOutput = try await PCCEngine.shared.generate(
+                let generated = try await PCCEngine.shared.generate(
                     system: prompt.system,
                     user: prompt.user,
-                    jsonPrefix: prompt.prefill,
+                    generating: GenerableLook.self,
                     maxTokens: Self.maximumTokensPerLook,
-                    temperature: temperature,
+                    temperature: temperature
                 )
-                print("✅ [OutfitGenerationPipeline] Look \(lookIndex) raw output (\(rawOutput.count) chars):\n\(rawOutput)")
+                print("✅ [OutfitGenerationPipeline] Look \(lookIndex) @Generable output: \(generated.garments.count) garments")
 
-                let parsedLooks = try parseLooks(
-                    from: rawOutput.trimmingCharacters(in: .whitespacesAndNewlines),
+                let options = ParseOptions(
                     colorSeason: profile.colorSeason,
                     structure: structure,
                     allowsOffPaletteAccent: allowsOffPalette,
                     requiredSwatches: dresscodeColors?.swatches,
                     excludedHexes: excludedHexes
                 )
-                guard let first = parsedLooks.first else {
-                    throw LLMError.invalidOutput("LLM returned 0 looks for look index \(lookIndex).")
-                }
+                let look = makeOutfitLook(from: generated, options: options)
                 // A look whose garments were all dropped (unknown categories) would show placeholder cards.
-                guard !first.garments.isEmpty else {
+                guard !look.garments.isEmpty else {
                     throw LLMError.invalidOutput("Look index \(lookIndex) has no usable garments.")
                 }
-                parsedLook = first
+                parsedLook = look
             } catch {
                 print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) attempt \(attempt + 1) failed: \(error.localizedDescription)")
                 if let engineError = error as? PCCEngineError, case .promptTooLong = engineError {
@@ -1179,6 +1215,34 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 resolvedHex: resolvedColor.hex
             )
         )
+    }
+
+    /// Converts a `@Generable` `GenerableLook` directly into an `OutfitLook`, snapping colors and filtering garments.
+    private func makeOutfitLook(from generated: GenerableLook, options: ParseOptions) -> OutfitLook {
+        let look = OutfitLook(
+            lookIndex: generated.lookIndex,
+            fitRationale: generated.fitRationale,
+            isBookmarked: false,
+            lookImageData: nil
+        )
+        let garments = generated.garments.compactMap { item -> GarmentItem? in
+            let dto = LLMOutfitGenerationResponse.GarmentDTO(
+                category: item.category,
+                name: item.name,
+                material: item.material,
+                colorName: item.colorName,
+                hexColor: item.hexColor,
+                rationale: item.rationale,
+                playgroundPrompt: item.playgroundPrompt
+            )
+            return makeGarmentItem(from: dto, options: options)
+        }
+        let outfitGarments = makeOutfitGarments(from: garments, structure: options.structure)
+        for garment in outfitGarments {
+            garment.outfitLook = look
+        }
+        look.garments = outfitGarments
+        return look
     }
 
     private func decodeLooks(from jsonString: String, options: ParseOptions) throws -> [OutfitLook] {

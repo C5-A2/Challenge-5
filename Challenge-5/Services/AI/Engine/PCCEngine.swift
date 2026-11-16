@@ -69,6 +69,26 @@ public actor PCCEngine {
 
     // MARK: - Text (LLM)
 
+    /// Generates a structured `@Generable` value directly from system + user prompts.
+    public func generate<T: Generable>(
+        system: String,
+        user: String,
+        generating type: T.Type,
+        maxTokens: Int = 512,
+        temperature: Float = 0.2
+    ) async throws -> T {
+        try Self.validateAvailability()
+
+        let session = LanguageModelSession(model: PrivateCloudComputeLanguageModel(), instructions: system)
+        let options = GenerationOptions(temperature: Double(temperature), maximumResponseTokens: maxTokens)
+        do {
+            let response = try await session.respond(to: user, generating: type, options: options)
+            return response.content
+        } catch {
+            throw Self.map(error)
+        }
+    }
+
     /// Generates a text answer for the given system + user prompts.
     ///
     /// PCC has no assistant pre-fill, so `jsonPrefix` is appended to the instructions as a
