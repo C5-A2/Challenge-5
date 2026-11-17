@@ -119,6 +119,7 @@ struct CollapsibleRationaleDrawer: View {
                 }
                 .padding(.horizontal, AppDimensions.screenHorizontalPadding)
                 .padding(.bottom, 48)
+                .textSelection(.enabled)
             }
         }
         .background(
