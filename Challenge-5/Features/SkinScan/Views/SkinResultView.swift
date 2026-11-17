@@ -11,20 +11,17 @@ import SwiftData
 import UIKit
 #endif
 
-/// Personal Color Season result screen (C5-85).
+/// Personal Color Season result screen ("Analyze Result" — C5-85).
 ///
-/// Presents:
-/// 1. Color Season Wheel poster with the user's face in the center surrounded by chromatic palette wedges.
-/// 2. Foundation / neutral skin tone swatches.
-/// 3. Personalized skin undertone explanation.
-/// 4. Curated Pantone TCX swatches list with hex values.
-/// 5. Color styling rules and colors to avoid.
-/// 6. Action buttons for "Retake" and "Next" (proceeding to Body Scan).
+/// Mirrors the Color Season content in `ProfileHubView` (circular color wheel with face avatar,
+/// season title & definition, and "Color that suit you the most" / "Color doesn't suits you" 4x2 grids),
+/// plus bottom "Next" and "Retake the photo" actions.
 struct SkinResultView: View {
 
     // MARK: - State & Dependencies
 
     @Bindable var viewModel: SkinScanViewModel
+    var onDismiss: (() -> Void)? = nil
     var onNext: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
@@ -40,322 +37,126 @@ struct SkinResultView: View {
 
     var body: some View {
         ZStack {
-            AppColors.canvasBackground
+            Color.white
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // Top Sheet Drag Indicator
+                Capsule()
+                    .fill(Color(hex: "#D6D1CA"))
+                    .frame(width: 38, height: 5)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
+
                 headerBar
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppDimensions.sectionSpacing) {
-                        resultPosterCard
+                    VStack(spacing: 22) {
+                        #if canImport(UIKit)
+                        let resolvedFaceImage: ColorSeasonPlatformImage? = viewModel.capturedFaceImage
+                        #else
+                        let resolvedFaceImage: ColorSeasonPlatformImage? = nil
+                        #endif
 
-                        undertoneExplanationCard
+                        ColorSeasonResultContentView(
+                            season: activeSeason,
+                            faceImage: resolvedFaceImage
+                        )
 
-                        curatedSwatchesCard
-
-                        stylingGuidanceCard
-
-                        Spacer(minLength: 16)
+                        Spacer(minLength: 8)
                     }
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
+                    .padding(.top, 10)
+                    .padding(.bottom, 20)
                 }
 
                 bottomActionBar
             }
         }
+        .environment(\.colorScheme, .light)
     }
 
     // MARK: - Header Bar
 
     private var headerBar: some View {
         HStack {
-            CircularIconButton(systemName: "chevron.left") {
+            // Left: Back (<) Button
+            Button {
                 viewModel.currentStep = .review
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                    .frame(width: 44, height: 44)
+                    .background(Color(hex: "#EFEFF0"))
+                    .clipShape(Circle())
             }
+            .buttonStyle(.plain)
 
             Spacer()
 
             Text("Analyze Result")
-                .font(AppTypography.cardHeadline)
-                .foregroundStyle(AppColors.espressoTitle)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color(hex: "#1C1C1E"))
 
             Spacer()
 
+            // Right: Close (X) Button
             Button {
-                viewModel.retakePhoto()
+                if let onDismiss {
+                    onDismiss()
+                } else {
+                    dismiss()
+                }
             } label: {
-                Text("Retake")
-                    .font(AppTypography.caption.weight(.medium))
-                    .foregroundStyle(AppColors.espressoTitle)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(AppColors.circularButtonBackground)
-                    .clipShape(Capsule())
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                    .frame(width: 44, height: 44)
+                    .background(Color(hex: "#EFEFF0"))
+                    .clipShape(Circle())
             }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
-    }
-
-    // MARK: - Result Poster Card
-
-    private var resultPosterCard: some View {
-        VStack(spacing: 16) {
-            // Best Colors Badge
-            Text("BEST COLORS FOR YOUR SEASON")
-                .font(AppTypography.caption.weight(.bold))
-                .tracking(1.2)
-                .foregroundStyle(AppColors.espressoTitle.opacity(0.85))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(Color(hex: "#F5ECE5"))
-                .clipShape(Capsule())
-
-            // Color Season Wheel with Face in Center
-            ColorSeasonWheelView(
-                selectedSeasonName: activeSeason.rawValue,
-                wheelDiameter: 230,
-                hexColors: activeSeason.wheelHexColors,
-                faceImage: viewModel.capturedFaceImage
-            )
-
-            // Season Title (exact match with ColorSeason ruleset)
-            Text(activeSeason.rawValue)
-                .font(.system(size: 21, weight: .bold).width(.expanded))
-                .foregroundStyle(AppColors.espressoTitle)
-                .padding(.top, 4)
-
-            // Season Definition (exact match with ColorSeason.definition ruleset)
-            Text(activeSeason.definition)
-                .font(.system(size: 13.5))
-                .foregroundStyle(AppColors.bodyText)
-                .multilineTextAlignment(.center)
-                .lineSpacing(2)
-                .padding(.horizontal, 8)
-                .padding(.bottom, 4)
-        }
-        .padding(.vertical, 22)
-        .padding(.horizontal, AppDimensions.cardInternalPadding)
-        .frame(maxWidth: .infinity)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius)
-                .stroke(AppColors.subtleBorder, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.04), radius: 10, y: 3)
-    }
-
-    // MARK: - Undertone Explanation Card
-
-    private var undertoneExplanationCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Color(hex: "#C68B59"))
-
-                Text("Seasonal Essence & Tonal Aspects")
-                    .font(AppTypography.cardHeadline)
-                    .foregroundStyle(AppColors.espressoTitle)
-            }
-
-            Text(activeSeason.act)
-                .font(AppTypography.bodyRegular)
-                .foregroundStyle(AppColors.bodyText)
-                .lineSpacing(3)
-
-            Divider()
-                .padding(.vertical, 2)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Tonal Coordinates")
-                    .font(AppTypography.caption.weight(.semibold))
-                    .foregroundStyle(AppColors.espressoTitle)
-
-                Text("• Hue: \(activeSeason.hue)")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.mutedCaption)
-
-                Text("• Value: \(activeSeason.value)")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.mutedCaption)
-
-                Text("• Chroma: \(activeSeason.chroma)")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.mutedCaption)
-            }
-        }
-        .padding(AppDimensions.cardInternalPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius)
-                .stroke(AppColors.subtleBorder, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.03), radius: 8, y: 2)
-    }
-
-    // MARK: - Curated Swatches Card
-
-    private var curatedSwatchesCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Curated Palette Swatches")
-                    .font(AppTypography.cardHeadline)
-                    .foregroundStyle(AppColors.espressoTitle)
-
-                Spacer()
-
-                Text("Pantone TCX")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.mutedCaption)
-            }
-
-            VStack(spacing: 10) {
-                ForEach(activeSeason.sampleSwatches) { swatch in
-                    HStack(spacing: 12) {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color(hex: swatch.hex))
-                            .frame(width: 38, height: 38)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
-                            )
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(swatch.name)
-                                .font(AppTypography.bodyRegular.weight(.medium))
-                                .foregroundStyle(AppColors.espressoTitle)
-
-                            Text(swatch.pantoneCode)
-                                .font(AppTypography.caption)
-                                .foregroundStyle(AppColors.mutedCaption)
-                        }
-
-                        Spacer()
-
-                        Text(swatch.hex.uppercased())
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(AppColors.mutedCaption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.black.opacity(0.04))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    .padding(.vertical, 2)
-                }
-            }
-        }
-        .padding(AppDimensions.cardInternalPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius)
-                .stroke(AppColors.subtleBorder, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.03), radius: 8, y: 2)
-    }
-
-    // MARK: - Styling Guidance Card
-
-    private var stylingGuidanceCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Wardrobe Color Harmonization")
-                .font(AppTypography.cardHeadline)
-                .foregroundStyle(AppColors.espressoTitle)
-
-            // Combination Rules
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.green)
-                        .font(.system(size: 14))
-
-                    Text("How to Combine")
-                        .font(AppTypography.caption.weight(.semibold))
-                        .foregroundStyle(AppColors.espressoTitle)
-                }
-
-                Text(activeSeason.colorCombinationRules)
-                    .font(AppTypography.bodyRegular)
-                    .foregroundStyle(AppColors.bodyText)
-                    .lineSpacing(2)
-            }
-
-            Divider()
-                .padding(.vertical, 2)
-
-            // Colors to Avoid
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(Color.orange)
-                        .font(.system(size: 14))
-
-                    Text("Colors to Avoid")
-                        .font(AppTypography.caption.weight(.semibold))
-                        .foregroundStyle(AppColors.espressoTitle)
-                }
-
-                Text(activeSeason.colorsToAvoid)
-                    .font(AppTypography.bodyRegular)
-                    .foregroundStyle(AppColors.bodyText)
-                    .lineSpacing(2)
-
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 10)], spacing: 10) {
-                    ForEach(activeSeason.colorsToAvoidPalette) { swatch in
-                        Circle()
-                            .fill(Color(hex: swatch.hex))
-                            .frame(width: 40, height: 40)
-                            .overlay(Circle().stroke(AppColors.subtleBorder, lineWidth: 1))
-                            .overlay(
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .shadow(color: .black.opacity(0.5), radius: 1)
-                            )
-                            .accessibilityLabel(swatch.name)
-                    }
-                }
-                .padding(.top, 4)
-            }
-        }
-        .padding(AppDimensions.cardInternalPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppColors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius)
-                .stroke(AppColors.subtleBorder, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.03), radius: 8, y: 2)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Bottom Action Bar
 
     private var bottomActionBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-
-            PrimaryPillButton(title: "Next") {
+        VStack(spacing: 14) {
+            Button {
                 _ = viewModel.saveToProfile(in: modelContext)
-                if let onNext = onNext {
+                if let onNext {
                     onNext()
                 } else {
                     dismiss()
                 }
+            } label: {
+                Text("Next")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(Color.black)
+                    .clipShape(Capsule())
             }
-            .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-            .padding(.vertical, 16)
+            .buttonStyle(.plain)
+
+            Button {
+                viewModel.retakePhoto()
+            } label: {
+                Text("Retake the photo")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color(hex: "#007AFF"))
+            }
+            .buttonStyle(.plain)
         }
-        .background(AppColors.cardBackground)
+        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+        .padding(.top, 10)
+        .padding(.bottom, 20)
+        .background(Color.white)
     }
 }
 

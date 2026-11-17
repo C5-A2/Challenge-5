@@ -61,7 +61,7 @@ struct ProfilingFlowHostView: View {
         case .review:
             FaceReviewView(viewModel: skinViewModel)
         case .result:
-            SkinResultView(viewModel: skinViewModel) {
+            SkinResultView(viewModel: skinViewModel, onDismiss: { closeFlow() }) {
                 // Advance seamlessly from Skin Scan result to Body Scan guide
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     phase = .bodyScan

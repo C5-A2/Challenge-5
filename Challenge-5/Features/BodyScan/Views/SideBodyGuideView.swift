@@ -59,7 +59,7 @@ struct SideBodyGuideView: View {
                         illustrationCard
                             .padding(.top, 16)
 
-                        Text("For the most accurate results, stand sideways (90°) in a natural upright posture with fitted clothing and arms relaxed by your side.")
+                        Text("For the most accurate results, put your hair in a high bun, wear fitted clothing in a color that contrasts with the background, and stand sideways (90°) in a natural upright posture against a plain wall with arms relaxed by your side.")
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(Color(hex: "#1C1C1E"))
                             .multilineTextAlignment(.center)

@@ -59,7 +59,7 @@ struct FrontBodyGuideView: View {
                         illustrationCard
                             .padding(.top, 16)
 
-                        Text("For the most accurate results, stand upright facing the camera directly in fitted clothing against a plain, contrasting wall.")
+                        Text("For the most accurate results, put your hair in a high bun, wear fitted clothing in a color that contrasts with the background, and stand upright facing the camera against a plain wall.")
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(Color(hex: "#1C1C1E"))
                             .multilineTextAlignment(.center)
