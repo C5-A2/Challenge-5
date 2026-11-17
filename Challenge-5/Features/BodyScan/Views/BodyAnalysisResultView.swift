@@ -31,7 +31,7 @@ struct BodyAnalysisResultView: View {
     @Environment(\.modelContext) private var modelContext
     @FocusState private var focusedMetric: EditableField?
 
-    @State private var selectedPhotoTab: Int = 0 // 0 = Front View, 1 = Side View
+    @State private var selectedPhotoTab: Int = 0 // 0 = Front View, 1 = Side View, 2 = Torso Length
     @State private var showSkeleton: Bool = true
     @State private var showSlices: Bool = true
 
@@ -77,10 +77,6 @@ struct BodyAnalysisResultView: View {
         viewModel.torsoLengthCm ?? round((viewModel.heightCm * 0.315) * 10) / 10
     }
 
-    private var thrRatio: Double {
-        viewModel.computedTorsoToHeightRatio ?? 31.5
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -106,10 +102,8 @@ struct BodyAnalysisResultView: View {
                         // 2. Editable Measurements Card: Bust, Waist, Hips, Torso
                         measurementsListCard
 
-                        // 3. Torso Classification Cards (kept intact below Body Type & Measurements)
+                        // 3. Torso Proportion Card & Styling Direction
                         torsoProportionCard
-
-                        torsoBalanceCard
 
                         stylingPrincipleCard
 
@@ -189,83 +183,45 @@ struct BodyAnalysisResultView: View {
         .padding(.vertical, 8)
     }
 
-    // MARK: - 1. Body Type Hero Card (CobaBodyScan Front/Side Photo + Body Shape Title & Description)
+    // MARK: - 1. Body Type Hero Card (IG-Style Swipeable Front / Side / Torso Length + Body Shape Title & Description)
 
     private var bodyTypeHeroCard: some View {
         VStack(spacing: 14) {
-            // View Selector (Front View vs Side View — CobaBodyScan style)
-            Picker("View", selection: $selectedPhotoTab) {
-                Text("Front View").tag(0)
-                Text("Side View").tag(1)
-            }
-            .pickerStyle(.segmented)
+            #if canImport(UIKit)
+            let resolvedFrontImage: BodyCarouselImage? = viewModel.frontImage ?? (viewModel.frontImageData != nil ? UIImage(data: viewModel.frontImageData!) : nil)
+            let resolvedSideImage: BodyCarouselImage? = viewModel.sideImage ?? (viewModel.sideImageData != nil ? UIImage(data: viewModel.sideImageData!) : nil)
+            #else
+            let resolvedFrontImage: BodyCarouselImage? = nil
+            let resolvedSideImage: BodyCarouselImage? = nil
+            #endif
 
-            // Photo with Direct Pose & Slice Overlays (Matched 1:1 to rendered Image bounds like CobaBodyScan)
-            ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.black.opacity(0.04))
-                    .frame(height: 360)
-
-                #if canImport(UIKit)
-                if selectedPhotoTab == 0 {
-                    if let frontImg = viewModel.frontImage ?? (viewModel.frontImageData != nil ? UIImage(data: viewModel.frontImageData!) : nil) {
-                        Image(uiImage: frontImg)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 360)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay(
-                                BodyPoseOverlayView(
-                                    poseResult: viewModel.frontPoseResult,
-                                    chestY: viewModel.detectedBustY,
-                                    waistY: viewModel.detectedWaistY,
-                                    hipY: viewModel.detectedHipY,
-                                    chestBounds: viewModel.frontChestBounds,
-                                    waistBounds: viewModel.frontWaistBounds,
-                                    hipBounds: viewModel.frontHipBounds,
-                                    showSkeleton: showSkeleton,
-                                    showSlices: showSlices
-                                )
-                            )
-                    } else {
-                        fallbackMannequinSilhouette
-                    }
-                } else {
-                    if let sideImg = viewModel.sideImage ?? (viewModel.sideImageData != nil ? UIImage(data: viewModel.sideImageData!) : nil) {
-                        Image(uiImage: sideImg)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 360)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay(
-                                BodyPoseOverlayView(
-                                    poseResult: viewModel.sidePoseResult,
-                                    chestY: viewModel.detectedSideBustY ?? viewModel.detectedBustY,
-                                    waistY: viewModel.detectedSideWaistY ?? viewModel.detectedWaistY,
-                                    hipY: viewModel.detectedSideHipY ?? viewModel.detectedHipY,
-                                    chestBounds: viewModel.sideChestBounds,
-                                    waistBounds: viewModel.sideWaistBounds,
-                                    hipBounds: viewModel.sideHipBounds,
-                                    showSkeleton: showSkeleton,
-                                    showSlices: showSlices
-                                )
-                            )
-                    } else {
-                        fallbackMannequinSilhouette
-                    }
-                }
-                #else
-                fallbackMannequinSilhouette
-                #endif
-            }
-            .frame(height: 360)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+            BodyAnalysisCarouselView(
+                selectedTab: $selectedPhotoTab,
+                frontImage: resolvedFrontImage,
+                sideImage: resolvedSideImage,
+                frontPose: viewModel.frontPoseResult,
+                sidePose: viewModel.sidePoseResult,
+                frontBustY: viewModel.detectedBustY,
+                frontWaistY: viewModel.detectedWaistY,
+                frontHipY: viewModel.detectedHipY,
+                frontChestBounds: viewModel.frontChestBounds,
+                frontWaistBounds: viewModel.frontWaistBounds,
+                frontHipBounds: viewModel.frontHipBounds,
+                sideBustY: viewModel.detectedSideBustY,
+                sideWaistY: viewModel.detectedSideWaistY,
+                sideHipY: viewModel.detectedSideHipY,
+                sideChestBounds: viewModel.sideChestBounds,
+                sideWaistBounds: viewModel.sideWaistBounds,
+                sideHipBounds: viewModel.sideHipBounds,
+                torsoLengthCm: torsoLenCm,
+                heightCm: viewModel.heightCm,
+                torsoBalance: activeTorsoBalance,
+                showSkeleton: showSkeleton,
+                showSlices: showSlices,
+                frameHeight: 360
             )
 
-            // Overlay Toggle Controls (Skeleton & Slice Lines — CobaBodyScan style)
+            // Overlay Toggle Controls (Skeleton & Slice Lines — active on Front & Side views)
             HStack(spacing: 12) {
                 Toggle("Skeleton", isOn: $showSkeleton)
                     .toggleStyle(.button)
@@ -279,21 +235,31 @@ struct BodyAnalysisResultView: View {
 
                 Spacer()
             }
+            .opacity(selectedPhotoTab == 2 ? 0 : 1)
+            .disabled(selectedPhotoTab == 2)
 
             Divider()
                 .padding(.vertical, 2)
 
-            // Body Type Title & Simple Highlighted Description
-            Text(activeBodyType.displayName)
+            // Dynamic Title & Highlighted Description (Body Type on Front/Side, Torso Type on Torso Length slide)
+            Text(selectedPhotoTab == 2 ? activeTorsoBalance.displayName : activeBodyType.displayName)
                 .font(.system(size: 21, weight: .bold).width(.expanded))
                 .foregroundStyle(AppColors.espressoTitle)
+                .animation(.easeInOut(duration: 0.2), value: selectedPhotoTab)
 
-            bodyTypeHighlightedDescription(for: activeBodyType)
-                .font(.system(size: 13.5))
-                .multilineTextAlignment(.center)
-                .lineSpacing(2)
-                .padding(.horizontal, 10)
-                .padding(.bottom, 4)
+            Group {
+                if selectedPhotoTab == 2 {
+                    activeTorsoBalance.highlightedDescription
+                } else {
+                    bodyTypeHighlightedDescription(for: activeBodyType)
+                }
+            }
+            .font(.system(size: 13.5))
+            .multilineTextAlignment(.center)
+            .lineSpacing(2)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 4)
+            .animation(.easeInOut(duration: 0.2), value: selectedPhotoTab)
         }
         .padding(.vertical, 18)
         .padding(.horizontal, 16)
@@ -361,17 +327,6 @@ struct BodyAnalysisResultView: View {
                 (", paired with ", false),
                 ("slender hips and legs.", true)
             ])
-        }
-    }
-
-    private var fallbackMannequinSilhouette: some View {
-        ZStack {
-            Color(hex: "#F5F5F7")
-            Image("bodyfront")
-                .renderingMode(.original)
-                .resizable()
-                .scaledToFit()
-                .padding(.vertical, 16)
         }
     }
 
@@ -551,119 +506,7 @@ struct BodyAnalysisResultView: View {
         .shadow(color: .black.opacity(0.05), radius: 12, x: 0, y: 4)
     }
 
-    // MARK: - 4. Torso Balance Card (Kept Below Body Type)
-
-    private var torsoBalanceCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("VERTICAL PROPORTION")
-                        .font(AppTypography.caption.weight(.bold))
-                        .tracking(1.2)
-                        .foregroundStyle(AppColors.mutedCaption)
-
-                    Text(activeTorsoBalance.rawValue)
-                        .font(AppTypography.screenHeader)
-                        .foregroundStyle(AppColors.espressoTitle)
-                }
-
-                Spacer()
-
-                Text(activeTorsoBalance.thrThresholdDescription)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppColors.espressoTitle)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(AppColors.pastelGold.opacity(0.35))
-                    .clipShape(Capsule())
-            }
-
-            torsoGaugeView
-
-            Text(activeTorsoBalance.definition)
-                .font(AppTypography.bodyRegular)
-                .foregroundStyle(AppColors.bodyText)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(AppDimensions.cardInternalPadding)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.black.opacity(0.04), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.05), radius: 12, x: 0, y: 4)
-    }
-
-    private var torsoGaugeView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Torso-to-Height Ratio (THR)")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.mutedCaption)
-
-                Spacer()
-
-                Text(String(format: "%.1f%%", thrRatio))
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppColors.espressoTitle)
-            }
-
-            GeometryReader { geometry in
-                let totalWidth = geometry.size.width
-                let clampedTHR = min(38.0, max(25.0, thrRatio))
-                let indicatorX = totalWidth * CGFloat((clampedTHR - 25.0) / (38.0 - 25.0))
-
-                ZStack(alignment: .leading) {
-                    HStack(spacing: 3) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(activeTorsoBalance == .shortTorso ? AppColors.espressoTitle : Color.black.opacity(0.08))
-                            .frame(maxWidth: .infinity)
-
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(activeTorsoBalance == .balanced ? AppColors.espressoTitle : Color.black.opacity(0.08))
-                            .frame(maxWidth: .infinity)
-
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(activeTorsoBalance == .longTorso ? AppColors.espressoTitle : Color.black.opacity(0.08))
-                            .frame(maxWidth: .infinity)
-                    }
-                    .frame(height: 10)
-
-                    Circle()
-                        .fill(AppColors.espressoTitle)
-                        .frame(width: 16, height: 16)
-                        .overlay(Circle().stroke(Color.white, lineWidth: 2.5))
-                        .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
-                        .offset(x: max(0, min(totalWidth - 16, indicatorX - 8)))
-                }
-            }
-            .frame(height: 16)
-
-            HStack {
-                Text("Short (<30%)")
-                    .font(.system(size: 10, weight: activeTorsoBalance == .shortTorso ? .bold : .regular))
-                    .foregroundStyle(activeTorsoBalance == .shortTorso ? AppColors.espressoTitle : AppColors.mutedCaption)
-
-                Spacer()
-
-                Text("Balanced (30-33%)")
-                    .font(.system(size: 10, weight: activeTorsoBalance == .balanced ? .bold : .regular))
-                    .foregroundStyle(activeTorsoBalance == .balanced ? AppColors.espressoTitle : AppColors.mutedCaption)
-
-                Spacer()
-
-                Text("Long (>33%)")
-                    .font(.system(size: 10, weight: activeTorsoBalance == .longTorso ? .bold : .regular))
-                    .foregroundStyle(activeTorsoBalance == .longTorso ? AppColors.espressoTitle : AppColors.mutedCaption)
-            }
-        }
-        .padding(12)
-        .background(Color.black.opacity(0.025))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    // MARK: - 5. Styling Principle Card (Act)
+    // MARK: - 4. Styling Principle Card (Act)
 
     private var stylingPrincipleCard: some View {
         VStack(alignment: .leading, spacing: 14) {
