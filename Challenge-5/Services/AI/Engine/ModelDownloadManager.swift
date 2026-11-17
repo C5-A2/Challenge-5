@@ -50,17 +50,11 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
                 sizeBytes: 845_152_256, // ~806 MB
                 url: "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf"
             ),
-            // Text Generation LLM: Qwen 3.5 4B Instruct (Shard 1)
+            // Text Generation LLM: Qwen 3.5 4B Instruct (Official Unsloth Release)
             ModelEntry(
-                filename: "Qwen3.5-4B-Q3_K_M-00001-of-00002.gguf",
-                sizeBytes: 1_395_864_320, // ~1.3 GB
-                url: "\(customRepoBaseURL)/Qwen3.5-4B-Q3_K_M-00001-of-00002.gguf"
-            ),
-            // Text Generation LLM: Qwen 3.5 4B Instruct (Shard 2)
-            ModelEntry(
-                filename: "Qwen3.5-4B-Q3_K_M-00002-of-00002.gguf",
-                sizeBytes: 877_658_112, // ~837 MB
-                url: "\(customRepoBaseURL)/Qwen3.5-4B-Q3_K_M-00002-of-00002.gguf"
+                filename: "Qwen3.5-4B-Q3_K_M.gguf",
+                sizeBytes: 2_293_388_448, // ~2.2 GB
+                url: "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q3_K_M.gguf"
             )
         ]
     }
@@ -107,17 +101,30 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
         return size > 1_000_000 // Real GGUF is >1MB, not a Git LFS pointer
     }
 
-    /// Checks if all 4 required model files are available on device.
+    /// Checks if all required model files are available on device.
     public var isAllModelsDownloaded: Bool {
-        for model in Self.requiredModels {
-            if !Self.isFileDownloaded(filename: model.filename) {
-                // If not in Application Support, check if available locally (dev mode)
-                if LLMResource.candidateURL(for: model.filename) == nil {
-                    return false
-                }
-            }
-        }
-        return true
+        // 1. Check VLM
+        let hasVLM = Self.isFileDownloaded(filename: "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf") ||
+            LLMResource.candidateURL(for: "Qwen2.5-VL-3B-Instruct-Q4_K_M") != nil
+        guard hasVLM else { return false }
+
+        // 2. Check Multimodal Projector
+        let hasMmproj = Self.isFileDownloaded(filename: "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf") ||
+            LLMResource.candidateURL(for: "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0") != nil
+        guard hasMmproj else { return false }
+
+        // 3. Check LLM (either single file or dev mode shards)
+        let hasSingleLLM = Self.isFileDownloaded(filename: "Qwen3.5-4B-Q3_K_M.gguf") ||
+            LLMResource.candidateURL(for: "Qwen3.5-4B-Q3_K_M") != nil
+        let hasShardedLLM = LLMResource.candidateURL(for: "Qwen3.5-4B-Q3_K_M-00001-of-00002") != nil
+
+        return hasSingleLLM || hasShardedLLM
+    }
+
+    private var isLLMAvailable: Bool {
+        Self.isFileDownloaded(filename: "Qwen3.5-4B-Q3_K_M.gguf") ||
+        LLMResource.candidateURL(for: "Qwen3.5-4B-Q3_K_M") != nil ||
+        LLMResource.candidateURL(for: "Qwen3.5-4B-Q3_K_M-00001-of-00002") != nil
     }
 
     // MARK: - Auto-Download Execution
@@ -143,7 +150,10 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
         defer { isDownloading = false }
 
         let missing = Self.requiredModels.filter { model in
-            !Self.isFileDownloaded(filename: model.filename) && LLMResource.candidateURL(for: model.filename) == nil
+            if model.filename == "Qwen3.5-4B-Q3_K_M.gguf" && isLLMAvailable {
+                return false
+            }
+            return !Self.isFileDownloaded(filename: model.filename) && LLMResource.candidateURL(for: model.filename) == nil
         }
 
         guard !missing.isEmpty else {
