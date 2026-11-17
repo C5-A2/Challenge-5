@@ -74,14 +74,6 @@ struct OccasionsHomeView: View {
             .filter { $0.isPast }
             .sorted(by: { $0.date > $1.date })
     }
-
-    private var currentProfile: UserProfile? {
-        userProfiles.first
-    }
-
-    private var isProfileSetupCompleted: Bool {
-        currentProfile?.hasCompletedProfileSetup == true
-    }
     
     // MARK: - Body
     
@@ -97,11 +89,6 @@ struct OccasionsHomeView: View {
                     // Header Bar (Profile icon + Large Title)
                     headerBar
                         .padding(.top, 8)
-
-                    // Profile Setup Prompt Banner (C5-98)
-                    if !isProfileSetupCompleted {
-                        profileSetupPromptCard
-                    }
                     
                     // Main Feed Content: Upcoming Occasions & Past Occasions
                     if activeOccasions.isEmpty && pastOccasions.isEmpty {
@@ -209,47 +196,6 @@ struct OccasionsHomeView: View {
     }
     
     // MARK: - Subviews
-
-    /// Prompt card displayed at the top of Home feed encouraging profile setup (C5-98).
-    private var profileSetupPromptCard: some View {
-        Button {
-            pendingOccasionAfterProfiling = false
-            viewModel.isShowingProfilePromptModal = true
-        } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(AppColors.pastelGold.opacity(0.35))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 20))
-                        .foregroundStyle(AppColors.espressoTitle)
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Set Up Your Profile")
-                        .font(AppTypography.cardHeadline)
-                        .foregroundStyle(AppColors.espressoTitle)
-                    Text("Ketahui bentuk tubuh & warna personalmu untuk kurasi outfit yang presisi.")
-                        .font(AppTypography.caption)
-                        .foregroundStyle(AppColors.mutedCaption)
-                        .lineLimit(2)
-                }
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColors.mutedCaption)
-            }
-            .padding(AppDimensions.cardInternalPadding)
-            .background(AppColors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius)
-                    .stroke(AppColors.subtleBorder, lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-        }
-        .buttonStyle(.plain)
-    }
     
     /// Top header bar with history and profile circular buttons and large "Occasions" title.
     private var headerBar: some View {

@@ -30,7 +30,7 @@ public struct BookmarkToggleButton: View {
     
     @Binding public var isBookmarked: Bool
     public var style: Style = .glassmorphicOverlay
-    public var size: CGFloat = 36
+    public var size: CGFloat = AppDimensions.circularIconSize
     public var iconSize: CGFloat = 16
     public var activeColor: Color = AppColors.espressoTitle
     public var inactiveColor: Color = AppColors.espressoTitle.opacity(0.65)
@@ -45,7 +45,7 @@ public struct BookmarkToggleButton: View {
     public init(
         isBookmarked: Binding<Bool>,
         style: Style = .glassmorphicOverlay,
-        size: CGFloat = 36,
+        size: CGFloat = AppDimensions.circularIconSize,
         iconSize: CGFloat = 16,
         activeColor: Color = AppColors.espressoTitle,
         inactiveColor: Color = AppColors.espressoTitle.opacity(0.65),

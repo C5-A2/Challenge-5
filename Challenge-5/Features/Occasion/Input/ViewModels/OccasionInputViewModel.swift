@@ -89,7 +89,8 @@ public final class OccasionInputViewModel {
         date: Date = OccasionInputViewModel.defaultTomorrowDate,
         dresscode: String = "",
         selectedVisions: Set<StyleVision> = [],
-        referenceImages: [Data] = []
+        referenceImages: [Data] = [],
+        restoreDraft: Bool = false
     ) {
         self.existingOccasionID = nil
         self.title = title
@@ -104,6 +105,10 @@ public final class OccasionInputViewModel {
         self.initialDresscode = dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialVisions = selectedVisions
         self.initialReferenceImages = referenceImages
+        
+        if restoreDraft {
+            restoreDraftIfAvailable()
+        }
     }
     
     public init(from occasion: OccasionDetail) {
@@ -444,5 +449,82 @@ public final class OccasionInputViewModel {
         referencePhotoPickerItems = []
         isShowingVisionPicker = false
         isShowingDiscardAlert = false
+    }
+    
+    // MARK: - Draft Persistence
+    
+    private struct Draft: Codable {
+        let title: String
+        let date: Date
+        let dresscode: String
+        let selectedVisions: [StyleVision]
+        let referenceImages: [Data]
+        let referenceSavedLookIDs: [UUID?]
+    }
+    
+    private static var draftFileURL: URL? {
+        guard let baseURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return baseURL.appendingPathComponent("OccasionFormDraft.json")
+    }
+    
+    /// Saves the current create-form inputs as a local draft when there are unsaved changes.
+    public func saveDraft() {
+        guard existingOccasionID == nil else { return }
+        guard hasUnsavedChanges else {
+            clearDraft()
+            return
+        }
+        guard let url = Self.draftFileURL else { return }
+        
+        let draft = Draft(
+            title: title,
+            date: date,
+            dresscode: dresscode,
+            selectedVisions: Array(selectedVisions),
+            referenceImages: referenceImages,
+            referenceSavedLookIDs: referenceSavedLookIDs
+        )
+        
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let data = try JSONEncoder().encode(draft)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            // Best-effort draft persistence; ignore write failures.
+        }
+    }
+    
+    /// Restores a previously saved create-form draft if one exists.
+    public func restoreDraftIfAvailable() {
+        guard existingOccasionID == nil,
+              let url = Self.draftFileURL,
+              let data = try? Data(contentsOf: url),
+              let draft = try? JSONDecoder().decode(Draft.self, from: data) else {
+            return
+        }
+        
+        title = draft.title
+        date = Calendar.current.startOfDay(for: draft.date) >= Calendar.current.startOfDay(for: Date())
+            ? draft.date
+            : Self.defaultTomorrowDate
+        dresscode = draft.dresscode
+        selectedVisions = Set(draft.selectedVisions)
+        referenceImages = draft.referenceImages
+        if draft.referenceSavedLookIDs.count == draft.referenceImages.count {
+            referenceSavedLookIDs = draft.referenceSavedLookIDs
+        } else {
+            referenceSavedLookIDs = Array(repeating: nil, count: draft.referenceImages.count)
+        }
+    }
+    
+    /// Removes any saved create-form draft from disk.
+    public func clearDraft() {
+        guard let url = Self.draftFileURL else { return }
+        try? FileManager.default.removeItem(at: url)
     }
 }
