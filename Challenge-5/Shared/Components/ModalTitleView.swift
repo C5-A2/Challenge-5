@@ -17,7 +17,7 @@ public struct ModalTitleView: View {
     public var size: CGFloat
     
     // MARK: - Initializer
-    public init(_ text: String, size: CGFloat = 18) {
+    public init(_ text: String, size: CGFloat = 17) {
         self.text = text
         self.size = size
     }

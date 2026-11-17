@@ -28,12 +28,15 @@ public struct OccasionFormSheet: View {
     // MARK: - Environment & State
     
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State public var viewModel: OccasionInputViewModel
     @State public var mode: Mode
     private let initialMode: Mode
     
     @State private var isShowingDeleteConfirmation: Bool = false
     @State private var isShowingSaveConfirmation: Bool = false
+    @State private var isShowingDatePicker: Bool = false
+    @State private var didCompleteOrDiscard: Bool = false
     
     // MARK: - Callbacks
     
@@ -69,7 +72,7 @@ public struct OccasionFormSheet: View {
         onDelete: (() -> Void)? = nil,
         onDismiss: (() -> Void)? = nil
     ) {
-        _viewModel = State(initialValue: OccasionInputViewModel())
+        _viewModel = State(initialValue: OccasionInputViewModel(restoreDraft: initialMode == .create))
         _mode = State(initialValue: initialMode)
         self.initialMode = initialMode
         self.onSave = onSave
@@ -122,6 +125,8 @@ public struct OccasionFormSheet: View {
                             mode = .view
                         }
                     } else {
+                        didCompleteOrDiscard = true
+                        viewModel.clearDraft()
                         dismiss()
                         onDismiss?()
                     }
@@ -148,6 +153,17 @@ public struct OccasionFormSheet: View {
                 StyleVisionPickerSheet(viewModel: viewModel)
             }
         }
+        .preferredColorScheme(.light)
+        .onDisappear {
+            if mode == .create && !didCompleteOrDiscard {
+                viewModel.saveDraft()
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase != .active && mode == .create && !didCompleteOrDiscard {
+                viewModel.saveDraft()
+            }
+        }
     }
     
     // MARK: - Subviews
@@ -166,13 +182,21 @@ public struct OccasionFormSheet: View {
             Spacer()
             
             switch mode {
-            case .create:
-                CircularIconButton(
-                    systemName: "arrow.up",
-                    isFilled: viewModel.isValid,
-                    isEnabled: viewModel.isValid,
-                    action: handleSave
-                )
+            case .create, .edit:
+                Button(action: handleSave) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(viewModel.isValid ? .white : AppColors.bodyText)
+                        .frame(
+                            width: AppDimensions.circularIconSize,
+                            height: AppDimensions.circularIconSize
+                        )
+                        .background(viewModel.isValid ? AppColors.primaryBlack : AppColors.circularButtonBackground)
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(viewModel.isValid ? 0.08 : 0.01), radius: 3, y: 1)
+                }
+                .disabled(!viewModel.isValid)
+                .opacity(viewModel.isValid ? 1.0 : 0.45)
             case .view:
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -187,21 +211,6 @@ public struct OccasionFormSheet: View {
                         .background(AppColors.primaryBlack)
                         .clipShape(Capsule())
                 }
-            case .edit:
-                Button(action: handleSave) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(
-                            width: AppDimensions.circularIconSize,
-                            height: AppDimensions.circularIconSize
-                        )
-                        .background(AppColors.primaryBlack)
-                        .clipShape(Circle())
-                        .shadow(color: .black.opacity(viewModel.isValid ? 0.08 : 0.02), radius: 3, y: 1)
-                }
-                .disabled(!viewModel.isValid)
-                .opacity(viewModel.isValid ? 1.0 : 0.45)
             }
         }
     }
@@ -229,17 +238,11 @@ public struct OccasionFormSheet: View {
             HStack {
                 Text("Date")
                     .font(AppTypography.bodyRegular)
-                    .foregroundStyle(AppColors.espressoTitle)
+                    .foregroundStyle(AppColors.primaryBlack)
                 
                 Spacer()
                 
-                Text(viewModel.date.formatted(date: .long, time: .omitted))
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppColors.espressoTitle)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color(hex: "#E5E5EA").opacity(0.85))
-                    .clipShape(Capsule())
+                dateCapsuleBadge
             }
             .padding(.horizontal, 18)
             .frame(height: AppDimensions.inputFieldHeight)
@@ -290,6 +293,16 @@ public struct OccasionFormSheet: View {
         }
     }
     
+    private var dateCapsuleBadge: some View {
+        Text(viewModel.date.formatted(date: .long, time: .omitted))
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(AppColors.primaryBlack)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color(.tertiarySystemFill))
+            .clipShape(Capsule())
+    }
+
     private var editModeContent: some View {
         VStack(spacing: AppDimensions.elementSpacing + 4) {
             // 1. Occasion Title Field (Required, Max 50 Characters)
@@ -320,16 +333,36 @@ public struct OccasionFormSheet: View {
             }
             
             // 2. Date Picker Row (Defaults to tomorrow, past dates disabled)
-            DatePicker(
-                "Date",
-                selection: $viewModel.date,
-                in: min(Calendar.current.startOfDay(for: Date()), Calendar.current.startOfDay(for: viewModel.date))...,
-                displayedComponents: [.date]
-            )
-            .font(AppTypography.bodyRegular)
-            .foregroundStyle(AppColors.primaryBlack)
-            .tint(AppColors.primaryBlack)
+            Button {
+                isShowingDatePicker = true
+            } label: {
+                HStack {
+                    Text("Date")
+                        .font(AppTypography.bodyRegular)
+                        .foregroundStyle(AppColors.primaryBlack)
+                    
+                    Spacer()
+                    
+                    dateCapsuleBadge
+                }
+            }
+            .buttonStyle(.plain)
             .pillInputContainer()
+            .popover(isPresented: $isShowingDatePicker, arrowEdge: .top) {
+                CalendarPickerSheet(
+                    selectedDate: $viewModel.date,
+                    minimumDate: min(
+                        Calendar.current.startOfDay(for: Date()),
+                        Calendar.current.startOfDay(for: viewModel.date)
+                    ),
+                    showCardChrome: false
+                ) {
+                    isShowingDatePicker = false
+                }
+                .frame(width: 320)
+                .presentationCompactAdaptation(.popover)
+                .presentationBackground(Color.white)
+            }
             
             // 3. "I Want to Look More" Selector Row (Opens picker modal, shows chosen under)
             visionSelectorSection(isInteractive: true)
@@ -466,6 +499,10 @@ public struct OccasionFormSheet: View {
     
     private func performSave() {
         guard viewModel.isValid else { return }
+        if mode == .create {
+            didCompleteOrDiscard = true
+            viewModel.clearDraft()
+        }
         let detail = viewModel.createOccasionDetail()
         onSave?(detail)
         dismiss()

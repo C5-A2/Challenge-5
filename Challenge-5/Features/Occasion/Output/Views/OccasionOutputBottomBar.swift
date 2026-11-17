@@ -30,14 +30,14 @@ struct OccasionOutputBottomBar: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            CircularIconButton(systemName: "books.vertical") {
+            LiquidGlassCircularButton(systemName: "books.vertical") {
                 onInfoTap?()
             }
             .accessibilityLabel("Look Details and Rationale")
             
             Spacer()
             
-            CircularIconButton(
+            LiquidGlassCircularButton(
                 systemName: isBookmarked ? "bookmark.fill" : "bookmark",
                 isFilled: isBookmarked,
                 isEnabled: !isBookmarkDisabled
