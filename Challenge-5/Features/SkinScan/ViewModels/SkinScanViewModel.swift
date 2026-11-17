@@ -38,7 +38,11 @@ public final class SkinScanViewModel {
 
     #if canImport(UIKit)
     public var capturedFaceImage: UIImage?
+    public var capturedAmbientImage: UIImage?
+    public var capturedFlashBurst: [UIImage] = []
+    public var capturedAmbientBurst: [UIImage] = []
     #endif
+    public var capturedCalibrationTelemetry: CameraCalibrationTelemetry? = nil
     public var capturedFaceData: Data?
 
     // MARK: - Camera Session & Lighting State
@@ -51,6 +55,7 @@ public final class SkinScanViewModel {
     /// Real-time normalized luminance level (0.0 to 1.0) computed by `LightingAnalyzer`.
     public var luminanceLevel: Double = 0.5
     public var lightingStatus: LightingStatus = .optimal
+    public var ambientColorTemperatureKelvin: Float? = nil
     public var isFaceInFrame: Bool = false
     public var isHeadPoseDirect: Bool = false
     public var isFaceUnobstructed: Bool = false
@@ -58,9 +63,15 @@ public final class SkinScanViewModel {
     public var obstructionReason: String? = nil
     public var dynamicGuidanceText: String = "Position face within the oval guide"
 
-    /// Indicates whether lighting is bright natural daylight without uneven shadows (C5-123).
+    /// True when ambient light color temperature is within reasonable indoor/daylight bounds (2600K–8500K).
+    public var isColorTemperatureBalanced: Bool {
+        guard let kelvin = ambientColorTemperatureKelvin else { return true }
+        return kelvin >= 2600 && kelvin <= 8500
+    }
+
+    /// Indicates whether lighting is adequate without blown-out glare or extreme color casts (C5-123).
     public var isLightingAdequate: Bool {
-        luminanceLevel >= 0.36 && luminanceLevel <= 0.88 && lightingStatus == .optimal
+        luminanceLevel >= 0.24 && luminanceLevel <= 0.92 && lightingStatus == .optimal && isColorTemperatureBalanced
     }
 
     /// True when face is centered, directly facing camera at eye level, unobstructed (no glasses/mask/hair), bare face, and brightly lit (C5-123).
@@ -154,20 +165,44 @@ public final class SkinScanViewModel {
     }
 
     /// Update real-time vision & lighting results streaming from LightingAnalyzer (C5-83 & C5-123).
-    public func applyRealTimeAnalysis(_ result: RealTimeFaceAnalysisResult) {
+    public func applyRealTimeAnalysis(
+        _ result: RealTimeFaceAnalysisResult,
+        colorTemperatureKelvin: Float? = nil
+    ) {
         self.luminanceLevel = result.luminance
         self.lightingStatus = result.lightingStatus
+        self.ambientColorTemperatureKelvin = colorTemperatureKelvin
         self.isFaceInFrame = result.isFaceDetected && result.isFaceCentered
         self.isHeadPoseDirect = result.isHeadPoseDirect
         self.isFaceUnobstructed = result.isFaceUnobstructed
         self.isBareFaceDetected = result.isBareFace
         self.obstructionReason = result.obstructionReason
+
+        if let kelvin = colorTemperatureKelvin, result.isReadyForOptimalCapture {
+            if kelvin < 2600 {
+                self.dynamicGuidanceText = "Extreme yellow light (\(Int(kelvin))K) — move toward brighter light"
+                return
+            } else if kelvin > 8500 {
+                self.dynamicGuidanceText = "Extreme blue light (\(Int(kelvin))K) — move toward neutral light"
+                return
+            }
+        }
         self.dynamicGuidanceText = result.guidanceText
     }
 
     #if canImport(UIKit)
-    public func setCapturedPhoto(_ image: UIImage) {
+    public func setCapturedPhoto(
+        _ image: UIImage,
+        ambientImage: UIImage? = nil,
+        flashBurst: [UIImage] = [],
+        ambientBurst: [UIImage] = [],
+        telemetry: CameraCalibrationTelemetry? = nil
+    ) {
         self.capturedFaceImage = image
+        self.capturedAmbientImage = ambientImage ?? ambientBurst.first
+        self.capturedFlashBurst = flashBurst.isEmpty ? [image] : flashBurst
+        self.capturedAmbientBurst = ambientBurst.isEmpty ? (ambientImage.map { [$0] } ?? []) : ambientBurst
+        self.capturedCalibrationTelemetry = telemetry
         self.capturedFaceData = image.jpegData(compressionQuality: 0.85)
         self.isPhotoValidating = true
         self.reviewValidationMessage = nil
@@ -178,7 +213,7 @@ public final class SkinScanViewModel {
             let check = await analyzer.analyzeStaticImage(image)
             await MainActor.run {
                 self.isPhotoValidating = false
-                self.isLightingConfirmed = (check.lightingStatus == .optimal && check.luminance >= 0.36 && check.luminance <= 0.88)
+                self.isLightingConfirmed = (check.lightingStatus == .optimal && check.luminance >= 0.24 && check.luminance <= 0.92)
                 self.isDirectAngleConfirmed = (check.isFaceDetected && check.isHeadPoseDirect)
                 self.isBareFaceConfirmed = (check.isFaceDetected && check.isFaceUnobstructed && check.isBareFace)
 
@@ -201,7 +236,11 @@ public final class SkinScanViewModel {
     public func retakePhoto() {
         #if canImport(UIKit)
         capturedFaceImage = nil
+        capturedAmbientImage = nil
+        capturedFlashBurst = []
+        capturedAmbientBurst = []
         #endif
+        capturedCalibrationTelemetry = nil
         capturedFaceData = nil
         isBareFaceConfirmed = false
         isLightingConfirmed = false
@@ -225,11 +264,21 @@ public final class SkinScanViewModel {
 
         do {
             #if canImport(UIKit)
-            if let image = capturedFaceImage {
-                let (season, metrics) = try await colorAnalyzer.analyzeDetailedSkinTone(from: image)
-                self.predictedColorSeason = season
-                self.selectedColorSeason = season
-                self.analysisMetrics = metrics
+            if let primaryImage = capturedFaceImage {
+                let result: (season: ColorSeason, metrics: SkinAnalysisMetrics)
+                if !capturedAmbientBurst.isEmpty {
+                    let flashes = capturedFlashBurst.isEmpty ? [primaryImage] : capturedFlashBurst
+                    result = try await colorAnalyzer.analyzeDetailedSkinTone(
+                        flashImages: flashes,
+                        ambientImages: capturedAmbientBurst,
+                        telemetry: capturedCalibrationTelemetry
+                    )
+                } else {
+                    result = try await colorAnalyzer.analyzeDetailedSkinTone(from: primaryImage)
+                }
+                self.predictedColorSeason = result.season
+                self.selectedColorSeason = result.season
+                self.analysisMetrics = result.metrics
                 self.isAnalyzing = false
                 self.currentStep = .result
                 return

@@ -47,7 +47,7 @@ struct ProfileHubView: View {
     @State private var activeColorSheet: ColorListSheet? = nil
     private let showManualProfileDebug: Bool = true
     @State private var isShowingDebugSheet: Bool = false
-    @State private var selectedBodyPhotoSide: Int = 0 // 0 = Front, 1 = Side
+    @State private var selectedBodyPhotoSide: Int = 0 // 0 = Front, 1 = Side, 2 = Torso Length
     @State private var showSkeleton: Bool = true
     @State private var showSlices: Bool = true
 
@@ -57,6 +57,11 @@ struct ProfileHubView: View {
     @State private var torsoInputText: String = ""
     @State private var editedTorsoCm: Double? = nil
 
+    #if canImport(UIKit)
+    @State private var cachedFaceImage: UIImage? = nil
+    @State private var cachedFrontBodyImage: UIImage? = nil
+    @State private var cachedSideBodyImage: UIImage? = nil
+    #endif
     @State private var cachedFrontPose: PoseAnalysisResult? = nil
     @State private var cachedSidePose: PoseAnalysisResult? = nil
     @State private var cachedFrontBustY: Double? = nil
@@ -111,18 +116,15 @@ struct ProfileHubView: View {
 
     #if canImport(UIKit)
     private var faceUIImage: UIImage? {
-        guard let data = currentProfile?.facePhotoData else { return nil }
-        return UIImage(data: data)
+        cachedFaceImage
     }
 
     private var frontBodyUIImage: UIImage? {
-        guard let data = currentProfile?.frontBodyPhotoData else { return nil }
-        return UIImage(data: data)
+        cachedFrontBodyImage
     }
 
     private var sideBodyUIImage: UIImage? {
-        guard let data = currentProfile?.sideBodyPhotoData else { return nil }
-        return UIImage(data: data)
+        cachedSideBodyImage
     }
     #endif
 
@@ -167,12 +169,37 @@ struct ProfileHubView: View {
         }
         .environment(\.colorScheme, .light)
         .onAppear {
+            refreshCachedImages()
             syncProfileMetricInputs()
-            runOverlayPoseDetectionIfNeeded()
+            if selectedTab == .bodyType {
+                runOverlayPoseDetectionIfNeeded()
+            }
+        }
+        .onDisappear {
+            commitMetricField(focusedMetricField)
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            if newTab == .bodyType {
+                runOverlayPoseDetectionIfNeeded()
+            }
+        }
+        .onChange(of: currentProfile?.facePhotoData) { _, _ in
+            refreshCachedImages()
+        }
+        .onChange(of: currentProfile?.frontBodyPhotoData) { _, _ in
+            refreshCachedImages()
+            runOverlayPoseDetectionIfNeeded(force: true)
+        }
+        .onChange(of: currentProfile?.sideBodyPhotoData) { _, _ in
+            refreshCachedImages()
+            runOverlayPoseDetectionIfNeeded(force: true)
         }
         .onChange(of: currentProfile?.updatedAt) { _, _ in
             syncProfileMetricInputs()
-            runOverlayPoseDetectionIfNeeded()
+        }
+        .onChange(of: focusedMetricField) { oldField, _ in
+            commitMetricField(oldField)
+            syncProfileMetricInputs()
         }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -191,6 +218,8 @@ struct ProfileHubView: View {
     private var headerBar: some View {
         HStack {
             Button {
+                commitMetricField(focusedMetricField)
+                focusedMetricField = nil
                 if let onBack = onBack {
                     onBack()
                 } else {
@@ -333,6 +362,7 @@ struct ProfileHubView: View {
                 .padding(.top, 18)
                 .padding(.bottom, 24)
             }
+            .scrollDismissesKeyboard(.interactively)
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         }
         .padding(.bottom, 8)
@@ -377,9 +407,9 @@ struct ProfileHubView: View {
                     .shadow(color: .black.opacity(0.06), radius: 12, x: 0, y: 4)
             )
 
-            // "Color suits you the most" Swatch Grid
+            // "Color that suit you the most" Swatch Grid
             VStack(alignment: .leading, spacing: 12) {
-                swatchSectionHeader(title: "Color suits you the most") {
+                swatchSectionHeader(title: "Color that suit you the most") {
                     activeColorSheet = .suits
                 }
 
@@ -399,7 +429,7 @@ struct ProfileHubView: View {
             switch sheet {
             case .suits:
                 ColorSwatchListSheet(
-                    title: "Color Suits you the Most",
+                    title: "Color that Suit you the Most",
                     hexes: displayedGridSwatches(for: activeSeason)
                 )
             case .avoid:
@@ -510,16 +540,24 @@ struct ProfileHubView: View {
                 Divider()
                     .padding(.vertical, 2)
 
-                Text(activeBodyType.rawValue)
+                Text(selectedBodyPhotoSide == 2 ? activeTorsoBalance.displayName : activeBodyType.rawValue)
                     .font(AppTypography.title2Bold.width(.expanded))
                     .foregroundStyle(AppColors.espressoTitle)
+                    .animation(.easeInOut(duration: 0.2), value: selectedBodyPhotoSide)
 
-                bodyTypeHighlightedText(for: activeBodyType)
-                    .font(.system(size: 13.5))
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(2)
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 4)
+                Group {
+                    if selectedBodyPhotoSide == 2 {
+                        activeTorsoBalance.highlightedDescription
+                    } else {
+                        bodyTypeHighlightedText(for: activeBodyType)
+                    }
+                }
+                .font(.system(size: 13.5))
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
+                .animation(.easeInOut(duration: 0.2), value: selectedBodyPhotoSide)
             }
             .padding(.vertical, 18)
             .padding(.horizontal, 16)
@@ -532,58 +570,48 @@ struct ProfileHubView: View {
 
             // 2. Editable Bust, Waist, Hips, Torso Measurements Card
             VStack(spacing: 0) {
-                profileMeasurementRow(
+                EditableMeasurementsCardHeader()
+
+                EditableMeasurementRow(
                     title: "Bust",
                     text: $bustInputText,
-                    field: .bust
-                ) { newVal in
-                    if let v = parseDouble(newVal), v > 0 {
-                        applyProfileMeasurementUpdate(bust: v)
-                    }
-                }
+                    field: .bust,
+                    focusedField: $focusedMetricField
+                ) { _ in }
                 Divider().padding(.horizontal, 18)
-                profileMeasurementRow(
+                EditableMeasurementRow(
                     title: "Waist",
                     text: $waistInputText,
-                    field: .waist
-                ) { newVal in
-                    if let v = parseDouble(newVal), v > 0 {
-                        applyProfileMeasurementUpdate(waist: v)
-                    }
-                }
+                    field: .waist,
+                    focusedField: $focusedMetricField
+                ) { _ in }
                 Divider().padding(.horizontal, 18)
-                profileMeasurementRow(
+                EditableMeasurementRow(
                     title: "Hips",
                     text: $hipsInputText,
-                    field: .hips
-                ) { newVal in
-                    if let v = parseDouble(newVal), v > 0 {
-                        applyProfileMeasurementUpdate(hip: v)
-                    }
-                }
+                    field: .hips,
+                    focusedField: $focusedMetricField
+                ) { _ in }
                 Divider().padding(.horizontal, 18)
-                profileMeasurementRow(
+                EditableMeasurementRow(
                     title: "Torso",
                     text: $torsoInputText,
-                    field: .torso
-                ) { newVal in
-                    if let v = parseDouble(newVal), v > 0 {
-                        editedTorsoCm = v
-                        applyProfileMeasurementUpdate(torso: v)
-                    }
-                }
+                    field: .torso,
+                    focusedField: $focusedMetricField
+                ) { _ in }
             }
-            .padding(.vertical, 4)
+            .padding(.bottom, 6)
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(Color.white)
                     .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 3)
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(Color.black.opacity(0.04), lineWidth: 1)
+            )
 
-            // 3. Torso Classification Card (Kept below Body Type)
-            profileTorsoClassificationCard
-
-            // 4. "Styles that suit you the most" Section
+            // 3. "Styles that suit you the most" Section
             VStack(alignment: .leading, spacing: 12) {
                 Text("Styles that suit you the most")
                     .font(.system(size: 16, weight: .medium))
@@ -615,52 +643,42 @@ struct ProfileHubView: View {
         }
     }
 
-    private func profileMeasurementRow(
-        title: String,
-        text: Binding<String>,
-        field: ProfileMetricField,
-        onChange: @escaping (String) -> Void
-    ) -> some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.black)
-
-            Spacer()
-
-            HStack(spacing: 4) {
-                TextField("0", text: text)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.black)
-                    .multilineTextAlignment(.trailing)
-                    .keyboardType(.decimalPad)
-                    .focused($focusedMetricField, equals: field)
-                    .frame(width: 64)
-                    .onChange(of: text.wrappedValue) { _, newValue in
-                        onChange(newValue)
-                    }
-
-                Text("cm")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(Color(hex: "#8E8E93"))
+    private func commitMetricField(_ field: ProfileMetricField?) {
+        guard let field else { return }
+        switch field {
+        case .bust:
+            if let v = MeasurementTextFormatting.parse(bustInputText), v > 0, v != profileBustCm {
+                applyProfileMeasurementUpdate(bust: v)
+            }
+        case .waist:
+            if let v = MeasurementTextFormatting.parse(waistInputText), v > 0, v != profileWaistCm {
+                applyProfileMeasurementUpdate(waist: v)
+            }
+        case .hips:
+            if let v = MeasurementTextFormatting.parse(hipsInputText), v > 0, v != profileHipCm {
+                applyProfileMeasurementUpdate(hip: v)
+            }
+        case .torso:
+            if let v = MeasurementTextFormatting.parse(torsoInputText), v > 0, v != profileTorsoCm {
+                editedTorsoCm = v
+                applyProfileMeasurementUpdate(torso: v)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 15)
     }
 
     private func syncProfileMetricInputs() {
-        bustInputText = "\(Int(round(profileBustCm)))"
-        waistInputText = "\(Int(round(profileWaistCm)))"
-        hipsInputText = "\(Int(round(profileHipCm)))"
-        torsoInputText = "\(Int(round(profileTorsoCm)))"
-    }
-
-    private func parseDouble(_ text: String) -> Double? {
-        let normalized = text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: ",", with: ".")
-        return Double(normalized)
+        if focusedMetricField != .bust {
+            bustInputText = MeasurementTextFormatting.format(profileBustCm)
+        }
+        if focusedMetricField != .waist {
+            waistInputText = MeasurementTextFormatting.format(profileWaistCm)
+        }
+        if focusedMetricField != .hips {
+            hipsInputText = MeasurementTextFormatting.format(profileHipCm)
+        }
+        if focusedMetricField != .torso {
+            torsoInputText = MeasurementTextFormatting.format(profileTorsoCm)
+        }
     }
 
     private func applyProfileMeasurementUpdate(
@@ -707,143 +725,44 @@ struct ProfileHubView: View {
         }
     }
 
-    private var profileTorsoClassificationCard: some View {
-        let height = currentProfile?.measurements?.heightCm ?? 170.0
-        let thrRatio: Double = height > 0
-            ? round(((profileTorsoCm / height) * 100.0) * 10) / 10
-            : 31.5
-
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("VERTICAL PROPORTION")
-                        .font(AppTypography.caption.weight(.bold))
-                        .tracking(1.2)
-                        .foregroundStyle(AppColors.mutedCaption)
-
-                    Text(activeTorsoBalance.rawValue)
-                        .font(AppTypography.screenHeader)
-                        .foregroundStyle(AppColors.espressoTitle)
-                }
-
-                Spacer()
-
-                Text(activeTorsoBalance.thrThresholdDescription)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppColors.espressoTitle)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(AppColors.pastelGold.opacity(0.35))
-                    .clipShape(Capsule())
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Torso-to-Height Ratio (THR)")
-                        .font(AppTypography.caption)
-                        .foregroundStyle(AppColors.mutedCaption)
-
-                    Spacer()
-
-                    Text(String(format: "%.1f%%", thrRatio))
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppColors.espressoTitle)
-                }
-
-                HStack(spacing: 3) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(activeTorsoBalance == .shortTorso ? AppColors.espressoTitle : Color.black.opacity(0.08))
-                        .frame(maxWidth: .infinity)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(activeTorsoBalance == .balanced ? AppColors.espressoTitle : Color.black.opacity(0.08))
-                        .frame(maxWidth: .infinity)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(activeTorsoBalance == .longTorso ? AppColors.espressoTitle : Color.black.opacity(0.08))
-                        .frame(maxWidth: .infinity)
-                }
-                .frame(height: 10)
-            }
-            .padding(12)
-            .background(Color.black.opacity(0.025))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            Text(activeTorsoBalance.definition)
-                .font(AppTypography.bodyRegular)
-                .foregroundStyle(AppColors.bodyText)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.white)
-                .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 3)
-        )
-    }
-
     @ViewBuilder
     private var bodyPhotoPreview: some View {
+        let height = currentProfile?.measurements?.heightCm ?? 170.0
+
         VStack(spacing: 12) {
-            Picker("View", selection: $selectedBodyPhotoSide) {
-                Text("Front View").tag(0)
-                Text("Side View").tag(1)
-            }
-            .pickerStyle(.segmented)
+            #if canImport(UIKit)
+            let resolvedFrontImage: BodyCarouselImage? = frontBodyUIImage
+            let resolvedSideImage: BodyCarouselImage? = sideBodyUIImage
+            #else
+            let resolvedFrontImage: BodyCarouselImage? = nil
+            let resolvedSideImage: BodyCarouselImage? = nil
+            #endif
 
-            ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.black.opacity(0.04))
-
-                #if canImport(UIKit)
-                if selectedBodyPhotoSide == 0, let frontImg = frontBodyUIImage {
-                    Image(uiImage: frontImg)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 320)
-                        .overlay(
-                            BodyPoseOverlayView(
-                                poseResult: cachedFrontPose,
-                                chestY: cachedFrontBustY ?? 0.30,
-                                waistY: cachedFrontWaistY ?? 0.45,
-                                hipY: cachedFrontHipY ?? 0.55,
-                                chestBounds: cachedFrontChestBounds,
-                                waistBounds: cachedFrontWaistBounds,
-                                hipBounds: cachedFrontHipBounds,
-                                showSkeleton: showSkeleton,
-                                showSlices: showSlices
-                            )
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                } else if selectedBodyPhotoSide == 1, let sideImg = sideBodyUIImage {
-                    Image(uiImage: sideImg)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 320)
-                        .overlay(
-                            BodyPoseOverlayView(
-                                poseResult: cachedSidePose,
-                                chestY: cachedSideBustY ?? 0.30,
-                                waistY: cachedSideWaistY ?? 0.45,
-                                hipY: cachedSideHipY ?? 0.55,
-                                chestBounds: cachedSideChestBounds,
-                                waistBounds: cachedSideWaistBounds,
-                                hipBounds: cachedSideHipBounds,
-                                showSkeleton: showSkeleton,
-                                showSlices: showSlices
-                            )
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                } else {
-                    defaultBodyIllustration
-                        .frame(height: 300)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                #else
-                defaultBodyIllustration
-                    .frame(height: 300)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                #endif
-            }
-            .frame(height: 336)
+            BodyAnalysisCarouselView(
+                selectedTab: $selectedBodyPhotoSide,
+                frontImage: resolvedFrontImage,
+                sideImage: resolvedSideImage,
+                frontPose: cachedFrontPose,
+                sidePose: cachedSidePose,
+                frontBustY: cachedFrontBustY ?? 0.30,
+                frontWaistY: cachedFrontWaistY ?? 0.45,
+                frontHipY: cachedFrontHipY ?? 0.55,
+                frontChestBounds: cachedFrontChestBounds,
+                frontWaistBounds: cachedFrontWaistBounds,
+                frontHipBounds: cachedFrontHipBounds,
+                sideBustY: cachedSideBustY ?? 0.30,
+                sideWaistY: cachedSideWaistY ?? 0.45,
+                sideHipY: cachedSideHipY ?? 0.55,
+                sideChestBounds: cachedSideChestBounds,
+                sideWaistBounds: cachedSideWaistBounds,
+                sideHipBounds: cachedSideHipBounds,
+                torsoLengthCm: profileTorsoCm,
+                heightCm: height,
+                torsoBalance: activeTorsoBalance,
+                showSkeleton: showSkeleton,
+                showSlices: showSlices,
+                frameHeight: 336
+            )
 
             HStack(spacing: 16) {
                 Button {
@@ -872,11 +791,22 @@ struct ProfileHubView: View {
                 }
                 .buttonStyle(.plain)
             }
+            .opacity(selectedBodyPhotoSide == 2 ? 0 : 1)
+            .disabled(selectedBodyPhotoSide == 2)
         }
     }
 
-    private func runOverlayPoseDetectionIfNeeded() {
+    private func refreshCachedImages() {
         #if canImport(UIKit)
+        cachedFaceImage = currentProfile?.facePhotoData.flatMap { UIImage(data: $0) }
+        cachedFrontBodyImage = currentProfile?.frontBodyPhotoData.flatMap { UIImage(data: $0) }
+        cachedSideBodyImage = currentProfile?.sideBodyPhotoData.flatMap { UIImage(data: $0) }
+        #endif
+    }
+
+    private func runOverlayPoseDetectionIfNeeded(force: Bool = false) {
+        #if canImport(UIKit)
+        if !force, cachedFrontPose != nil { return }
         guard let frontImg = frontBodyUIImage else { return }
         let sideImg = sideBodyUIImage ?? frontImg
         let heightCm = currentProfile?.measurements?.heightCm ?? 170.0
@@ -909,17 +839,6 @@ struct ProfileHubView: View {
             }
         }
         #endif
-    }
-
-    private var defaultBodyIllustration: some View {
-        ZStack {
-            Color(hex: "#F5F5F7")
-            Image("bodyfront")
-                .renderingMode(.original)
-                .resizable()
-                .scaledToFit()
-                .padding(.vertical, 14)
-        }
     }
 
     private func garmentRecommendationRow(icon: String, title: String, detail: String) -> some View {
@@ -1030,9 +949,9 @@ struct ProfileHubView: View {
         season.wheelHexColors
     }
 
-    /// Curated grid swatches displayed under "Color suits you the most", ordered by the seasonal ring palette.
+    /// Curated grid swatches displayed under "Color suits you the most", returning all 35 swatches from the model palette.
     private func displayedGridSwatches(for season: ColorSeason) -> [String] {
-        season.wheelHexColors
+        season.palette.map(\.hex)
     }
 
     /// Computes relative luminance of a hex color to choose readable dark/light label text.
