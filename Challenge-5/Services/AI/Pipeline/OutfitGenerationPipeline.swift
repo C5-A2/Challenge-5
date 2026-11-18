@@ -123,9 +123,9 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
     ) async throws -> [OutfitLook] {
         // If models are not yet downloaded, auto-download them seamlessly in the background!
         if !ModelDownloadManager.shared.isAllModelsDownloaded {
-            onStageChange?("Menyiapkan AI Stylist...", "Mengunduh model gaya di background (hanya 1x)...", [])
+            onStageChange?("Preparing AI Stylist...", "Downloading styling models in the background (one-time setup)...", [])
             try await ModelDownloadManager.shared.ensureModelsDownloaded { progress, status in
-                onStageChange?("Menyiapkan AI Stylist...", status, [])
+                onStageChange?("Preparing AI Stylist...", status, [])
             }
         }
 

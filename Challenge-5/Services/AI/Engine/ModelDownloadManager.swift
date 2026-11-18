@@ -66,7 +66,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
     @Published public private(set) var currentStepIndex: Int = 0
     @Published public private(set) var totalSteps: Int = 4
     @Published public private(set) var progress: Double = 0.0 // 0.0 ... 1.0
-    @Published public private(set) var statusText: String = "Menyiapkan AI Stylist..."
+    @Published public private(set) var statusText: String = "Preparing AI Stylist..."
     @Published public private(set) var errorMessage: String? = nil
 
     // MARK: - Local Directory Storage
@@ -164,7 +164,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
         // If already available locally or fully downloaded, return immediately
         if isAllModelsDownloaded {
             progress = 1.0
-            statusText = "AI Model siap digunakan."
+            statusText = "AI models are ready."
             onProgress?(1.0, statusText)
             return
         }
@@ -210,7 +210,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
 
         guard !missing.isEmpty else {
             progress = 1.0
-            statusText = "Semua model AI siap digunakan!"
+            statusText = "All AI models are ready!"
             notifyListeners(progress: 1.0, status: statusText)
             return
         }
@@ -223,7 +223,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
             currentStepIndex = idx + 1
             currentFileName = model.filename
 
-            let status = "Menyiapkan AI Stylist (\(idx + 1)/\(missing.count))..."
+            let status = "Preparing AI Stylist (\(idx + 1)/\(missing.count))..."
             statusText = status
             notifyListeners(progress: self.progress, status: status)
 
@@ -242,7 +242,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
         }
 
         progress = 1.0
-        statusText = "Semua model AI siap digunakan!"
+        statusText = "All AI models are ready!"
         notifyListeners(progress: 1.0, status: statusText)
     }
 
@@ -303,7 +303,7 @@ extension ModelDownloadManager: URLSessionDownloadDelegate {
             let mbWritten = String(format: "%.1f", Double(totalBytesWritten) / 1_000_000.0)
             let mbTotal = String(format: "%.1f", Double(totalBytesExpectedToWrite) / 1_000_000.0)
             let percent = Int(self.progress * 100)
-            self.statusText = "Menyiapkan AI Stylist (\(percent)%): \(mbWritten) / \(mbTotal) MB"
+            self.statusText = "Preparing AI Stylist (\(percent)%): \(mbWritten) / \(mbTotal) MB"
             self.notifyListeners(progress: self.progress, status: self.statusText)
         }
     }
