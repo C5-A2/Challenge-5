@@ -269,7 +269,10 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				EXCLUDED_SOURCE_FILE_NAMES = "*gitkeep*";
+				EXCLUDED_SOURCE_FILE_NAMES = (
+					"*gitkeep*",
+					"*.gguf",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = c5;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
@@ -317,7 +320,10 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				EXCLUDED_SOURCE_FILE_NAMES = "*gitkeep*";
+				EXCLUDED_SOURCE_FILE_NAMES = (
+					"*gitkeep*",
+					"*.gguf",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = c5;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
