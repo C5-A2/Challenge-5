@@ -133,6 +133,8 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
     private var downloadContinuation: CheckedContinuation<Void, Error>?
     private var runningDownloadTask: Task<Void, Error>?
     private var progressListeners: [UUID: @MainActor (Double, String) -> Void] = [:]
+    private var currentBaseBytes: Int64 = 0
+    private var totalBatchBytes: Int64 = 0
 
     private func notifyListeners(progress: Double, status: String) {
         for listener in progressListeners.values {
@@ -216,16 +218,12 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
         }
 
         totalSteps = missing.count
-        let totalMissingBytes = missing.reduce(Int64(0)) { $0 + $1.approximateSizeBytes }
-        var previousFilesBytes: Int64 = 0
+        totalBatchBytes = missing.reduce(Int64(0)) { $0 + $1.approximateSizeBytes }
+        currentBaseBytes = 0
 
         for (idx, model) in missing.enumerated() {
             currentStepIndex = idx + 1
             currentFileName = model.filename
-
-            let status = "Preparing AI Stylist (\(idx + 1)/\(missing.count))..."
-            statusText = status
-            notifyListeners(progress: self.progress, status: status)
 
             guard let url = URL(string: model.downloadURLString) else {
                 throw URLError(.badURL)
@@ -233,12 +231,10 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
 
             try await downloadSingleModel(
                 from: url,
-                filename: model.filename,
-                baseBytes: previousFilesBytes,
-                totalBytes: totalMissingBytes
+                filename: model.filename
             )
 
-            previousFilesBytes += model.approximateSizeBytes
+            currentBaseBytes += model.approximateSizeBytes
         }
 
         progress = 1.0
@@ -248,9 +244,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
 
     private func downloadSingleModel(
         from url: URL,
-        filename: String,
-        baseBytes: Int64,
-        totalBytes: Int64
+        filename: String
     ) async throws {
         var request = URLRequest(url: url)
         request.timeoutInterval = 3600 // 1 hour for large network files
@@ -291,19 +285,18 @@ extension ModelDownloadManager: URLSessionDownloadDelegate {
         totalBytesExpectedToWrite: Int64
     ) {
         Task { @MainActor in
-            let currentFileFraction = totalBytesExpectedToWrite > 0
-                ? Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+            let overallBytesWritten = self.currentBaseBytes + totalBytesWritten
+            let overallFraction = self.totalBatchBytes > 0
+                ? Double(overallBytesWritten) / Double(self.totalBatchBytes)
                 : 0.0
 
-            // Overall progress based on current step
-            let stepFraction = 1.0 / Double(max(self.totalSteps, 1))
-            let overall = (Double(self.currentStepIndex - 1) * stepFraction) + (currentFileFraction * stepFraction)
-            self.progress = min(max(overall, 0.0), 1.0)
+            self.progress = min(max(overallFraction, 0.0), 1.0)
+            let percent = min(Int(self.progress * 100), 99)
 
-            let mbWritten = String(format: "%.1f", Double(totalBytesWritten) / 1_000_000.0)
-            let mbTotal = String(format: "%.1f", Double(totalBytesExpectedToWrite) / 1_000_000.0)
-            let percent = Int(self.progress * 100)
-            self.statusText = "Preparing AI Stylist (\(percent)%): \(mbWritten) / \(mbTotal) MB"
+            let mbWritten = String(format: "%.0f", Double(overallBytesWritten) / 1_000_000.0)
+            let mbTotal = String(format: "%.0f", Double(self.totalBatchBytes) / 1_000_000.0)
+
+            self.statusText = "Downloading AI models: \(percent)% (\(mbWritten) / \(mbTotal) MB)"
             self.notifyListeners(progress: self.progress, status: self.statusText)
         }
     }
