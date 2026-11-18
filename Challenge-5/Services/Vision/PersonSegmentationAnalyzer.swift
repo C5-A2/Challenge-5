@@ -190,35 +190,63 @@ public final class PersonSegmentationAnalyzer: Sendable {
             rightLimitNorm: chestArmBounds?.right
         )
 
-        // 2. Extract Waist slice (scans narrowest contour around waist level)
-        let waistSlice = extractNarrowestWaistSlice(
-            centerWaistY: waistY,
-            torsoCenterX: effectiveCenterX,
-            baseAddress: baseAddress,
-            maskWidth: maskWidth,
-            maskHeight: maskHeight,
-            bytesPerRow: bytesPerRow,
-            threshold: threshold,
-            originalWidth: originalWidth,
-            leftLimitNorm: waistArmBounds?.left,
-            rightLimitNorm: waistArmBounds?.right
-        )
+        // 2. Extract Waist slice (Front scans narrowest contour; Side measures directly at the Front-mapped waist Y)
+        let waistSlice: SliceExtractionResult?
+        if isFrontView {
+            waistSlice = extractNarrowestWaistSlice(
+                centerWaistY: waistY,
+                torsoCenterX: effectiveCenterX,
+                baseAddress: baseAddress,
+                maskWidth: maskWidth,
+                maskHeight: maskHeight,
+                bytesPerRow: bytesPerRow,
+                threshold: threshold,
+                originalWidth: originalWidth,
+                leftLimitNorm: waistArmBounds?.left,
+                rightLimitNorm: waistArmBounds?.right
+            )
+        } else {
+            waistSlice = extractSlice(
+                atNormalizedY: waistY,
+                torsoCenterX: effectiveCenterX,
+                baseAddress: baseAddress,
+                maskWidth: maskWidth,
+                maskHeight: maskHeight,
+                bytesPerRow: bytesPerRow,
+                threshold: threshold,
+                originalWidth: originalWidth
+            )
+        }
 
-        // 3. Extract Hip slice (scans widest contour around hip level with bilateral crotch gap detection)
-        let hipSlice = extractWidestHipSlice(
-            centerHipY: hipY,
-            torsoCenterX: effectiveCenterX,
-            baseAddress: baseAddress,
-            maskWidth: maskWidth,
-            maskHeight: maskHeight,
-            bytesPerRow: bytesPerRow,
-            threshold: threshold,
-            originalWidth: originalWidth,
-            leftLimitNorm: hipArmBounds?.left,
-            rightLimitNorm: hipArmBounds?.right,
-            poseResult: poseResult,
-            isFrontView: isFrontView
-        )
+        // 3. Extract Hip slice (Front scans widest contour with crotch-gap bridge; Side measures directly at the Front-mapped hip Y)
+        let hipSlice: SliceExtractionResult?
+        if isFrontView {
+            hipSlice = extractWidestHipSlice(
+                centerHipY: hipY,
+                torsoCenterX: effectiveCenterX,
+                baseAddress: baseAddress,
+                maskWidth: maskWidth,
+                maskHeight: maskHeight,
+                bytesPerRow: bytesPerRow,
+                threshold: threshold,
+                originalWidth: originalWidth,
+                leftLimitNorm: hipArmBounds?.left,
+                rightLimitNorm: hipArmBounds?.right,
+                poseResult: poseResult,
+                isFrontView: isFrontView
+            )
+        } else {
+            hipSlice = extractSlice(
+                atNormalizedY: hipY,
+                torsoCenterX: effectiveCenterX,
+                baseAddress: baseAddress,
+                maskWidth: maskWidth,
+                maskHeight: maskHeight,
+                bytesPerRow: bytesPerRow,
+                threshold: threshold,
+                originalWidth: originalWidth
+            )
+        }
 
         var warnings: [String] = []
         if chestSlice == nil || waistSlice == nil || hipSlice == nil {
@@ -354,7 +382,8 @@ public final class PersonSegmentationAnalyzer: Sendable {
         leftLimitNorm: Double?,
         rightLimitNorm: Double?
     ) -> SliceExtractionResult? {
-        let offsets = [-0.025, -0.012, 0.0, 0.012, 0.025]
+        // Ordered from anatomical center outward so ties stay centered rather than biasing upward.
+        let offsets = [0.0, 0.009, -0.009, 0.018, -0.018]
         var candidateSlices: [SliceExtractionResult] = []
 
         for offset in offsets {

@@ -152,5 +152,15 @@ public class CameraPreviewUIView: UIView {
     public var videoPreviewLayer: AVCaptureVideoPreviewLayer {
         layer as! AVCaptureVideoPreviewLayer
     }
+
+    public override func layoutSubviews() {
+        super.layoutSubviews()
+        videoPreviewLayer.frame = bounds
+        if let connection = videoPreviewLayer.connection {
+            if connection.isVideoOrientationSupported {
+                connection.videoOrientation = .portrait
+            }
+        }
+    }
 }
 #endif

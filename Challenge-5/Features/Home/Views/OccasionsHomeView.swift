@@ -323,7 +323,7 @@ struct OccasionsHomeView: View {
     }
     
     // MARK: - Actions
-    
+
     /// Deletes an occasion from SwiftData.
     private func deleteOccasion(_ occasion: OccasionItem) {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
