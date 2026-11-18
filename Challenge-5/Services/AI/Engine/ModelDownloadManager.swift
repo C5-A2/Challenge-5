@@ -131,12 +131,37 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
 
     private var activeTask: URLSessionDownloadTask?
     private var downloadContinuation: CheckedContinuation<Void, Error>?
+    private var runningDownloadTask: Task<Void, Error>?
+    private var progressListeners: [UUID: @MainActor (Double, String) -> Void] = [:]
 
-    /// Automatically downloads any missing model files in the background without user intervention.
+    private func notifyListeners(progress: Double, status: String) {
+        for listener in progressListeners.values {
+            listener(progress, status)
+        }
+    }
+
+    /// Quietly triggers background model downloading on app launch if needed.
+    /// Runs with utility QoS so camera, scanning, and UI remain at 60/120 FPS.
+    public func startBackgroundDownloadIfNeeded() {
+        guard !isAllModelsDownloaded else { return }
+        guard runningDownloadTask == nil else { return }
+
+        runningDownloadTask = Task(priority: .utility) { [weak self] in
+            guard let self = self else { return }
+            do {
+                try await self.performDownloadPipeline()
+            } catch {
+                print("⚠️ [ModelDownloadManager] Background download paused/cancelled: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Automatically downloads any missing model files without user intervention.
+    /// If a background download is already underway, safely joins it and streams live progress.
     public func ensureModelsDownloaded(
         onProgress: ((_ progress: Double, _ status: String) -> Void)? = nil
     ) async throws {
-        // If already available locally or fully downloaded, skip download immediately
+        // If already available locally or fully downloaded, return immediately
         if isAllModelsDownloaded {
             progress = 1.0
             statusText = "AI Model siap digunakan."
@@ -144,10 +169,37 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
             return
         }
 
-        guard !isDownloading else { return }
-        isDownloading = true
-        errorMessage = nil
-        defer { isDownloading = false }
+        let listenerId = UUID()
+        if let onProgress = onProgress {
+            progressListeners[listenerId] = onProgress
+            onProgress(self.progress, self.statusText)
+        }
+        defer {
+            progressListeners.removeValue(forKey: listenerId)
+        }
+
+        // If background download is already in progress, wait for it
+        if let existing = runningDownloadTask {
+            try await existing.value
+            return
+        }
+
+        // Otherwise, start new pipeline task and wait
+        let task = Task { [weak self] in
+            guard let self = self else { return }
+            try await self.performDownloadPipeline()
+        }
+        self.runningDownloadTask = task
+        try await task.value
+    }
+
+    private func performDownloadPipeline() async throws {
+        defer {
+            self.runningDownloadTask = nil
+            self.isDownloading = false
+        }
+        self.isDownloading = true
+        self.errorMessage = nil
 
         let missing = Self.requiredModels.filter { model in
             if model.filename == "Qwen3.5-4B-Q3_K_M.gguf" && isLLMAvailable {
@@ -158,6 +210,8 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
 
         guard !missing.isEmpty else {
             progress = 1.0
+            statusText = "Semua model AI siap digunakan!"
+            notifyListeners(progress: 1.0, status: statusText)
             return
         }
 
@@ -171,7 +225,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
 
             let status = "Menyiapkan AI Stylist (\(idx + 1)/\(missing.count))..."
             statusText = status
-            onProgress?(progress, status)
+            notifyListeners(progress: self.progress, status: status)
 
             guard let url = URL(string: model.downloadURLString) else {
                 throw URLError(.badURL)
@@ -181,8 +235,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
                 from: url,
                 filename: model.filename,
                 baseBytes: previousFilesBytes,
-                totalBytes: totalMissingBytes,
-                onProgress: onProgress
+                totalBytes: totalMissingBytes
             )
 
             previousFilesBytes += model.approximateSizeBytes
@@ -190,15 +243,14 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
 
         progress = 1.0
         statusText = "Semua model AI siap digunakan!"
-        onProgress?(1.0, statusText)
+        notifyListeners(progress: 1.0, status: statusText)
     }
 
     private func downloadSingleModel(
         from url: URL,
         filename: String,
         baseBytes: Int64,
-        totalBytes: Int64,
-        onProgress: ((_ progress: Double, _ status: String) -> Void)?
+        totalBytes: Int64
     ) async throws {
         var request = URLRequest(url: url)
         request.timeoutInterval = 3600 // 1 hour for large network files
@@ -220,7 +272,10 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
     public func cancel() {
         activeTask?.cancel()
         activeTask = nil
+        runningDownloadTask?.cancel()
+        runningDownloadTask = nil
         isDownloading = false
+        progressListeners.removeAll()
     }
 }
 
@@ -247,7 +302,9 @@ extension ModelDownloadManager: URLSessionDownloadDelegate {
 
             let mbWritten = String(format: "%.1f", Double(totalBytesWritten) / 1_000_000.0)
             let mbTotal = String(format: "%.1f", Double(totalBytesExpectedToWrite) / 1_000_000.0)
-            self.statusText = "Memuat kecerdasan gaya (\(Int(self.progress * 100))%): \(mbWritten) / \(mbTotal) MB"
+            let percent = Int(self.progress * 100)
+            self.statusText = "Menyiapkan AI Stylist (\(percent)%): \(mbWritten) / \(mbTotal) MB"
+            self.notifyListeners(progress: self.progress, status: self.statusText)
         }
     }
 
