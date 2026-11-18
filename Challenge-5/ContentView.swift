@@ -43,6 +43,10 @@ struct ContentView: View {
                     .toolbar(.hidden, for: .navigationBar)
             }
         }
+        .task {
+            // Silently kick off background AI model download on launch if needed
+            ModelDownloadManager.shared.startBackgroundDownloadIfNeeded()
+        }
     }
 }
 

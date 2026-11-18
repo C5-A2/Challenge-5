@@ -89,7 +89,14 @@ nonisolated public struct LLMResource: Sendable {
         return true
     }
 
-    private static func candidateURL(for name: String) -> URL? {
+    public static func candidateURL(for name: String) -> URL? {
+        // 0. Try Application Support directory (auto-downloaded from Cloud Storage)
+        if let localURL = ModelDownloadManager.localURL(for: name),
+           FileManager.default.fileExists(atPath: localURL.path),
+           isUsableModelFile(atPath: localURL.path) {
+            return localURL
+        }
+
         // 1. Try App Bundle (when running in target with Resources folder reference)
         if let bundleURL = Bundle.main.url(forResource: name, withExtension: modelExtension),
            isUsableModelFile(atPath: bundleURL.path) {
@@ -106,6 +113,7 @@ nonisolated public struct LLMResource: Sendable {
         let candidatePaths = [
             Bundle.main.bundleURL.appendingPathComponent("\(name).\(modelExtension)").path,
             Bundle.main.bundleURL.appendingPathComponent("Resources/\(name).\(modelExtension)").path,
+            "/Users/michaeldavidsin/Documents/GitHub/Challenge-5/Challenge-5/Resources/\(name).\(modelExtension)",
             "/Users/bryansamuel/ADA/C5/Challenge-5/Challenge-5/Resources/\(name).\(modelExtension)"
         ]
 
