@@ -69,29 +69,29 @@ nonisolated public enum ColorSeason: String, Codable, CaseIterable, Identifiable
     public var definition: String {
         switch self {
         case .brightSpring:
-            return "Bright Spring is the combination of bright and warm. The most prominent characteristic of Bright Springs is the clearness of their features, which gives them a bright, luminous, and fresh appearance."
+            return "You have a bright, clear complexion with neutral-warm (golden or peach) undertones and high natural contrast across your face. Because your natural coloring is vivid with zero greyness, so intensely saturated and clear hues such as vivid coral, sunny yellow, bright turquoise, apple green, and lively pink mirror your natural luminosity without muting you."
         case .trueSpring:
-            return "True Spring is the combination of warm and bright. It is the original Spring season, characterized by a sunny, glowing appearance with no trace of coolness."
+            return "You have purely warm (golden or honey) undertones with medium contrast and a fresh, sunlit clarity. Since your features have zero coolness, rich, yellow-based, so vibrant shades such as warm coral, tomato red, golden yellow, clear turquoise, apple green, and warm camel harmonize with your natural warmth and keep you glowing."
         case .lightSpring:
-            return "Light Spring is the combination of light and warm. Flowing from Spring into Summer, it combines Spring warmth with Summer delicacy, featuring a colorful palette reminiscent of a box of sweets."
+            return "You have light, delicate features with low contrast and neutral-warm (golden or peach) undertones. Because your overall coloring is airy without heavy depth, a light warm pastels and soft neutrals such as peach, soft coral, mint green, cherry blossom pink, warm ivory, and light camel flatter your gentleness without overpowering you."
         case .lightSummer:
-            return "Light Summer is the combination of light and cool. Flowing from Spring into Summer, it features neutral-cool, delicate, ice-cream-like colors."
+            return "You have very light, delicate features with low contrast and neutral-cool (blue or pink) undertones. Because your coloring is pale and airy, a fresh, blue-based pastels and soft cool neutrals such as powder blue, soft lavender, cool blush pink, pale mint, periwinkle, and dove grey keep your look balanced and luminous."
         case .trueSummer:
-            return "True Summer is the combination of cool and muted. As the coolest season of the Summer family, features lack any warmth and are overlaid with a gentle, watery coolness."
+            return "You have purely cool (blue or rose) undertones with medium contrast and a soft, gently blended appearance. Since your features contain no warmth, a calm, cool, medium-depth shades such as raspberry, cool teal, soft rose, dusty orchid, misty slate blue, and cool navy echo your natural coolness without looking harsh."
         case .softSummer:
-            return "Soft Summer is the combination of muted and cool. Flowing from Summer into Autumn, features are gently greyed out, giving a blended, understated appearance."
+            return "You have muted, softly blended features with low-to-medium contrast and neutral-cool undertones. Because your coloring has a gentle, smoky quality, desaturated, so grey-tinted cool tones such as dusty rose, mauve, sage green, muted teal, slate blue, and cocoa taupe enhance your understated harmony without overwhelming you."
         case .softAutumn:
-            return "Soft Autumn is the combination of muted and warm. Flowing from Summer into Autumn, features are soft, greyed/walnut-tinted, understated, and gentle."
+            return "You have muted, understated features with low-to-medium contrast and neutral-warm undertones that blend smoothly together. Because your coloring is soft rather than stark, so earthy, desaturated, low-contrast shades such as sage green, warm taupe, dusty rose, muted terracotta, camel, and soft olive complement your gentle warmth naturally."
         case .trueAutumn:
-            return "True Autumn is the combination of warm and muted. Being the warmest season of the Autumn family, True Autumn features comprise rich, earthy foliage-like colors."
+            return "You have purely warm (golden or bronze) undertones with medium contrast and a rich, earthy softness. Since your features radiate warm, sunlit depth and rich autumn-forest hues such as terracotta, rust, mustard yellow, warm olive green, caramel, and burnt sienna bring out your natural richness and warmth."
         case .darkAutumn:
-            return "Dark Autumn is the combination of dark and warm. Flowing from Autumn into Winter, it combines deep, bronzy warmth with mysterious dark depth."
+            return "You have a deep, rich complexion with high contrast and neutral-warm (golden or olive) undertones. Because depth is your most prominent trait, then rich, saturated, and heavier warm shades such as deep olive, espresso brown, burnt orange, warm burgundy, deep teal, and rich gold balance your intensity without washing you out."
         case .darkWinter:
-            return "Dark Winter is the combination of dark and cool. Flowing from Autumn into Winter, it features prominent dark features set against lighter skin, creating deep, frosty intensity."
+            return "You have prominent dark features with high contrast and neutral-cool undertones. Because your coloring combines deep intensity with a hint of frost, rich, a cool-leaning dark shades and crisp accents such as deep pine green, true burgundy, deep plum, midnight blue, charcoal, and crisp white match your natural depth and contrast."
         case .trueWinter:
-            return "True Winter is the combination of cool and bright. As the coolest Winter sub-season, features have a frost-like coolness and striking, brilliant contrast."
+            return "You have purely cool (icy, blue-based) undertones with high contrast and sharp, dramatic clarity. Since your features have zero warmth or softness, bold, crisp, so pure cool tones such as royal blue, emerald green, ruby red, sharp fuchsia, true black, and icicle white highlight your cool brilliance effortlessly."
         case .brightWinter:
-            return "Bright Winter is the combination of bright and cool. Flowing from Winter into Spring, it features clear, striking, highly saturated features with a frosted brilliance."
+            return "You have ultra-clear, bright features with very high contrast and neutral-cool undertones. Because your coloring is crisp and high-energy with zero muddiness, so electric and hyper-saturated shades such as electric blue, vivid magenta, bright fuchsia, clear turquoise, optic white, and pure black match your natural intensity."
         }
     }
 
