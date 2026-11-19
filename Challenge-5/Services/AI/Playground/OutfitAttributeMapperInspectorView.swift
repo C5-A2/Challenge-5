@@ -463,17 +463,24 @@ extension View {
                 concepts: package?.playgroundConcepts ?? [],
                 sourceImage: sourceImage,
                 onCompletion: { url in
+                    print("🖼️ [ImagePlayground] Sheet returned an image file: \(url.lastPathComponent)")
                     if let data = try? Data(contentsOf: url),
                        let ciImage = CIImage(data: data),
                        let cgImage = CIContext().createCGImage(ciImage, from: ciImage.extent) {
+                        print("🖼️ [ImagePlayground] Image decoded (\(cgImage.width)x\(cgImage.height)).")
                         onGenerated(cgImage)
                     } else if let onFailure {
+                        print("⚠️ [ImagePlayground] The returned file could not be read as an image.")
                         onFailure()
                     } else {
                         onCancellation?()
                     }
                 },
                 onCancellation: {
+                    // The sheet runs in a separate system process: when it can't create the image (for example a
+                    // concept its safety filter refuses), it shows the error inside the sheet and only reports a
+                    // cancellation here once the sheet is closed.
+                    print("⚠️ [ImagePlayground] Sheet closed without an image (cancelled by the user, or Image Playground could not create it; its own message is shown inside the sheet).")
                     onCancellation?()
                 }
             )

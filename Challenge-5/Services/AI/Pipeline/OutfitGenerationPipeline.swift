@@ -191,6 +191,9 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         var previousSummaries: [GeneratedLookSummary] = []
 
         do {
+            // A new silhouette rotation for this generation, so a repeat generation gives new outfits.
+            OutfitPromptBuilder.styleOffset = Int.random(in: 0..<1_000)
+            print("🔋 [PCC] Quota: \(PCCEngine.quotaSummary())")
             for lookIndex in 0..<Self.lookCount {
                 let refStatusSuffix = referenceDescriptions.isEmpty
                     ? ""
@@ -320,9 +323,14 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         referenceAnalysis: ReferenceStyleAnalysis?,
         minimumTemperature: Float?
     ) async throws -> OutfitLook {
-        let archetype = OutfitArchetype(lookIndex: lookIndex)
+        // Look N recreates reference photo N exactly (its own pieces, e.g. a gown or a top with a skirt),
+        // instead of every look blending all photos into one. Later looks are variations of all of them.
+        let focusedReference = OutfitArchetype(lookIndex: lookIndex) == .surpriseMe ? nil : referenceAnalysis?.focused(on: lookIndex)
+        let recreatesReference = focusedReference != nil
+        let lookReference = focusedReference ?? referenceAnalysis
+        let archetype: OutfitArchetype = recreatesReference ? .referenceMatch : OutfitArchetype(lookIndex: lookIndex)
         let structure = archetype.structure(
-            referenceStructure: referenceAnalysis?.suggestedStructure,
+            referenceStructure: lookReference?.suggestedStructure,
             dresscodeStructure: OutfitStructure(dresscode: occasion.dresscode)
         )
         let baseTemperature = max(archetype.temperature, minimumTemperature ?? 0)
@@ -330,8 +338,9 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         // Colors: the dresscode's colors are enforced on every garment; otherwise the reference look
         // keeps the reference colors and the surprise look may add one accent outside her palette.
         let dresscodeColors = DresscodeColorRule.forOccasion(title: occasion.title, dresscode: occasion.dresscode, note: occasion.customNote, palette: profile.colorSeason?.outfitSwatches ?? [])
-        let keepsReferenceColors = archetype == .referenceMatch && referenceAnalysis != nil
-        let dresscodeRequirements = DresscodeRequirements(dresscode: occasion.dresscode)
+        // Looks that follow the reference photos keep their color story (the parser doesn't snap them away).
+        let keepsReferenceColors = archetype != .surpriseMe && lookReference != nil
+        let dresscodeRequirements = DresscodeRequirements.forOccasion(title: occasion.title, dresscode: occasion.dresscode)
         let excludedHexes = DresscodeColorRule.excludedHexes(
             dresscode: occasion.dresscode,
             occasionTitle: occasion.title,
@@ -354,8 +363,9 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 lookIndex: lookIndex,
                 structure: structure,
                 previousLooks: avoidedLooks,
-                referenceAnalysis: referenceAnalysis,
-                forcesCompact: forcesCompactPrompt
+                referenceAnalysis: lookReference,
+                forcesCompact: forcesCompactPrompt,
+                recreatesReference: recreatesReference
             )
             print("🔧 [OutfitGenerationPipeline] Look \(lookIndex) \(archetype) / \(structure.rawValue) (temp \(temperature), attempt \(attempt + 1)/\(Self.maximumAttemptsPerLook)). Prompt \(prompt.count) chars. Running \(LLMResource.activeModelFilename)…")
 
@@ -366,7 +376,8 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                     user: prompt.user,
                     generating: GenerableLook.self,
                     maxTokens: Self.maximumTokensPerLook,
-                    temperature: temperature
+                    temperature: temperature,
+                    topP: archetype.topP
                 )
                 print("✅ [OutfitGenerationPipeline] Look \(lookIndex) @Generable output: \(generated.garments.count) garments")
 
@@ -439,6 +450,19 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                     print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) uses forbidden color for \(guide.name). Generating it again.")
                     if bestCompleteFallback == nil { bestCompleteFallback = parsedLook }
                     continue
+                }
+            }
+
+            // Image Playground only reads "playgroundPrompt". When the model named the textile ("batik") in the
+            // garment's name or material but left it out of the prompt, the textile never reaches the picture.
+            for group in dresscodeRequirements.requiredTermGroups {
+                for index in parsedLook.garments.indices {
+                    let garment = parsedLook.garments[index]
+                    let prompt = garment.playgroundPrompt ?? ""
+                    guard !group.contains(where: { prompt.lowercased().contains($0) }),
+                          let term = group.first(where: { "\(garment.name) \(garment.material)".lowercased().contains($0) })
+                    else { continue }
+                    parsedLook.garments[index].playgroundPrompt = prompt.isEmpty ? nil : "\(term) \(prompt)"
                 }
             }
 
@@ -519,7 +543,9 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             let repeatsGarment = garments.contains { garment in
                 previousGarments.contains { $0.category == garment.category && $0.name == garment.name }
             }
-            let repeatsOutfit = comparesColors && garments.count == previousGarments.count && garments.allSatisfy { garment in
+            // Same colors only counts as a repeat for an outfit of 2 or more pieces: two different dresses
+            // in the same pink (common when a batik color story keeps the colors close) are not a repeat.
+            let repeatsOutfit = comparesColors && garments.count >= 2 && garments.count == previousGarments.count && garments.allSatisfy { garment in
                 previousGarments.contains { $0.category == garment.category && $0.color == garment.color }
             }
             if repeatsGarment || repeatsOutfit {
@@ -1080,7 +1106,15 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
     ///   nothing (the model's own valid outfit is kept instead of an empty look).
     private func makeOutfitGarments(from garments: [GarmentItem], structure: OutfitStructure?) -> [GarmentItem] {
         var seenCategories: Set<GarmentCategory> = []
-        var outfit = garments.filter { seenCategories.insert($0.category).inserted }
+        // When the model returns two pieces of the same category (two dresses), keep the one with the
+        // Indonesian textile ("batik") the dresscode asks for, instead of always the first.
+        let textileWords = ["batik", "tenun", "songket", "ikat", "ulos", "lurik", "endek", "sasirangan", "jumputan", "kebaya"]
+        func hasTextile(_ garment: GarmentItem) -> Bool {
+            let text = "\(garment.name) \(garment.material) \(garment.playgroundPrompt ?? "")".lowercased()
+            return textileWords.contains { text.contains($0) }
+        }
+        let prioritized = garments.filter(hasTextile) + garments.filter { !hasTextile($0) }
+        var outfit = prioritized.filter { seenCategories.insert($0.category).inserted }
         if seenCategories.contains(.dress) {
             outfit.removeAll { $0.category == .top || $0.category == .bottom }
         }

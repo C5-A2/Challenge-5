@@ -154,17 +154,17 @@ extension OutfitPlaygroundPackage {
     private static let blockedWords: Set<String> = [
         "sheer", "translucent", "transparent", "mesh", "see-through", "fishnet",
         "revealing", "sexy", "naked", "nude", "skin", "flesh", "cutout", "cut-out",
-        "slit", "plunging", "deep-v", "low-cut", "cleavage", "waist", "swallowtail",
-        "corset", "boning", "mini", "micro", "bodycon", "bralette", "lingerie"
+        "slit", "plunging", "deep-v", "low-cut", "cleavage", "waist", "swallowtail"
     ]
 
     /// Neutral garment-noun replacements for sensitive terms so the silhouette stays coherent.
     private static let tokenReplacements: [String: String] = [
-        "bustier": "top",
-        "camisole": "top",
-        "cami": "top",
-        "bodysuit": "top",
-        "bikini": "top"
+        // Trendy words (corset, mini, bodycon, bustier, camisole, bodysuit) are passed to Image Playground as they are.
+        "bikini": "top",
+        // Indonesian names Image Playground doesn't know.
+        "selendang": "shawl",
+        "jarik": "sarong",
+        "kutubaru": "kebaya"
     ]
 
     /// Dangling trailing words trimmed after filtered tokens are removed.
@@ -211,6 +211,7 @@ extension OutfitPlaygroundPackage {
             cleaned = cleaned
                 .replacingOccurrences(of: "sleeveless", with: "", options: .caseInsensitive)
                 .replacingOccurrences(of: "spaghetti-strap", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: "camisole", with: "top", options: .caseInsensitive)
                 .replacingOccurrences(of: "tank top", with: "top", options: .caseInsensitive)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -237,6 +238,90 @@ extension OutfitPlaygroundPackage {
         }
 
         return "\(trimmedColor.lowercased()) color \(prompt)"
+    }
+
+    /// Indonesian textiles Image Playground barely knows by name alone.
+    private static let indonesianTextiles = ["batik", "tenun", "songket", "ikat", "ulos", "lurik", "endek", "sasirangan", "jumputan"]
+
+    /// Words dropped from a textile garment's phrase before it is rebuilt: motif names Image Playground
+    /// misreads ("buketan floral" became a plain flower print, "parang" means nothing to it), print words
+    /// added back below, and shiny fabrics that wash a print out into a faint tone-on-tone texture.
+    private static let textileNoiseWords: Set<String> = [
+        "color", "colored", "colour", "motif", "motifs", "print", "printed", "pattern", "patterned",
+        "parang", "kawung", "buketan", "floral", "flower", "flowers", "mega", "mendung", "lereng", "truntum",
+        "sekar", "jagad", "indonesian", "javanese", "tulis", "cotton",
+        // Loose shapes Image Playground turns into a costume; the phrase says "fitted" instead.
+        "kimono", "tunic", "kaftan", "batwing", "oversized", "loose", "boxy", "flowy", "fitted"
+    ]
+
+    /// Image Playground draws "apricot color batik top" as a plain apricot top: the color word wins over the print.
+    /// For a batik (or other Indonesian textile) garment the phrase is rebuilt so the print leads and the
+    /// garment color becomes the print's ground, with a dark or light motif that contrasts with it.
+    private static func textilePhrase(for garment: GarmentPlaygroundAttributes, short: Bool, accent: String? = nil) -> String? {
+        let base = "\(garment.playgroundPrompt ?? "") \(garment.name)"
+        let tokens = base.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+        guard let textile = indonesianTextiles.first(where: { tokens.contains($0) }) else { return nil }
+
+        let colorWords = Set(garment.colorName.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty })
+        var shape = tokens.filter { token in
+            !textileNoiseWords.contains(token) && !indonesianTextiles.contains(token) && !colorWords.contains(token)
+        }
+        while let first = shape.first, ["and", "with", "in", "on", "of", "a"].contains(first) { shape.removeFirst() }
+        while let last = shape.last, ["and", "with", "in", "on", "of", "a"].contains(last) { shape.removeLast() }
+        // The prompt and the name usually repeat the cut ("peplum top ... peplum top"): keep each word once.
+        var seenWords = Set<String>()
+        shape = shape.filter { seenWords.insert($0).inserted }
+        let ground = garment.colorName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        // The motif repeats the color of the outfit's other piece (the top or bodice), so the batik and the
+        // top belong together instead of a fixed navy-and-rose motif under any top color.
+        let motifColors: String
+        if let accent, !accent.isEmpty, accent != ground {
+            motifColors = isLight(hex: garment.colorHex) ? "\(accent) and navy" : "\(accent) and cream"
+        } else {
+            motifColors = isLight(hex: garment.colorHex) ? "navy, soft blue and dusty rose" : "cream, silver and soft blue"
+        }
+        // Kept short: long concepts made Image Playground fail or drop parts of the outfit.
+        let batikDescription = "small repeating \(motifColors) Javanese \(textile) pattern"
+        if short {
+            return "\(ground) \(safeCategoryNoun(for: garment)) with \(batikDescription)"
+        }
+        // Modern kebaya: an embellished bodice (lace, beads, sequins, tulle, organza) with a batik skirt or panel.
+        let embellishmentWords: Set<String> = ["lace", "beaded", "beads", "bead", "sequin", "sequins", "tulle", "organza",
+                                               "brocade", "corset", "bustier", "kebaya", "bodice", "ruffle", "ruffled", "bow", "sash"]
+        let garmentShape = shape.isEmpty ? safeCategoryNoun(for: garment) : shape.prefix(7).joined(separator: " ")
+        if shape.contains(where: { embellishmentWords.contains($0) }) {
+            // A dress with an embellished bodice: say which part is plain and which is batik, otherwise the
+            // whole dress came out in one batik print.
+            if garment.category == .dress {
+                // "plain bodice" gave a flat, unbeaded top and a stiff skirt. Name the shine and the flow outright,
+                // the way her reference gowns look: a sparkling beaded bodice, a flowing floor-length batik skirt, a train.
+                let necklines = ["off-shoulder", "one-shoulder", "halter", "sweetheart", "strapless", "v-neck", "square-neck"]
+                let neckline = necklines.first { shape.joined(separator: "-").contains($0) || shape.contains($0) } ?? ""
+                let hasTrain = shape.contains("train") || shape.contains("tulle")
+                let skirtShape = shape.contains("mermaid") ? "mermaid" : "column"
+                return "\(ground) gown, sparkling heavily beaded sequin \(neckline) bodice, flowing floor-length \(skirtShape) skirt in \(batikDescription)\(hasTrain ? ", sheer tulle train" : "")"
+            }
+            return "\(ground) \(garmentShape) with \(batikDescription)"
+        }
+        // A batik skirt should move: "fitted" made long skirts look stiff, so long skirts are "flowing".
+        let isLongSkirt = garment.category == .bottom && shape.contains { ["maxi", "mermaid", "long", "floor", "column", "wrap", "sarong"].contains($0) }
+        let isWrap = shape.contains { ["wrap", "sarong", "jarik", "draped", "knotted"].contains($0) }
+        if garment.category == .bottom && isWrap {
+            return "ankle-length \(textile) sarong wrap skirt with a draped front fold, \(batikDescription) on \(ground)"
+        }
+        return "\(isLongSkirt ? "flowing floor-length" : "fitted") \(garmentShape) in \(batikDescription) on \(ground)"
+    }
+
+    /// Whether a hex color is light (so a dark motif contrasts with it).
+    private static func isLight(hex: String) -> Bool {
+        let clean = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        guard clean.count == 6, let value = UInt32(clean, radix: 16) else { return true }
+        let r = Double((value >> 16) & 0xFF), g = Double((value >> 8) & 0xFF), b = Double(value & 0xFF)
+        return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5
     }
 
     /// Derives a clean, safe noun for simplified Regenerate prompt variations.
@@ -365,13 +450,156 @@ extension OutfitPlaygroundPackage {
         return "\(cue) \(updated)"
     }
 
+    /// Words that already say how a piece fits or flows.
+    private static let fitWords: Set<String> = [
+        "fitted", "bodycon", "corset", "structured", "tailored", "slim", "ruched", "wrap", "bodice", "sheath", "column",
+        "a-line", "flared", "tiered", "tulle", "pleated", "oversized", "relaxed", "loose", "skater", "mermaid", "peplum"
+    ]
+    private static let sleeveWords = ["sleeve", "sleeveless", "strap", "strapless", "halter", "off-shoulder", "one-shoulder",
+                                      "cami", "camisole", "tank", "bandeau", "tube"]
+
+    /// A top or dress with no fit word came out loose and shapeless (a chiffon "sweetheart" dress drawn as a
+    /// long-sleeve shift), and with no sleeve word Image Playground copied the long sleeves of the profile photo.
+    /// Adds "fitted" and, for necklines that are normally sleeveless, "sleeveless".
+    private static func withFitAndSleeves(_ phrase: String, for garment: GarmentPlaygroundAttributes, hasOuter: Bool) -> String {
+        guard garment.category == .top || garment.category == .dress else { return phrase }
+        let lower = phrase.lowercased()
+        let words = Set(lower.components(separatedBy: CharacterSet.alphanumerics.inverted.subtracting(CharacterSet(charactersIn: "-"))))
+        var result = phrase
+        if words.isDisjoint(with: fitWords) {
+            result = "fitted " + result
+        }
+        let hasSleeveInfo = sleeveWords.contains { lower.contains($0) }
+        let usuallySleeveless = ["sweetheart", "corset", "bustier", "slip", "bodice"].contains { lower.contains($0) }
+        if !hasSleeveInfo, usuallySleeveless, !hasOuter {
+            result += " sleeveless"
+        }
+        return result
+    }
+
     /// Builds a clean phrase for an individual garment at the requested variation level.
     /// `0` uses the full sanitized `playgroundPrompt`; higher levels progressively simplify wording.
+    /// A plain color Image Playground understands, read from the hex ("pastel peach", "dark green").
+    /// Swatch names mislead it: "Peach Nougat" came out beige and "Pastel Sage" came out grey.
+    static func plainColorName(hex: String) -> String? {
+        let clean = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        guard clean.count == 6, let value = UInt32(clean, radix: 16) else { return nil }
+        let r = Double((value >> 16) & 0xFF) / 255, g = Double((value >> 8) & 0xFF) / 255, b = Double(value & 0xFF) / 255
+        let maximum = max(r, g, b), delta = maximum - min(r, g, b)
+        let saturation = maximum == 0 ? 0 : delta / maximum
+        var hue = 0.0
+        if delta > 0 {
+            if maximum == r { hue = 60 * ((g - b) / delta).truncatingRemainder(dividingBy: 6) }
+            else if maximum == g { hue = 60 * ((b - r) / delta + 2) }
+            else { hue = 60 * ((r - g) / delta + 4) }
+        }
+        if hue < 0 { hue += 360 }
+
+        if saturation < 0.08 || (maximum > 0.85 && saturation < 0.14 && (25...60).contains(hue)) {
+            switch maximum {
+            case 0.9...: return saturation < 0.04 ? "white" : "ivory"
+            case 0.7..<0.9: return "light grey"
+            case 0.4..<0.7: return "grey"
+            case 0.2..<0.4: return "charcoal"
+            default: return "black"
+            }
+        }
+        let hueName: String
+        switch hue {
+        case 0..<12, 345...360: hueName = "red"
+        case 12..<25: hueName = maximum > 0.8 ? (saturation < 0.35 ? "peach" : "coral") : "rust"
+        case 25..<42: hueName = maximum > 0.8 ? "peach" : (maximum < 0.55 ? "brown" : "camel")
+        case 42..<65: hueName = maximum > 0.75 ? "yellow" : "mustard"
+        case 65..<100: hueName = maximum > 0.75 ? "sage green" : "olive green"
+        case 100..<160: hueName = maximum > 0.8 ? "mint green" : "green"
+        case 160..<195: hueName = "teal"
+        case 195..<215: hueName = "sky blue"
+        case 215..<250: hueName = maximum < 0.45 ? "navy blue" : "blue"
+        case 250..<290: hueName = maximum > 0.75 ? "lavender" : "purple"
+        case 290..<330: hueName = maximum > 0.75 ? "lilac pink" : "plum"
+        default: hueName = "pink"
+        }
+        if maximum >= 0.8 && saturation <= 0.45 { return "pastel \(hueName == "red" ? "pink" : hueName)" }
+        if maximum < 0.4 { return "dark \(hueName)" }
+        if saturation < 0.3 { return "muted \(hueName)" }
+        return hueName
+    }
+
+    /// Color words removed from the model's visual prompt before the real color is put back.
+    private static let colorWords: Set<String> = [
+        "color", "colored", "colour", "coloured", "red", "pink", "rose", "blush", "coral", "peach", "orange", "rust",
+        "terracotta", "yellow", "mustard", "lemon", "butter", "gold", "golden", "green", "sage", "olive", "mint",
+        "emerald", "forest", "teal", "turquoise", "aqua", "tosca", "blue", "navy", "cobalt", "sky", "periwinkle",
+        "lavender", "lilac", "purple", "plum", "violet", "mauve", "burgundy", "maroon", "wine", "berry", "fuchsia",
+        "magenta", "brown", "chocolate", "camel", "tan", "beige", "cream", "ivory", "white", "black", "grey", "gray",
+        "charcoal", "silver", "khaki", "taupe", "nougat", "latte", "mocha", "pastel", "light", "dark", "deep",
+        "dusty", "pale", "bright", "muted", "neon"
+    ]
+
+    /// The garment with its swatch name swapped for a plain color, in its name and visual prompt.
+    /// Color words the model writes in "colorName" that Image Playground understands, longest first.
+    private static let namedColorPhrases = [
+        "dusty pink", "dusty rose", "pale champagne", "soft pink", "powder blue", "baby blue", "navy blue", "sage green",
+        "champagne", "blush", "mauve", "ivory", "cream", "beige", "bronze", "gold", "silver", "navy", "black", "white",
+        "sage", "lavender", "lilac", "peach", "coral", "burgundy", "maroon", "emerald", "teal", "brown", "charcoal",
+        "grey", "gray", "pink", "rose", "red", "blue", "green", "purple", "yellow", "orange"
+    ]
+
+    private static func withPlainColor(_ garment: GarmentPlaygroundAttributes) -> GarmentPlaygroundAttributes {
+        // A readable color in "colorName" ("Pale dusty pink ...") wins over the hex: the model sometimes writes
+        // a hex that doesn't match its own color (dusty pink named, #E9686A coral-red given).
+        let lowerName = garment.colorName.lowercased()
+        var namedColor = namedColorPhrases.first { lowerName.contains($0) }
+        // "Butter Yellow" alone came out a strong gold: when the hex is a pastel, say so.
+        if let named = namedColor, !["pastel", "soft", "dusty", "pale", "baby", "powder"].contains(where: named.contains),
+           let fromHex = plainColorName(hex: garment.colorHex), fromHex.hasPrefix("pastel") {
+            namedColor = "pastel \(named)"
+        }
+        guard let plain = namedColor ?? plainColorName(hex: garment.colorHex) else { return garment }
+        // The model sometimes writes its own color in the prompt ("red satin bow dress") while the parser
+        // snapped the garment to another swatch (a pastel). Every color word is removed and the color
+        // read from the hex leads, so the picture always shows the garment's real color.
+        let swatchWords = Set(garment.colorName.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty })
+        var prompt = garment.playgroundPrompt
+        if let current = prompt {
+            let kept = current
+                .components(separatedBy: CharacterSet.alphanumerics.inverted.subtracting(CharacterSet(charactersIn: "-")))
+                .filter { !$0.isEmpty }
+                .filter { word in
+                    // "off-white" or "navy-blue" is checked part by part, so it can't repeat the color.
+                    let parts = word.lowercased().split(separator: "-").map(String.init)
+                    return !parts.contains { colorWords.contains($0) || swatchWords.contains($0) }
+                }
+            prompt = "\(plain) color " + kept.joined(separator: " ")
+        }
+        return GarmentPlaygroundAttributes(
+            id: garment.id,
+            category: garment.category,
+            name: garment.name,
+            clothingType: garment.clothingType,
+            colorHex: garment.colorHex,
+            colorName: plain,
+            fabricMaterial: garment.fabricMaterial,
+            fitSilhouette: garment.fitSilhouette,
+            stylingDetails: garment.stylingDetails,
+            playgroundPrompt: prompt
+        )
+    }
+
     private static func buildPhrase(
-        for garment: GarmentPlaygroundAttributes,
+        for originalGarment: GarmentPlaygroundAttributes,
         hasOuter: Bool,
-        variation: Int
+        variation: Int,
+        accent: String? = nil
     ) -> String {
+        let garment = withPlainColor(originalGarment)
+        // Batik and other Indonesian textiles: the print leads the phrase in every variation,
+        // otherwise the color word wins and the piece is drawn plain.
+        if let phrase = textilePhrase(for: garment, short: variation >= 2, accent: accent) {
+            return sanitizePrompt(phrase, category: garment.category, hasOuter: hasOuter)
+        }
         switch variation {
         case 0:
             let base: String
@@ -380,8 +608,10 @@ extension OutfitPlaygroundPackage {
             } else {
                 base = "\(garment.colorName) color \(garment.name)"
             }
+            // Capped at 12 words: long concepts made Image Playground fail or drop pieces.
             let sanitized = sanitizePrompt(base, category: garment.category, hasOuter: hasOuter)
-            return reinforcePatternCue(in: sanitized, for: garment)
+                .split(separator: " ").prefix(12).joined(separator: " ")
+            return reinforcePatternCue(in: withFitAndSleeves(sanitized, for: garment, hasOuter: hasOuter), for: garment)
         case 1:
             let colorPrefix = resolvedVisualColorPrefix(for: garment)
             let safeNoun = safeCategoryNoun(for: garment)
@@ -408,6 +638,29 @@ extension OutfitPlaygroundPackage {
         }
     }
 
+    /// The plain color of the outfit's first piece that isn't batik (or another Indonesian textile),
+    /// used as the batik's motif color so the pieces match.
+    private var textileAccentColor: String? {
+        let plain = garments.first { garment in
+            let text = "\(garment.name) \(garment.playgroundPrompt ?? "")".lowercased()
+            return !Self.indonesianTextiles.contains { text.contains($0) }
+        }
+        return plain.flatMap { Self.plainColorName(hex: $0.colorHex) }
+    }
+
+    /// Shoes that fit the occasion (heels for formal events, sneakers or flats for casual ones),
+    /// in black for a dark outfit and beige otherwise.
+    private var occasionShoes: String {
+        let darkPieces = garments.filter { !Self.isLight(hex: $0.colorHex) }.count
+        let darkOutfit = !garments.isEmpty && darkPieces * 2 > garments.count
+        let shoes = OccasionStyleBank.shoes(forTitle: occasionTitle, dresscode: dresscode, lookIndex: lookIndex, darkOutfit: darkOutfit)
+        // Same safety filter as the garments, so no blocked word can stop the whole image.
+        return shoes
+            .components(separatedBy: CharacterSet.alphanumerics.inverted.subtracting(CharacterSet(charactersIn: "-")))
+            .filter { !$0.isEmpty && !Self.blockedWords.contains($0.lowercased()) }
+            .joined(separator: " ")
+    }
+
     /// Converts mapped outfit attributes into native `ImagePlaygroundConcept` tokens.
     /// Directly compatible with `.imagePlaygroundSheet(concepts:sourceImage:)`.
     @available(iOS 18.2, macOS 15.2, *)
@@ -429,14 +682,14 @@ extension OutfitPlaygroundPackage {
         
         // When an outer layer is present, lead with the outer worn over the inner top/dress
         if let outer = outerGarment {
-            let outerPhrase = Self.buildPhrase(for: outer, hasOuter: true, variation: mode)
+            let outerPhrase = Self.buildPhrase(for: outer, hasOuter: true, variation: 0, accent: textileAccentColor)
             var segments: [String] = []
             
             if let top = topGarment {
-                let topPhrase = Self.buildPhrase(for: top, hasOuter: true, variation: mode)
+                let topPhrase = Self.buildPhrase(for: top, hasOuter: true, variation: 0, accent: textileAccentColor)
                 segments.append("\(outerPhrase) over \(topPhrase)")
             } else if let dress = dressGarment {
-                let dressPhrase = Self.buildPhrase(for: dress, hasOuter: true, variation: mode)
+                let dressPhrase = Self.buildPhrase(for: dress, hasOuter: true, variation: 0, accent: textileAccentColor)
                 segments.append("\(outerPhrase) over \(dressPhrase)")
             } else if bottomGarment != nil {
                 segments.append("\(outerPhrase) over a neutral classic top")
@@ -445,11 +698,13 @@ extension OutfitPlaygroundPackage {
             }
             
             if let bottom = bottomGarment {
-                let bottomPhrase = Self.buildPhrase(for: bottom, hasOuter: true, variation: mode)
+                let bottomPhrase = Self.buildPhrase(for: bottom, hasOuter: true, variation: 0, accent: textileAccentColor)
                 segments.append("with \(bottomPhrase)")
             }
             
+            segments.append("and \(occasionShoes)")
             let combined = segments.joined(separator: ", ")
+            print("🎨 [ImagePlayground] Concept (variation \(mode)): \(leadVerb) \(combined)")
             return [.text("\(leadVerb) \(combined)")]
         }
         
@@ -458,7 +713,7 @@ extension OutfitPlaygroundPackage {
             garmentPhrases.append("coordinated classic tailored blouse")
         }
         for garment in garments {
-            let phrase = Self.buildPhrase(for: garment, hasOuter: hasOuter, variation: mode)
+            let phrase = Self.buildPhrase(for: garment, hasOuter: hasOuter, variation: 0, accent: textileAccentColor)
             if !phrase.isEmpty {
                 garmentPhrases.append(phrase)
             }
@@ -469,7 +724,7 @@ extension OutfitPlaygroundPackage {
         }
         
         let outfitList = garmentPhrases.joined(separator: pairJoiner)
-        var promptText = "\(leadVerb) \(outfitList)"
+        var promptText = "\(leadVerb) \(outfitList), and \(occasionShoes)"
         if mode <= 1 {
             let lower = promptText.lowercased()
             switch upperSleeveCoverage {
@@ -484,6 +739,7 @@ extension OutfitPlaygroundPackage {
                 break
             }
         }
+        print("🎨 [ImagePlayground] Concept (variation \(mode)): \(promptText)")
         return [.text(promptText)]
     }
 }

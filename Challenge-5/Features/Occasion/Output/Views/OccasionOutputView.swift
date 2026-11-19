@@ -578,10 +578,14 @@ struct OccasionOutputView: View {
     }
     
     private func triggerPlaygroundGeneration() {
+        print("🖼️ [ImagePlayground] Generate tapped. processing: \(isProcessingPlayground), outfit loading: \(viewModel.isLoading), look loading: \(viewModel.isCurrentLookLoading), has look: \(viewModel.currentLook != nil)")
         guard !isProcessingPlayground,
               !viewModel.isLoading,
               !viewModel.isCurrentLookLoading,
-              let currentLook = viewModel.currentLook else { return }
+              let currentLook = viewModel.currentLook else {
+            print("⚠️ [ImagePlayground] Not started: still busy or no look selected.")
+            return
+        }
         
         // Show loading indicator immediately when user taps Generate / Regenerate
         isProcessingPlayground = true
@@ -599,6 +603,7 @@ struct OccasionOutputView: View {
         #else
         #if canImport(ImagePlayground)
         if #available(iOS 18.2, *) {
+            print("🖼️ [ImagePlayground] Available on this device: \(ImagePlaygroundViewController.isAvailable). Variation \(playgroundVariationByLookID[currentLook.id, default: 0]).")
             if ImagePlaygroundViewController.isAvailable {
                 // Ensure state is cleanly settled before presenting remote XPC sheet
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {

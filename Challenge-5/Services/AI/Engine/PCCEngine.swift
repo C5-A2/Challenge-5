@@ -50,6 +50,15 @@ public actor PCCEngine {
 
     // MARK: - Availability
 
+    /// One line about today's PCC quota, for the console: whether it's reached or close, and when it resets.
+    public nonisolated static func quotaSummary() -> String {
+        let usage = PrivateCloudComputeLanguageModel().quotaUsage
+        var approaching = false
+        if case .belowLimit(let info) = usage.status { approaching = info.isApproachingLimit }
+        let reset = usage.resetDate.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "not given"
+        return "limit reached: \(usage.isLimitReached), approaching: \(approaching), resets: \(reset)"
+    }
+
     /// Throws `PCCEngineError.unavailable` when PCC cannot be used right now.
     public nonisolated static func validateAvailability() throws {
         let model = PrivateCloudComputeLanguageModel()
@@ -75,12 +84,15 @@ public actor PCCEngine {
         user: String,
         generating type: T.Type,
         maxTokens: Int = 512,
-        temperature: Float = 0.2
+        temperature: Float = 0.2,
+        topP: Float? = nil
     ) async throws -> T {
         try Self.validateAvailability()
 
         let session = LanguageModelSession(model: PrivateCloudComputeLanguageModel(), instructions: system)
-        let options = GenerationOptions(temperature: Double(temperature), maximumResponseTokens: maxTokens)
+        // Nucleus sampling per look direction, so the 5 looks differ more.
+        let sampling = topP.map { GenerationOptions.SamplingMode.random(probabilityThreshold: Double($0)) }
+        let options = GenerationOptions(sampling: sampling, temperature: Double(temperature), maximumResponseTokens: maxTokens)
         do {
             let response = try await session.respond(to: user, generating: type, options: options)
             return response.content
@@ -98,7 +110,8 @@ public actor PCCEngine {
         user: String,
         jsonPrefix: String? = nil,
         maxTokens: Int = 512,
-        temperature: Float = 0.2
+        temperature: Float = 0.2,
+        topP: Float? = nil
     ) async throws -> String {
         try Self.validateAvailability()
 
@@ -108,7 +121,9 @@ public actor PCCEngine {
         }
 
         let session = LanguageModelSession(model: PrivateCloudComputeLanguageModel(), instructions: instructions)
-        let options = GenerationOptions(temperature: Double(temperature), maximumResponseTokens: maxTokens)
+        // Nucleus sampling per look direction (the Qwen setup used it too), so the 5 looks differ more.
+        let sampling = topP.map { GenerationOptions.SamplingMode.random(probabilityThreshold: Double($0)) }
+        let options = GenerationOptions(sampling: sampling, temperature: Double(temperature), maximumResponseTokens: maxTokens)
         do {
             let response = try await session.respond(to: user, options: options)
             return response.content
@@ -122,6 +137,8 @@ public actor PCCEngine {
     private static let visionSystemPrompt = """
         You are an expert fashion stylist and visual analyst with deep knowledge of global, Asian, and Indonesian fashion aesthetics.
         Describe ONLY the clothing worn by the person in this photo in clear natural English, garment by garment: one sentence per garment (top, bottom or dress, and any outer layer), then one short sentence for the overall vibe.
+        If the bodice and the skirt are sewn together as one garment (a gown, a kebaya dress, a mermaid gown), call it ONE "dress" or "gown" and describe its bodice and its skirt inside that sentence; only call them a top and a bottom when they are clearly two separate pieces. Name draped panels, tulle or satin sashes, trains, slits and the full length (floor-length, ankle, knee).
+        End with one last line, exactly "STRUCTURE: ONE-PIECE" when the outfit is a dress, gown or jumpsuit (even if the bodice and skirt are different fabrics), or exactly "STRUCTURE: SEPARATES" when the top and the bottom are two pieces.
         For EACH garment state its type, neckline or collar, sleeve length, length (cropped, waist, hip, knee, midi, maxi), fit, fabric, pattern, and its exact color with a shade word (for example "dusty pastel pink", "light wash blue", not just "pink" or "blue").
         Highlight:
         - Specific garment pieces and cut names (e.g. crop top, halter top, camisole, blazer, suit jacket, cardigan, button-down shirt, wide-leg trousers, pleated skirt, tiered ruffle skirt, maxi skirt, cheongsam/qipao, mandarin-collar dress, batik blouse, batik shirt, batik dress, batik skirt, kebaya, denim shorts).

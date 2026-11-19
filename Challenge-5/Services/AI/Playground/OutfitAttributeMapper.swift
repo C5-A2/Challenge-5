@@ -265,7 +265,11 @@ enum OutfitAttributeMapper {
         let key = data.count ^ data.prefix(256).hashValue ^ (openArms ? 1 : 0)
         if let cached = sourceImageCache, cached.key == key { return cached.image }
         guard let photo = UIImage(data: data) else { return nil }
-        let image = photoWithPlainClothes(photo, openArms: openArms) ?? photo
+        let plain = photoWithPlainClothes(photo, openArms: openArms)
+        print(plain == nil
+              ? "⚠️ [OutfitAttributeMapper] Could not find the face or the person in the profile photo; Image Playground gets the original photo (its clothes may be copied)."
+              : "🎨 [OutfitAttributeMapper] Profile photo clothes painted plain for Image Playground.")
+        let image = plain ?? photo
         sourceImageCache = (key, image)
         return image
     }

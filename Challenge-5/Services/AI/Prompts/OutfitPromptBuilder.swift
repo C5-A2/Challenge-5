@@ -322,7 +322,8 @@ struct OutfitPromptBuilder: Sendable {
         structure: OutfitStructure,
         previousLooks: [GeneratedLookSummary] = [],
         referenceAnalysis: ReferenceStyleAnalysis? = nil,
-        forcesCompact: Bool = false
+        forcesCompact: Bool = false,
+        recreatesReference: Bool = false
     ) -> ChatPrompt {
         let system = buildSingleLookSystemPrompt(
             occasion: occasion,
@@ -331,7 +332,8 @@ struct OutfitPromptBuilder: Sendable {
             structure: structure,
             previousLooks: previousLooks,
             referenceAnalysis: referenceAnalysis,
-            forcesCompact: forcesCompact
+            forcesCompact: forcesCompact,
+            recreatesReference: recreatesReference
         )
         let user = buildSingleLookUserPrompt(
             occasion: occasion,
@@ -354,9 +356,11 @@ struct OutfitPromptBuilder: Sendable {
         structure: OutfitStructure,
         previousLooks: [GeneratedLookSummary],
         referenceAnalysis: ReferenceStyleAnalysis? = nil,
-        forcesCompact: Bool = false
+        forcesCompact: Bool = false,
+        recreatesReference: Bool = false
     ) -> String {
-        let archetype = OutfitArchetype(lookIndex: lookIndex)
+        // With several reference photos, look N recreates photo N, so it uses the reference direction.
+        let archetype: OutfitArchetype = recreatesReference ? .referenceMatch : OutfitArchetype(lookIndex: lookIndex)
         let hasReference = hasReferenceImages(occasion)
         let title = archetype.title(hasReference: hasReference, hasVision: !occasion.visions.isEmpty)
 
@@ -425,7 +429,9 @@ struct OutfitPromptBuilder: Sendable {
 
     /// Above this size (about 3,100 tokens) the prompt is rebuilt compact, so one look's JSON (300-600 tokens) still fits
     /// in the model's 4,096-token context.
-    private static let maximumSystemPromptCharacters = 12_500
+    /// Apple PCC has a 32K-token context, so the full prompt fits. The old 12,500 limit (for Qwen's 4K context)
+    /// kept switching to the compact prompt, which lists only the last 2 looks, so look 4 or 5 repeated look 1.
+    private static let maximumSystemPromptCharacters = 40_000
     /// In a compact prompt, only the latest looks are listed as "do not repeat".
     private static let compactPreviousLookCount = 2
 
@@ -446,11 +452,12 @@ struct OutfitPromptBuilder: Sendable {
     private static let garmentNamingRule = """
     GARMENT NAMES & VISUAL PROMPTS:
     - "name": the cut or detail, then the garment type (no "+" sign, no color words; the color goes only in "colorName"). Name the neckline, sleeve, waist, length or silhouette instead of vague words (tailored, structured, elegant, classic, chic, sophisticated, modern, refined).
-    - A textile, pattern or texture required by the dresscode or the reference goes in the "name" and "playgroundPrompt" of the garment that carries it, in every look. Do not invent a printed pattern (floral, batik, stripes) that nobody asked for. Textures and trims (lace, tulle, organza, feathers, pearls, beading, sequins, ruffles, bows, pleats, draping, ruching) are details, not patterns, and are welcome when they fit the occasion.
-    - When a garment features batik, tenun, cheongsam, or cultural embroidery, write "playgroundPrompt" to highlight its visual contrast (e.g. "navy color cotton skirt with prominent contrasting batik motif print", "red color satin cheongsam dress with distinct contrasting gold floral embroidery") so the motif pops vividly instead of rendering as a faint tone-on-tone texture.
+    - A textile, pattern or texture required by the dresscode or the reference goes in the "name" and "playgroundPrompt" of the garment that carries it, in every look. Do not invent a printed pattern (floral, batik, stripes) that nobody asked for. Textures and trims (lace, tulle, organza, feathers, pearls, beading, sequins, ruffles, bows, pleats, draping, ruching, corset boning) are details, not patterns, and are welcome.
+    - When a garment features a cheongsam or cultural embroidery, write "playgroundPrompt" to highlight its visual contrast (e.g. "red color satin cheongsam dress with distinct contrasting gold floral embroidery") so the detail pops vividly instead of rendering as a faint tone-on-tone texture. Batik, tenun and other Indonesian textiles follow the DRESSCODE CHECKLIST.
     - "material": the base fabric only (e.g. Silk, Satin, Linen), never a pattern word.
     - Use a different cut or detail than the previous looks.
-    - "playgroundPrompt": 5-9 words, "[color] color [fabric] [key detail, texture or textile] [clothing noun]" so the image shows the detail (e.g. "ivory color silk pleated wrap blouse", "navy color batik pleated midi skirt"). Use safe, standard garment terms (top, blouse, knitwear, skirt, trousers, midi dress) and never use "sheer", "translucent", "revealing" or body-part words. Outer layers always say "long-sleeve".
+    - The key detail must be visible from the FRONT in a full-body photo (neckline, sleeves, waist, front drape, hem, silhouette). Never rely on a back-only detail (bow-back, open back, back slit).
+    - "playgroundPrompt": 5-9 words, "[color] color [fabric] [key detail, texture or textile] [clothing noun]" so the image shows the detail (e.g. "white color satin feather-trimmed corset mini dress", "navy color batik pleated midi skirt"). Never use "sheer", "translucent", "revealing" or body-part words. Outer layers always say "long-sleeve".
     """
 
     // MARK: - Occasion & Setting
@@ -464,34 +471,86 @@ struct OutfitPromptBuilder: Sendable {
         // Known occasions get a guide (formality, statement level, fabrics, a silhouette option for this look),
         // so the model doesn't have to guess what the title means or fall back to plain basics.
         if let guide = OccasionStyleBank.guide(forTitle: occasion.title, dresscode: cleanDresscode + " " + note) {
-            lines.append(guide.promptText(lookIndex: lookIndex, hasDress: structure.hasDress))
+            // A batik or kebaya dresscode brings its own required styling (DRESSCODE CHECKLIST below). Two "required"
+            // silhouettes fought, and the guide's plain off-shoulder top won over the kebaya, so the guide only gives an idea here.
+            let hasTextileStyling = !DresscodeRequirements.forOccasion(title: occasion.title, dresscode: cleanDresscode).textiles.isEmpty
+            lines.append(guide.promptText(lookIndex: lookIndex + Self.styleOffset, hasDress: structure.hasDress,
+                                          hasReference: hasReferenceImages(occasion) || hasTextileStyling))
         } else {
             lines.append("Infer the real-world venue, activity, time of day, comfort level and formality from '\(occasion.title)'. Choose a modern, stylish outfit a fashionable woman would genuinely wear there: cozy/elevated silhouettes for relaxed or at-home moments, polished separates or dresses for outings, and eveningwear only for formal events.")
+            // Without a guide the model fell back to office blouses with plain trousers, so each look still gets a modern cut.
+            if !hasReferenceImages(occasion), DresscodeRequirements.forOccasion(title: occasion.title, dresscode: cleanDresscode).textiles.isEmpty {
+                let options = structure.hasDress ? Self.fallbackDressOptions : Self.fallbackSeparatesOptions
+                lines.append("Silhouette for THIS look (required): \(options[max(lookIndex + Self.styleOffset, 0) % options.count]). Keep this cut and its key detail; adapt fabric and formality to the event.")
+            }
         }
 
+        // A textile, theme or formality named in the title counts too ("batik day", "hari batik").
+        let requirements = DresscodeRequirements.forOccasion(title: occasion.title, dresscode: cleanDresscode)
+        var checklist: [String] = []
         if cleanDresscode.isEmpty {
             lines.append("No dresscode given: infer the right formality from the occasion.")
         } else {
-            var checklist: [String] = []
             if OutfitStructure(dresscode: cleanDresscode) != nil {
                 checklist.append("Garment: EVERY look uses exactly the garment type the dresscode names, with the length, fit and details it names (put those words in the garment \"name\").")
             }
             if DresscodeColorRule(dresscode: cleanDresscode, palette: []) != nil {
                 checklist.append("Colors: only the colors in DRESSCODE COLORS below.")
             }
-            checklist += DresscodeRequirements(dresscode: cleanDresscode).checklist
             lines.append("DRESSCODE (hard rule for every look): \"\(cleanDresscode)\". Follow its formality, colors, textile, pattern, theme and garment exactly.")
-            let exclusions = DresscodeText.negated(cleanDresscode)
-            if !exclusions.isEmpty {
-                checklist.append("Ruled out by the dresscode (never use in any piece): \(exclusions).")
-            }
-            if !checklist.isEmpty {
-                lines.append("DRESSCODE CHECKLIST (this look must pass every line):\n" + checklist.map { "- \($0)" }.joined(separator: "\n"))
-            }
         }
+        checklist += requirements.checklist
+        checklist += requirements.textileStyling(
+            lookIndex: lookIndex + Self.styleOffset,
+            structure: structure,
+            formality: Self.textileFormality(title: occasion.title, dresscode: cleanDresscode + " " + note),
+            hasReference: hasReferenceImages(occasion) && OutfitArchetype(lookIndex: lookIndex) != .surpriseMe
+        )
+        let exclusions = DresscodeText.negated(cleanDresscode)
+        if !exclusions.isEmpty {
+            checklist.append("Ruled out by the dresscode (never use in any piece): \(exclusions).")
+        }
+        if !checklist.isEmpty {
+            lines.append("DRESSCODE CHECKLIST (this look must pass every line):\n" + checklist.map { "- \($0)" }.joined(separator: "\n"))
+        }
+        lines.append("ONE MOOD FOR ALL 5 LOOKS: every look belongs to this occasion's mood and statement level (for a birthday: sweet, festive and photo-ready; for a wedding: elegant and glamorous). The looks differ in silhouette, details and color, never in how dressy they are.")
         lines.append("HOW THE RULES COMBINE: the dresscode decides WHAT she wears (garment, textile, pattern, colors, formality); her body styling goal decides the CUT and where details go; the look direction decides the STYLE IDEA; her palette chooses colors only where the dresscode doesn't.")
         return lines.joined(separator: "\n")
     }
+
+    /// How formal batik or kebaya styling must be for this occasion.
+    static func textileFormality(title: String, dresscode: String) -> DresscodeRequirements.TextileFormality {
+        guard let guide = OccasionStyleBank.guide(forTitle: title, dresscode: dresscode) else { return .regular }
+        switch guide.name {
+        case "Inauguration or official ceremony", "Job interview", "Religious service", "Funeral or condolence visit", "School meeting":
+            return .covered
+        case "Graduation", "Attending a graduation", "Wedding guest", "Gala, prom or formal dinner", "Formal event", "Semi-formal or cocktail event",
+             "National day or traditional event", "Family celebration (parents' anniversary, Mother's Day)", "Eid or family gathering":
+            return .elegant
+        default:
+            return .regular
+        }
+    }
+
+    /// Shifts which silhouette, batik styling and motif each look gets. Set to a new random value at the
+    /// start of every generation, so generating the same occasion again doesn't bring back the same outfits.
+    nonisolated(unsafe) static var styleOffset = 0
+
+    /// Modern cuts used when no occasion guide matches the title, one per look.
+    private static let fallbackSeparatesOptions = [
+        "a draped sweetheart top with high-rise wide-leg trousers",
+        "a fitted corset top with a satin midi skirt",
+        "a puff-sleeve square-neck top with a pleated mini skirt",
+        "an asymmetric one-shoulder top with straight trousers",
+        "a matching co-ord: a cropped top and a midi skirt in the same color"
+    ]
+    private static let fallbackDressOptions = [
+        "a square-neck puff-sleeve mini dress",
+        "a corset-bodice midi dress with a flowing skirt",
+        "a one-shoulder draped midi dress",
+        "a halter-neck slip dress",
+        "a ruched wrap mini dress"
+    ]
 
     /// The user lives in Indonesia: tropical weather and what women there usually wear.
     /// Without this, the model defaults to Western cold-weather pieces (wool coats, heavy knits).
@@ -500,7 +559,7 @@ struct OutfitPromptBuilder: Sendable {
     - Dress her the way young Indonesian women dress for this kind of event today, not for a cold Western climate.
     - Prefer breathable fabrics (cotton, linen, rayon, viscose, light crepe, chiffon; satin for evening).
     - If there is an outer layer, it stays light and short or mid-length. No wool coats, cashmere, puffer jackets, thick knits or long shapeless dusters.
-    - Traditional pieces or motifs (kebaya, batik, tenun, songket) ONLY when the reference photos or the dresscode explicitly ask for them; otherwise do NOT use traditional pieces.
+    - Traditional pieces or motifs (kebaya, batik, tenun, songket) ONLY when the reference photos, the dresscode or the occasion itself (a national day, Kartini, Hari Batik) ask for them; otherwise do NOT use traditional pieces.
     """
 
     private static let compactIndonesiaSetting = """
@@ -515,6 +574,9 @@ struct OutfitPromptBuilder: Sendable {
       * Relaxed, casual or at-home events: textured rib knit, contrast piping, asymmetric wrap or tie waist, ruched/gathered detail, scalloped or pointelle trim, clean tonal co-ord cuts (styled and current, never eveningwear).
       * Smart, daytime or semi-formal/evening events: pleats, draping, bows, structured panels, satin/jacquard sheen, lace trim, tulle, beading or statement tailoring.
     - Shaped, not shapeless: use intentional proportions (defined waist, draped neckline, crisp hem or body-skimming fit). Avoid dated, matronly or costume-like pieces and long shapeless outers.
+    - Think of what young women post on Instagram and Pinterest in 2026 and what Zara, Mango, Reformation, Love Bonito, Cotton Ink or This Is April sell this season: fitted bodices, corset or bustier tops, square, sweetheart, halter, one-shoulder or off-shoulder necklines, puff or flutter sleeves, cut-in shoulders, slip and wrap dresses, mini or asymmetric hems, co-ord sets, wide-leg trousers.
+    - NEVER old-fashioned: no lace bolero, shrug or cardigan over a dress, no tulle midi skirt with a lace bodice, no tights or stockings, no pussy-bow or bow-neck collar, no loose long-sleeve A-line or shift dress, no knee-length long-sleeve tea dress, no plain sheath dress, nothing a grandmother, an office uniform or a school uniform would look like. (Modern kebaya pieces asked for by a batik or kebaya dresscode, such as a beaded lace corset bodice or a tulle sash, are allowed.) Long sleeves only when the occasion needs modesty or the dresscode asks; then make them modern (puff, bishop or flared sleeves on a fitted bodice).
+    - Vary the fabric across the 5 looks: satin in at most one look; also use crepe, linen, cotton poplin, knit, chiffon, organza or denim where the occasion allows.
     """
 
     // MARK: - Look Direction
@@ -526,7 +588,7 @@ struct OutfitPromptBuilder: Sendable {
         case .referenceMatch:
             return hasReference
                 ? "Recreate the outfit in the user's reference photos as closely as possible: the same kind of pieces, layering, silhouette, textures, patterns and colors (see COLORS). Change only what the dresscode requires, and fit the cut to her styling goal."
-                : "Create her signature outfit for this occasion: a polished, flattering, current look she would happily wear again, using the suggested silhouette and strictly following the dresscode."
+                : "Create her signature outfit for this occasion: the most flattering, trend-led version of the suggested silhouette, at the occasion's statement level (sweet and festive for a birthday or party, elegant for a formal event), strictly following the dresscode. Never a safe office-like outfit."
         case .localTouch:
             return "Style her in contemporary Indonesian fashion-creator street or occasion wear: build the outfit around ONE distinctive modern element (an interesting texture, an asymmetric or draped cut, or a traditional textile ONLY if the dresscode or reference photos ask for it) while keeping every other piece simple, current and strictly compliant with the occasion and dresscode."
         case .colorStory:
@@ -566,12 +628,19 @@ struct OutfitPromptBuilder: Sendable {
             """
         case .localTouch, .colorStory, .lookMore:
             guard let analysis else { return nil }
+            // She uploads references to get looks like them, so the other looks are close variations,
+            // not loose "taste" hints (those gave blazers and mini skirts for gown references).
             return """
-            REFERENCE PHOTOS (her taste, follow it): keep the same style, formality, vibe, fit, level of trendiness and signature details as these photos (their textures and trims such as lace, feathers, corset, beading or tulle, and surface patterns only if explicitly named below), with the same kind of garments where the look direction allows, but do not copy them piece by piece:
-            "\(analysis.promptDescription)"
+            REFERENCE PHOTOS (she wants looks LIKE these; this wins over the OCCASION GUIDE and MODERN STYLE):
+            "\(analysis.fullDescription)"
+            - Keep the same garment type, length, silhouette, fabric mix, embellishments and color story as the reference photos (for example a floor-length gown stays a floor-length gown, a beaded bodice stays beaded, a batik mermaid skirt stays a batik mermaid skirt).
+            - Make it a new variation of them: change only one or two details (the neckline, the drape or sash, the type of embellishment, or the shade within the same color story) so it differs from the previous looks.
             """
         case .surpriseMe:
-            return nil
+            guard let analysis else { return nil }
+            return """
+            REFERENCE PHOTOS (keep their formality and elegance, but bring a new idea): "\(analysis.promptDescription)"
+            """
         }
     }
 
@@ -591,7 +660,8 @@ struct OutfitPromptBuilder: Sendable {
             return "STYLE VISION (main source for this look):\n\(details)"
         }
         let moods = occasion.visions.map { "\($0.adjective): \($0.visionDescription)" }.joined(separator: "\n- ")
-        return "PERSONALITY (keep this feeling in the outfit, without letting it override the look direction):\n- \(moods)"
+        // "Confident, elegant, energetic" gave a plain beige knit and pleated skirt: the feeling has to show.
+        return "PERSONALITY (she wants to look like this; it must be visible in the cut, the details and the color, inside the occasion's rules):\n- \(moods)"
     }
 
     /// Body shape guides every look with moderate weight: flattering cuts are preferred,
@@ -649,7 +719,7 @@ struct OutfitPromptBuilder: Sendable {
             DRESSCODE COLORS (hard rule, overrides her season palette, the look direction, the reference photos and the style vision):
             The event asks for "\(dresscodeColors.label)". EVERY garment must be \(dresscodeColors.label). Do not use any other color, not even as an accent or a neutral base.
             Pick each garment's "colorName" and "hexColor" from this list only, copied exactly: \(dresscodeColors.promptList)
-            Prefer the colors marked [suits her]. Use different shades from the list across the pieces so the outfit doesn't look flat.
+            Prefer the colors marked [suits her]. Use different shades from the list across the pieces so the outfit doesn't look flat.\(dresscodeColors.label.contains("pastel") ? "\nPASTEL: EVERY piece is a clearly colored pastel (soft pink, baby blue, lavender, mint, butter yellow, peach...). No white, cream, beige, grey, brown or black piece." : "")\(Self.pastelLeadLine(for: dresscodeColors, lookIndex: lookIndex))\(Self.toneLine(for: dresscodeColors))
             """
         }
 
@@ -662,6 +732,19 @@ struct OutfitPromptBuilder: Sendable {
             }
             return """
             COLORS (reference look): use the exact garment colors stated in the reference description for each corresponding piece. Give each color a clear name and an accurate hex. Do NOT swap them for palette colors.\(paletteHint)
+            """
+        }
+
+        // 3. The other looks stay in the reference photos' color story (for example a blush bodice with brown batik),
+        //    instead of a rotating accent color that turned them red, orange and teal.
+        if hasReference, referenceAnalysis != nil, archetype != .surpriseMe {
+            var paletteHint = ""
+            if let colorSeason = profile?.colorSeason {
+                let palette = colorSeason.outfitSwatches.map { swatch in "\(swatch.name) (\(swatch.hex))" }.joined(separator: ", ")
+                paletteHint = "\nPick each color from her \(colorSeason.rawValue) palette, the swatch closest to the reference color: \(palette)"
+            }
+            return """
+            COLORS (follow the reference photos): use the same color story as the reference outfits (the same bodice color and the same textile or skirt colors), shifting only the shade slightly so this look differs from the previous ones. No new color families.\(paletteHint)
             """
         }
 
@@ -679,7 +762,8 @@ struct OutfitPromptBuilder: Sendable {
         let neutralHexSet = Set(neutrals.map { $0.hex.uppercased() })
         let seasonColors = swatches.filter { !neutralHexSet.contains($0.hex.uppercased()) }
         // Spread accent hues across the 5 looks by putting this look's rotating hue family first.
-        let leadFamily = PaletteColorFamily.leadFamily(forLookIndex: lookIndex, palette: seasonColors)
+        // The offset changes each generation, so look 1 isn't always the pink/coral family.
+        let leadFamily = PaletteColorFamily.leadFamily(forLookIndex: lookIndex + Self.styleOffset, palette: seasonColors)
         let orderedSeasonColors: [ColorSeason.ColorSwatch]
         if let leadFamily {
             let leadSwatches = seasonColors.filter { PaletteColorFamily(hex: $0.hex) == leadFamily }
@@ -692,7 +776,14 @@ struct OutfitPromptBuilder: Sendable {
         func describe(_ list: [ColorSeason.ColorSwatch]) -> String {
             list.map { compactPalette ? $0.name : "\($0.name) (\($0.hex))" }.joined(separator: ", ")
         }
-        let leadNote = leadFamily.map { " For variety across looks, prefer \($0.rawValue) when picking an accent color." } ?? ""
+        // A soft "prefer" was ignored: every look came out pink or peach. The accent family is now required
+        // and its swatches are named, so the five looks spread over pinks, blues, greens, purples and golds.
+        let leadSwatchNames = leadFamily.map { family in
+            seasonColors.filter { PaletteColorFamily(hex: $0.hex) == family }.prefix(6).map { "\($0.name) (\($0.hex))" }.joined(separator: ", ")
+        } ?? ""
+        let leadNote = leadFamily.map { family in
+            "\nTHIS LOOK'S ACCENT COLOR (required, so the 5 looks don't all share one color): \(family.rawValue), in a soft shade, from: \(leadSwatchNames). Use no other non-neutral color family in this look."
+        } ?? ""
         let palette = neutrals.isEmpty || orderedSeasonColors.isEmpty
             ? describe(swatches)
             : "\nNeutrals (the base — prioritize first): \(describe(neutrals))\nSeason colors (the accent): \(describe(orderedSeasonColors))"
@@ -739,17 +830,91 @@ struct OutfitPromptBuilder: Sendable {
             neutralPriority = "NEUTRALS FIRST: keep most of the outfit neutral and let the bold idea (the accent or the cut) be the surprise."
             mixingRule = "Do not dress her all in the same earthy family (for example all brown and green). Mix neutrals with one season color instead."
         default:
-            neutralPriority = "NEUTRALS FIRST: build the outfit on the neutrals. Use the darkest neutral as her black, the lightest neutral as her white, and greys, creams or beiges as the base for at least half of the pieces. Add season colors as ONE accent piece or a small part of the look."
+            neutralPriority = "NEUTRAL-FIRST: build on her neutrals (her darkest neutral as her black, her lightest as her white, plus greys, creams or beiges). Add at most ONE soft, muted season color, preferably from the family named above, on one main piece. An all-neutral outfit is fine when it has texture or a strong cut, but give it a tonal mix (for example cream with taupe), never one flat beige from head to toe."
             mixingRule = "Do not dress her all in the same earthy family (for example all brown and green). Mix neutrals with one season color instead."
+        }
+        // A batik or other Indonesian textile dresscode has its own color story (the batik's colors, with the
+        // bodice picking one of them). The neutral-plus-one-color rule and the rotating accent family fought with
+        // it and gave mismatched pairs (a teal lace top over a pink and navy batik skirt).
+        if !DresscodeRequirements.forOccasion(title: occasion.title, dresscode: occasion.dresscode).textiles.isEmpty {
+            return """
+            COLORS (\(colorSeason.rawValue)): \(rule)
+            TEXTILE COLOR STORY: first choose the textile's colors: a neutral ground from her neutrals (cream, ivory, navy, brown or black) plus ONE soft accent from the palette.\(leadNote) Every other piece (bodice, top, outer, sash) is that accent or one of those neutrals, so the whole outfit reads as one calm color story. Never add an unrelated or loud color.
+            Palette: \(palette)
+            Avoid: \(colorSeason.colorsToAvoid)
+            """
         }
         return """
         COLORS (\(colorSeason.rawValue)): \(rule)\(leadNote)
         \(neutralPriority)
         \(mixingRule)
-        CALM COLORS: build the outfit on neutrals and use at most ONE non-neutral color (two shades of it are fine). Prefer soft, muted shades. Never combine several bright colors: no rainbow, neon or clashing color mixes.
+        CALM COLORS: at most ONE non-neutral color (two shades of it are fine), \(Self.wantsLivelyColor(occasion) ? "in a clear, lively shade because she wants to look energetic or bold (still never neon)" : "always in a soft, muted shade"). Never neon or several competing colors.
+        HARMONY: the top and the bottom (or the dress and the outer) must belong together: either tonal (two shades of one color), or a neutral with one soft color, or two neutrals. Never two unrelated colors (for example teal with olive, or yellow with teal).
         Palette: \(palette)
         Avoid: \(colorSeason.colorsToAvoid)
         """
+    }
+
+    /// A requested tone holds for the whole outfit: neon means every piece is neon, earth tones every piece earthy.
+    /// Several named colors are split so the pieces still go together.
+    private static func toneLine(for rule: DresscodeColorRule) -> String {
+        let label = rule.label
+        if label.contains("neon") {
+            return "\nNEON: EVERY piece is a true neon (electric, fluorescent). No pastel, muted or neutral piece. Use one or two neon shades that look good together, for example neon pink with neon orange, or a tonal neon green."
+        }
+        if label.contains("earth") {
+            return "\nEARTH TONES: EVERY piece is an earth tone (terracotta, olive, camel, rust, sand, chocolate). No bright, pastel or cool color."
+        }
+        let words = label.split(separator: " ").filter { $0 != "pastel" }
+        if words.count >= 2 {
+            return "\nSEVERAL COLORS: use the named colors together in a planned way (for example one color for the main piece and the other for the second piece or a detail), so they look intentional, never random."
+        }
+        return ""
+    }
+
+    /// Style visions that need color with energy instead of the soft, muted default.
+    private static func wantsLivelyColor(_ occasion: OccasionItem) -> Bool {
+        let words = occasion.visions.map { $0.adjective.lowercased() }.joined(separator: " ")
+        return ["energetic", "bold", "confident", "vibrant", "playful", "fun", "happy", "joyful", "fierce"].contains { words.contains($0) }
+    }
+
+    /// Pastel families handed out one per look, so "pastel" isn't five pink-and-blue looks.
+    private static let pastelRotation: [(name: String, hues: [ClosedRange<Double>])] = [
+        ("pink", [300...360, 0...15]),
+        ("blue", [170...250]),
+        ("mint green", [70...170]),
+        ("lavender", [250...300]),
+        ("butter yellow or peach", [15...70])
+    ]
+
+    /// For a plain "pastel" dresscode: this look's pastel family, worn tonal so the pieces belong together
+    /// (pink with sage, or pink with lavender, looked mismatched).
+    private static func pastelLeadLine(for rule: DresscodeColorRule, lookIndex: Int) -> String {
+        guard rule.label == "pastel" else { return "" }
+        func hue(_ hex: String) -> Double? {
+            let clean = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+            guard clean.count == 6, let value = UInt32(clean, radix: 16) else { return nil }
+            let r = Double((value >> 16) & 0xFF) / 255, g = Double((value >> 8) & 0xFF) / 255, b = Double(value & 0xFF) / 255
+            let maximum = max(r, g, b), delta = maximum - min(r, g, b)
+            guard delta > 0 else { return nil }
+            var h: Double
+            if maximum == r { h = 60 * ((g - b) / delta).truncatingRemainder(dividingBy: 6) }
+            else if maximum == g { h = 60 * ((b - r) / delta + 2) }
+            else { h = 60 * ((r - g) / delta + 4) }
+            return h < 0 ? h + 360 : h
+        }
+        let count = pastelRotation.count
+        for step in 0..<count {
+            let family = pastelRotation[(max(lookIndex, 0) + step) % count]
+            let swatches = rule.swatches.filter { swatch in
+                guard let h = hue(swatch.hex) else { return false }
+                return family.hues.contains { $0.contains(h) }
+            }
+            guard !swatches.isEmpty else { continue }
+            let names = swatches.map { "\($0.name) (\($0.hex))" }.joined(separator: ", ")
+            return "\nTHIS LOOK'S PASTEL: \(family.name). Make the outfit tonal: every piece in a shade of \(family.name) from these: \(names). Do not mix two different pastel colors in one look."
+        }
+        return ""
     }
 
     /// Earlier looks, so this one is different in style and pieces, not only in color.
@@ -774,7 +939,7 @@ struct OutfitPromptBuilder: Sendable {
     private func piecesRule(for structure: OutfitStructure) -> String {
         let required = structure.categories.map { "\"\($0.rawValue)\"" }.joined(separator: ", ")
         if structure.hasOptionalOuter {
-            return "The \"garments\" array must contain these categories in this order: \(required). If you add an outer layer, put ONE \"\(GarmentCategory.outer.rawValue)\" item first."
+            return "The \"garments\" array must contain these categories in this order: \(required). An outer layer is optional: add one only when it clearly improves the look (a cropped jacket or a sharp blazer), never when it would cover the main piece's neckline, bodice or bow, and usually not for birthdays, parties or dates. If you add one, put ONE \"\(GarmentCategory.outer.rawValue)\" item first."
         }
         return "The \"garments\" array must contain exactly \(structure.categories.count) item(s), with these categories in this order: \(required)."
     }

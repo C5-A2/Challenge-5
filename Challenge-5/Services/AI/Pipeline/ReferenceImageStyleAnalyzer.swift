@@ -257,6 +257,14 @@ nonisolated struct ReferenceStyleAnalysis: Sendable {
     /// The outfit structure the descriptions mention most, so the reference look keeps the same pieces.
     /// `nil` when the text doesn't make it clear.
     let suggestedStructure: OutfitStructure?
+    /// Each photo's own description, so look N can recreate photo N exactly (with its own pieces).
+    let descriptions: [String]
+
+    /// The analysis of one photo only. `nil` when there is no photo at that index.
+    func focused(on index: Int) -> ReferenceStyleAnalysis? {
+        guard descriptions.indices.contains(index) else { return nil }
+        return ReferenceStyleAnalysis(descriptions: [descriptions[index]], recap: nil)
+    }
 
     /// Words in a VLM description that point to a one-piece outfit or an outer layer.
     private static let onePieceKeywords = ["dress", "gown", "jumpsuit", "romper", "playsuit"]
@@ -270,6 +278,7 @@ nonisolated struct ReferenceStyleAnalysis: Sendable {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         guard !cleaned.isEmpty else { return nil }
+        self.descriptions = cleaned
 
         fullDescription = cleaned.count == 1
             ? cleaned[0]
@@ -291,6 +300,11 @@ nonisolated struct ReferenceStyleAnalysis: Sendable {
     /// The pieces one description mentions: a dress or jumpsuit (with or without an outer layer),
     /// or separates (with or without an outer layer).
     private static func structure(in description: String) -> OutfitStructure {
+        // The vision model ends with an explicit structure line; trust it over keyword guessing.
+        let upper = description.uppercased()
+        let outer = outerKeywords.contains { description.lowercased().contains($0) }
+        if upper.contains("STRUCTURE: ONE-PIECE") { return outer ? .dressWithOuter : .dress }
+        if upper.contains("STRUCTURE: SEPARATES") { return outer ? .outerTopBottom : .topBottom }
         // Whole words only: "dressed" or "petticoat" must not count as a dress or a coat.
         let words = Set(description.lowercased()
             .components(separatedBy: CharacterSet.letters.inverted)
@@ -298,7 +312,11 @@ nonisolated struct ReferenceStyleAnalysis: Sendable {
         func mentions(_ keyword: String) -> Bool {
             words.contains(keyword) || words.contains(keyword + "s") || words.contains(keyword + "es")
         }
-        let hasOnePiece = onePieceKeywords.contains(where: mentions)
+        // A gown is often described as "a beaded bodice ... a batik mermaid skirt" with no word "dress":
+        // a bodice with a skirt and no separate top counts as one piece.
+        let separateTopWords = ["top", "blouse", "shirt", "kebaya", "camisole", "bustier", "tee"]
+        let bodiceGown = mentions("bodice") && mentions("skirt") && !separateTopWords.contains(where: mentions)
+        let hasOnePiece = onePieceKeywords.contains(where: mentions) || bodiceGown || mentions("train")
         let hasOuter = outerKeywords.contains(where: mentions)
         switch (hasOnePiece, hasOuter) {
         case (true, true): return .dressWithOuter
