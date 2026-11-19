@@ -289,11 +289,8 @@ struct OccasionOutputView: View {
     /// The user's own front body photo, falling back to the mock body (`mock_result_1`) when none is set.
     private var activePlaygroundSourceImage: Image? {
         let activeProfile = userProfiles.first ?? viewModel.profile
-        let openArms = (playgroundPackage?.upperSleeveCoverage ?? .long) != .long
-        // Full-body photo with her clothes painted plain, so Image Playground draws the recommended
-        // outfit instead of copying what she wore in the profile photo.
         if let frontData = activeProfile?.frontBodyPhotoData,
-           let uiImage = OutfitAttributeMapper.playgroundSourceImage(fromPhotoData: frontData, openArms: openArms) {
+           let uiImage = OutfitAttributeMapper.playgroundSourceImage(fromPhotoData: frontData) {
             return Image(uiImage: uiImage)
         }
         return Image("mock_result_1")
