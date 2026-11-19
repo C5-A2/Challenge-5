@@ -305,7 +305,7 @@ struct OutfitPromptBuilder: Sendable {
     ///   - lookIndex: The 0-based index of the look. It picks the look's `OutfitArchetype` (creative direction).
     ///   - structure: The pieces of this look (outer + top + bottom, top + bottom, dress, dress + outer).
     ///   - previousLooks: Looks already generated, so this one differs in style, pieces and colors.
-    ///   - referenceAnalysis: What the user's reference photos show, described by the on-device VLM (Qwen 2.5 VL).
+    ///   - referenceAnalysis: What the user's reference photos show, described by the vision model (Apple PCC).
     func buildFormattedPrompt(
         occasion: OccasionItem,
         profile: UserProfile?,

@@ -8,9 +8,9 @@
 import Foundation
 import Combine
 
-/// Manages on-demand background downloading and local caching of the Qwen AI models.
+/// Manages on-demand background downloading and local caching of the Qwen 3.5 LLM model.
 /// Keeps the App Store installer lightweight (~30 MB) while preserving on-device
-/// dual-model quality (Qwen 2.5-VL-3B + Qwen 3.5-4B).
+/// text generation quality (Qwen 3.5-4B).
 @MainActor
 public final class ModelDownloadManager: NSObject, ObservableObject {
 
@@ -35,21 +35,9 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
     /// Base URL for custom team model repository on Hugging Face Hub.
     nonisolated(unsafe) public static var customRepoBaseURL = "https://huggingface.co/michaeldavidsin/challenge-5-models/resolve/main"
 
-    /// The exact list of models required for visual analysis and 5-look outfit generation.
+    /// The exact list of models required for 5-look outfit generation.
     nonisolated public static var requiredModels: [ModelEntry] {
         [
-            // Vision-Language Model (VLM): Qwen 2.5-VL 3B Instruct
-            ModelEntry(
-                filename: "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
-                sizeBytes: 1_932_735_280, // ~1.8 GB
-                url: "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"
-            ),
-            // Multimodal Projector for Qwen 2.5-VL 3B
-            ModelEntry(
-                filename: "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf",
-                sizeBytes: 845_152_256, // ~806 MB
-                url: "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf"
-            ),
             // Text Generation LLM: Qwen 3.5 4B Instruct (Official Unsloth Release)
             ModelEntry(
                 filename: "Qwen3.5-4B-Q3_K_M.gguf",
@@ -64,7 +52,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
     @Published public private(set) var isDownloading: Bool = false
     @Published public private(set) var currentFileName: String = ""
     @Published public private(set) var currentStepIndex: Int = 0
-    @Published public private(set) var totalSteps: Int = 4
+    @Published public private(set) var totalSteps: Int = 1
     @Published public private(set) var progress: Double = 0.0 // 0.0 ... 1.0
     @Published public private(set) var statusText: String = "Preparing AI Stylist..."
     @Published public private(set) var errorMessage: String? = nil
@@ -103,22 +91,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
 
     /// Checks if all required model files are available on device.
     public var isAllModelsDownloaded: Bool {
-        // 1. Check VLM
-        let hasVLM = Self.isFileDownloaded(filename: "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf") ||
-            LLMResource.candidateURL(for: "Qwen2.5-VL-3B-Instruct-Q4_K_M") != nil
-        guard hasVLM else { return false }
-
-        // 2. Check Multimodal Projector
-        let hasMmproj = Self.isFileDownloaded(filename: "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf") ||
-            LLMResource.candidateURL(for: "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0") != nil
-        guard hasMmproj else { return false }
-
-        // 3. Check LLM (either single file or dev mode shards)
-        let hasSingleLLM = Self.isFileDownloaded(filename: "Qwen3.5-4B-Q3_K_M.gguf") ||
-            LLMResource.candidateURL(for: "Qwen3.5-4B-Q3_K_M") != nil
-        let hasShardedLLM = LLMResource.candidateURL(for: "Qwen3.5-4B-Q3_K_M-00001-of-00002") != nil
-
-        return hasSingleLLM || hasShardedLLM
+        isLLMAvailable
     }
 
     private var isLLMAvailable: Bool {

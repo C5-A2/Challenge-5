@@ -373,7 +373,7 @@ struct OccasionOutputView: View {
                                 .foregroundStyle(AppColors.primaryBlue)
                         }
 
-                        Text("VLM: \(LLMResource.vlmModelFilename) • LLM: \(LLMResource.activeModelFilename)")
+                        Text("VLM: Apple PCC • LLM: \(LLMResource.activeModelFilename)")
                             .font(.system(size: 9.5, weight: .medium))
                             .foregroundStyle(AppColors.mutedCaption)
 
@@ -484,7 +484,7 @@ struct OccasionOutputView: View {
                     .buttonStyle(.plain)
                 }
 
-                Text("VLM: \(LLMResource.vlmModelFilename) • LLM: \(LLMResource.activeModelFilename)")
+                Text("VLM: Apple PCC • LLM: \(LLMResource.activeModelFilename)")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(AppColors.mutedCaption)
 

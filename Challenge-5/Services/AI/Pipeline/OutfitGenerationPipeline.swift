@@ -70,8 +70,8 @@ protocol OutfitGenerationPipelineProtocol {
 /// and its own sampling temperature. Earlier looks are passed to the next prompt so the
 /// looks differ in style and pieces, not only in color.
 ///
-/// Reference photos are first described one by one by the on-device vision-language model
-/// (Qwen 2.5 VL, `ReferenceImageStyleAnalyzer`), because the text model can't see images.
+/// Reference photos are first described one by one by the vision-language model
+/// (Apple PCC vision model, `ReferenceImageStyleAnalyzer`), because the text model can't see images.
 /// The descriptions are recapped into one paragraph and passed to every look's prompt.
 @MainActor
 final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
@@ -252,9 +252,8 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
     }
 
-    /// Unloads VLM/LLM weights + Metal backend and clears in-memory caches after generation.
+    /// Unloads LLM weights + Metal backend and clears in-memory caches after generation.
     private func releaseGenerationMemoryAndCaches() async {
-        await VLMEngine.shared.unload()
         await LLMEngine.shared.unloadModel()
         ReferenceImageStyleAnalyzer.shared.clearCache()
         OutfitAttributeMapper.clearSourceImageCache()
