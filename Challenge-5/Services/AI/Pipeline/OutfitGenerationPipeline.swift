@@ -417,6 +417,19 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 }
             }
 
+            // Image Playground only reads "playgroundPrompt". When the model named the textile ("batik") in the
+            // garment's name or material but left it out of the prompt, the textile never reaches the picture.
+            for group in dresscodeRequirements.requiredTermGroups {
+                for index in parsedLook.garments.indices {
+                    let garment = parsedLook.garments[index]
+                    let prompt = garment.playgroundPrompt ?? ""
+                    guard !group.contains(where: { prompt.lowercased().contains($0) }),
+                          let term = group.first(where: { "\(garment.name) \(garment.material)".lowercased().contains($0) })
+                    else { continue }
+                    parsedLook.garments[index].playgroundPrompt = prompt.isEmpty ? nil : "\(term) \(prompt)"
+                }
+            }
+
             // Without dresscode colors, a look mixing several bright colors is generated again (kept only as a last resort).
             if dresscodeColors == nil, !keepsReferenceColors, Self.isTooColorful(parsedLook) {
                 print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) mixes several bright colors. Generating it again.")
@@ -1079,7 +1092,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
     /// Converts any `#RRGGBB` hex color mathematically via HSL into a standard visual color name
     /// so Image Playground matches the actual UI swatch without confusing literal Pantone names or stale LLM colors.
-    private static func visualColorName(fromHex hex: String) -> String? {
+    nonisolated static func visualColorName(fromHex hex: String) -> String? {
         let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
         guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
         let r = Double((value >> 16) & 0xFF) / 255
@@ -1101,13 +1114,23 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
 
         if lightness < 0.13 { return "black" }
-        if lightness > 0.88 && hsvSaturation < 0.16 {
+        // Very light pastels (Ballet Pink, Lavender, Seafoam) have a low saturation too, so light colors use a
+        // lower grey threshold; the light greys in the palettes stay below 0.11.
+        let greyThreshold = lightness > 0.74 ? 0.11 : 0.16
+        if lightness > 0.88 && hsvSaturation < greyThreshold {
             return (hsvSaturation >= 0.06 && (15...75).contains(hue)) ? "cream" : "off-white"
         }
-        if hsvSaturation < 0.16 {
+        if hsvSaturation < greyThreshold {
             if lightness < 0.32 { return "charcoal grey" }
             if lightness > 0.68 { return "light grey" }
             return "grey"
+        }
+        // Light, softly saturated colors are pastels. Without this, pastel peach and butter yellow fell into
+        // the cream branch below and pastel pinks became "soft red", so Image Playground drew red.
+        let isPastel = lightness > 0.74 && hsvSaturation <= 0.4
+        if isPastel && lightness > 0.78 && hsvSaturation >= 0.18 {
+            if (15..<32).contains(hue) { return "pastel peach" }
+            if (46..<68).contains(hue) { return "pastel yellow" }
         }
         if hsvSaturation < 0.42 && (15...75).contains(hue) {
             if lightness > 0.78 { return "cream" }
@@ -1115,20 +1138,34 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
             return "taupe brown"
         }
 
-        let shade = lightness < 0.34 ? "deep " : (lightness > 0.74 ? "soft " : "")
+        // Strong, saturated mid-tones get "vivid" so Image Playground doesn't soften them (Raspberry Sorbet #D03168
+        // as plain "pink" was drawn as a pale dusty pink).
+        let isVivid = hsvSaturation >= 0.6 && (0.34...0.7).contains(lightness)
+        let shade = lightness < 0.34 ? "deep " : (isPastel ? "pastel " : (isVivid ? "vivid " : (lightness > 0.74 ? "soft " : "")))
         let baseHue: String
         switch hue {
-        case 345..., ..<15: baseHue = lightness < 0.34 ? "burgundy" : "red"
-        case 15..<42: baseHue = lightness < 0.45 ? "brown" : "terracotta"
+        // A light red is a pink in clothing ("Pastel Pink" #F4C2C2 used to become "soft red").
+        case 335..., ..<15:
+            if lightness < 0.34 { baseHue = "burgundy" }
+            else if lightness > 0.7 { baseHue = (!isPastel && (2..<15).contains(hue)) ? "coral" : "pink" }
+            // Greyed reds (Toadstool, Iron) are dusty rose or taupe, not red.
+            else if hsvSaturation < 0.3 { baseHue = (hue >= 330 || lightness > 0.55) ? "dusty rose" : "taupe brown" }
+            // Raspberry and bubblegum shades lean pink; light warm reds are coral.
+            else if (335..<350).contains(hue) && lightness > 0.5 { baseHue = "pink" }
+            else if lightness > 0.6 && hsvSaturation < 0.75 { baseHue = "coral" }
+            else { baseHue = "red" }
+        case 15..<42: baseHue = lightness < 0.45 ? "brown" : (lightness > 0.7 ? "peach" : "terracotta")
         case 42..<68: baseHue = (lightness < 0.48 || hsvSaturation < 0.45) ? "olive" : "gold"
-        case 68..<165: baseHue = hsvSaturation < 0.42 ? "sage green" : "green"
-        case 165..<200: baseHue = "teal"
+        case 68..<165:
+            if isPastel { baseHue = hue >= 120 ? "mint green" : "sage green" }
+            else { baseHue = hsvSaturation < 0.42 ? "sage green" : "green" }
+        case 165..<200: baseHue = isPastel ? "aqua" : "teal"
         case 200..<255: baseHue = lightness < 0.34 ? "navy blue" : "blue"
-        case 255..<305: baseHue = "purple"
+        case 255..<305: baseHue = isPastel ? "lavender" : "purple"
         default: baseHue = "pink"
         }
-        // Avoid redundant "deep burgundy" / "deep navy blue"
-        if baseHue == "burgundy" || baseHue == "navy blue" || baseHue == "sage green" {
+        // Avoid redundant "deep burgundy" / "deep navy blue"; a pastel keeps its "pastel" word.
+        if baseHue == "burgundy" || baseHue == "navy blue" || (baseHue == "sage green" && !isPastel) {
             return baseHue
         }
         return "\(shade)\(baseHue)"
