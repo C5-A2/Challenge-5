@@ -42,8 +42,8 @@ struct ColorSeasonResultContentView: View {
                     .foregroundStyle(AppColors.espressoTitle)
 
                 Text(season.definition)
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(Color(hex: "#7A7A7A"))
+                    .font(AppTypography.footnoteRegular)
+                    .foregroundStyle(AppColors.secondaryText)
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
                     .padding(.horizontal, 8)
@@ -54,8 +54,8 @@ struct ColorSeasonResultContentView: View {
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color.white)
-                    .shadow(color: .black.opacity(0.06), radius: 12, x: 0, y: 4)
+                    .fill(AppColors.cardBackground)
+                    .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 4)
             )
 
             // "Color that suit you the most" Swatch Grid
@@ -79,13 +79,13 @@ struct ColorSeasonResultContentView: View {
             // Accuracy disclaimer
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "info.circle")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(hex: "#8E8E93"))
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.secondaryText)
                     .padding(.top, 1)
 
                 Text("This result is an estimate from your photo and may not be 100% accurate. Lighting, camera quality, makeup, and skin conditions can affect it. Use it as a guide, and trust the colors that make you feel your best.")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Color(hex: "#8E8E93"))
+                    .font(AppTypography.caption2Regular)
+                    .foregroundStyle(AppColors.secondaryText)
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -93,7 +93,7 @@ struct ColorSeasonResultContentView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(hex: "#F5F5F7"))
+                    .fill(AppColors.circularButtonBackground)
             )
         }
         .sheet(item: $activeColorSheet) { sheet in
@@ -124,17 +124,17 @@ struct ColorSeasonResultContentView: View {
         HStack {
             Text(title)
                 .font(AppTypography.calloutSemiBold)
-                .foregroundStyle(Color(hex: "#1C1C1E"))
+                .foregroundStyle(AppColors.bodyText)
             Spacer()
             Button(action: action) {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                    .font(AppTypography.footnoteRegular)
+                    .foregroundStyle(AppColors.bodyText)
                     .frame(width: 30, height: 30)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .background(AppColors.cardBackground, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                            .stroke(AppColors.cardBorder, lineWidth: 1)
                     )
             }
             .buttonStyle(.plain)
@@ -160,7 +160,7 @@ struct ColorSeasonResultContentView: View {
 
             Text(normalizedHex)
                 .font(AppTypography.caption2Regular)
-                .foregroundStyle(isDark ? Color.white.opacity(0.92) : Color(hex: "#2C2C2E"))
+                .foregroundStyle(isDark ? Color.white.opacity(0.92) : AppColors.bodyText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .padding(.horizontal, 4)
@@ -170,7 +170,7 @@ struct ColorSeasonResultContentView: View {
             RoundedRectangle(cornerRadius: 3, style: .continuous)
                 .stroke(Color.white.opacity(0.9), lineWidth: 1.5)
         )
-        .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
+        .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
     }
 
     private func isDarkHex(_ hex: String) -> Bool {
@@ -225,7 +225,7 @@ struct ProfileSeasonRingAvatarView: View {
             // Center circular portrait
             ZStack {
                 Circle()
-                    .fill(Color(hex: "#EAE8E4"))
+                    .fill(AppColors.tabSelectionHighlight)
 
                 #if canImport(UIKit)
                 if let faceImage = faceImage {
