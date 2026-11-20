@@ -205,62 +205,26 @@ public final class BodyScanViewModel {
         let fixed = ImageOrientationHelper.fixOrientation(image: image)
         self.frontImage = fixed
         self.frontImageData = fixed.jpegData(compressionQuality: 0.85)
-        self.isFrontValidating = true
+        self.isFrontValidating = false
         self.frontValidationResult = nil
-        self.isFrontAngleConfirmed = false
-        self.isFrontPostureConfirmed = false
-        self.isFrontFittedClothingConfirmed = false
-        self.currentStep = .frontReview
-
-        Task { [fixed] in
-            let result = await HumanDetector.detectHuman(image: fixed, expectedType: .front)
-            await MainActor.run {
-                self.frontValidationResult = result
-                self.isFrontValidating = false
-                if result.isHumanPresent && result.isFullBody && result.isOrientationMatch {
-                    self.isFrontAngleConfirmed = true
-                    self.isFrontPostureConfirmed = true
-                    self.isFrontFittedClothingConfirmed = true
-                    self.errorMessage = nil
-                } else {
-                    self.isFrontAngleConfirmed = false
-                    self.isFrontPostureConfirmed = false
-                    self.isFrontFittedClothingConfirmed = false
-                    self.errorMessage = result.message
-                }
-            }
-        }
+        self.isFrontAngleConfirmed = true
+        self.isFrontPostureConfirmed = true
+        self.isFrontFittedClothingConfirmed = true
+        self.errorMessage = nil
+        self.currentStep = .sideGuide
     }
 
     public func setSidePhoto(_ image: UIImage) {
         let fixed = ImageOrientationHelper.fixOrientation(image: image)
         self.sideImage = fixed
         self.sideImageData = fixed.jpegData(compressionQuality: 0.85)
-        self.isSideValidating = true
+        self.isSideValidating = false
         self.sideValidationResult = nil
-        self.isSideAngleConfirmed = false
-        self.isSidePostureConfirmed = false
-        self.isSideFittedClothingConfirmed = false
-        self.currentStep = .sideReview
-
-        Task { [fixed] in
-            let result = await HumanDetector.detectHuman(image: fixed, expectedType: .side)
-            await MainActor.run {
-                self.sideValidationResult = result
-                self.isSideValidating = false
-                if result.isHumanPresent && result.isFullBody && result.isOrientationMatch {
-                    self.isSideAngleConfirmed = true
-                    self.isSidePostureConfirmed = true
-                    self.isSideFittedClothingConfirmed = true
-                    self.errorMessage = nil
-                } else {
-                    self.isSideAngleConfirmed = false
-                    self.isSidePostureConfirmed = false
-                    self.isSideFittedClothingConfirmed = false
-                    self.errorMessage = result.message
-                }
-            }
-        }
+        self.isSideAngleConfirmed = true
+        self.isSidePostureConfirmed = true
+        self.isSideFittedClothingConfirmed = true
+        self.errorMessage = nil
+        self.currentStep = .metricsInput
     }
     #endif
 

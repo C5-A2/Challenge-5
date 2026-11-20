@@ -165,19 +165,31 @@ struct BodyAnalysisCarouselView: View {
         ZStack {
             #if canImport(UIKit)
             if let baseImg = frontImage ?? sideImage {
+                let isFront = frontImage != nil
                 Image(uiImage: baseImg)
                     .resizable()
                     .scaledToFit()
                     .frame(height: frameHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(
+                        BodyPoseOverlayView(
+                            poseResult: isFront ? frontPose : sidePose,
+                            chestY: isFront ? frontBustY : (sideBustY ?? frontBustY),
+                            waistY: isFront ? frontWaistY : (sideWaistY ?? frontWaistY),
+                            hipY: isFront ? frontHipY : (sideHipY ?? frontHipY),
+                            chestBounds: isFront ? frontChestBounds : sideChestBounds,
+                            waistBounds: isFront ? frontWaistBounds : sideWaistBounds,
+                            hipBounds: isFront ? frontHipBounds : sideHipBounds,
+                            showSkeleton: showSkeleton,
+                            showSlices: showSlices
+                        )
+                    )
+                    .overlay(
                         TorsoLengthOverlayView(
-                            poseResult: frontImage != nil ? frontPose : sidePose,
-                            chestY: frontImage != nil ? frontBustY : (sideBustY ?? frontBustY),
-                            hipY: frontImage != nil ? frontHipY : (sideHipY ?? frontHipY),
-                            torsoLengthCm: torsoLengthCm,
-                            heightCm: heightCm,
-                            torsoBalance: torsoBalance
+                            poseResult: isFront ? frontPose : sidePose,
+                            chestY: isFront ? frontBustY : (sideBustY ?? frontBustY),
+                            hipY: isFront ? frontHipY : (sideHipY ?? frontHipY),
+                            torsoLengthCm: torsoLengthCm
                         )
                     )
             } else {
@@ -187,9 +199,7 @@ struct BodyAnalysisCarouselView: View {
                             poseResult: nil,
                             chestY: nil,
                             hipY: nil,
-                            torsoLengthCm: torsoLengthCm,
-                            heightCm: heightCm,
-                            torsoBalance: torsoBalance
+                            torsoLengthCm: torsoLengthCm
                         )
                     )
             }
@@ -218,8 +228,6 @@ private struct TorsoLengthOverlayView: View {
     let chestY: Double?
     let hipY: Double?
     let torsoLengthCm: Double
-    let heightCm: Double
-    let torsoBalance: TorsoBalance
 
     private var neckNormY: Double {
         if let nk = poseResult?.joints[.neck]?.normalizedLocation {
@@ -241,10 +249,6 @@ private struct TorsoLengthOverlayView: View {
         return 0.54
     }
 
-    private var feetNormY: Double {
-        poseResult?.feetBottomUIKitY ?? 0.90
-    }
-
     private var centerX: Double {
         if let ls = poseResult?.joints[.leftShoulder]?.normalizedLocation,
            let rs = poseResult?.joints[.rightShoulder]?.normalizedLocation {
@@ -261,10 +265,7 @@ private struct TorsoLengthOverlayView: View {
             let x = CGFloat(centerX) * w
             let yTop = CGFloat(neckNormY) * h
             let yHip = CGFloat(hipNormY) * h
-            let yFeet = CGFloat(feetNormY) * h
             let torsoMidY = (yTop + yHip) / 2.0
-            let lowerMidY = (yHip + yFeet) / 2.0
-            let lowerBodyCm = max(0, heightCm - torsoLengthCm)
 
             ZStack(alignment: .topLeading) {
                 // Torso vertical measurement span (Neck -> Hips)
@@ -281,15 +282,6 @@ private struct TorsoLengthOverlayView: View {
                 }
                 .stroke(Color(hex: "#0A66C2"), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
 
-                // Lower body vertical span (Hips -> Feet)
-                Path { path in
-                    path.move(to: CGPoint(x: x, y: yHip))
-                    path.addLine(to: CGPoint(x: x, y: yFeet))
-                    path.move(to: CGPoint(x: x - 14, y: yFeet))
-                    path.addLine(to: CGPoint(x: x + 14, y: yFeet))
-                }
-                .stroke(Color(hex: "#34C759").opacity(0.9), style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [5, 4]))
-
                 // Torso Length pill badge
                 Text(String(format: "Torso %.1f cm", torsoLengthCm))
                     .font(.system(size: 10.5, weight: .bold))
@@ -300,37 +292,6 @@ private struct TorsoLengthOverlayView: View {
                     .clipShape(Capsule())
                     .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
                     .position(x: min(w - 58, max(58, x + 52)), y: torsoMidY)
-
-                // Lower body pill badge
-                Text(String(format: "Lower %.1f cm", lowerBodyCm))
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Color(hex: "#2B7A4B").opacity(0.9))
-                    .clipShape(Capsule())
-                    .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
-                    .position(x: min(w - 56, max(56, x + 50)), y: lowerMidY)
-
-                // Bottom summary badge showing Torso type (without technical THR formula)
-                VStack {
-                    Spacer()
-                    HStack(spacing: 6) {
-                        Text("Torso Length")
-                            .font(.system(size: 11, weight: .bold))
-                        Text("•")
-                        Text(torsoBalance.displayName)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.95))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.black.opacity(0.68))
-                    .clipShape(Capsule())
-                    .padding(.bottom, 10)
-                }
-                .frame(maxWidth: .infinity)
             }
         }
         .allowsHitTesting(false)

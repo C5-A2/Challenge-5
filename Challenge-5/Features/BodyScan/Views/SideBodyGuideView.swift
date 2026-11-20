@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import PhotosUI
 import SwiftData
 
 #if canImport(UIKit)
@@ -26,8 +25,8 @@ struct SideBodyGuideView: View {
     // MARK: - State & Environment
 
     @Query private var userProfiles: [UserProfile]
-    @State private var selectedPickerItem: PhotosPickerItem? = nil
     @Environment(\.dismiss) private var dismiss
+    @State private var isShowingMetricsSheet: Bool = false
 
     private var hasExistingData: Bool {
         userProfiles.first?.bodyType != nil
@@ -59,24 +58,12 @@ struct SideBodyGuideView: View {
                         illustrationCard
                             .padding(.top, 16)
 
-                        Text("For the most accurate results, stand sideways (90°) in a natural upright posture with fitted clothing and arms relaxed by your side.")
+                        Text("For the most accurate results, put your hair in a high bun, go barefoot (no shoes), wear fitted clothing in a color that contrasts with the background, and stand sideways (90°) in a natural upright posture against a plain wall with arms relaxed by your side and your whole body in the frame.")
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(Color(hex: "#1C1C1E"))
                             .multilineTextAlignment(.center)
                             .lineSpacing(2.5)
                             .padding(.horizontal, 8)
-
-                        PhotosPicker(selection: $selectedPickerItem, matching: .images) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "photo.on.rectangle.angled")
-                                    .font(.system(size: 15, weight: .semibold))
-                                Text("Choose from Gallery")
-                                    .font(.system(size: 14, weight: .semibold))
-                            }
-                            .foregroundStyle(Color(hex: "#007AFF"))
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 16)
-                        }
 
                         Spacer(minLength: 16)
                     }
@@ -86,19 +73,43 @@ struct SideBodyGuideView: View {
                 bottomActionBar
             }
         }
-        .onChange(of: selectedPickerItem) { _, newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self) {
-                    #if canImport(UIKit)
-                    if let uiImage = UIImage(data: data) {
-                        await MainActor.run {
-                            viewModel.setSidePhoto(uiImage)
-                            selectedPickerItem = nil
-                        }
+        .fullScreenCover(
+            isPresented: Binding<Bool>(
+                get: { viewModel.currentStep == .sideCamera },
+                set: { isPresented in
+                    if !isPresented && viewModel.currentStep == .sideCamera {
+                        viewModel.currentStep = .sideGuide
                     }
-                    #endif
                 }
+            ),
+            onDismiss: {
+                if viewModel.currentStep == .metricsInput {
+                    isShowingMetricsSheet = true
+                }
+            }
+        ) {
+            SideBodyCameraView(viewModel: viewModel)
+        }
+        .sheet(
+            isPresented: $isShowingMetricsSheet,
+            onDismiss: {
+                if viewModel.currentStep == .metricsInput {
+                    viewModel.currentStep = .sideGuide
+                }
+            }
+        ) {
+            PhysicalMetricsInputView(viewModel: viewModel)
+        }
+        .onAppear {
+            if viewModel.currentStep == .metricsInput {
+                isShowingMetricsSheet = true
+            }
+        }
+        .onChange(of: viewModel.currentStep) { oldStep, newStep in
+            if newStep != .metricsInput {
+                isShowingMetricsSheet = false
+            } else if oldStep != .sideCamera {
+                isShowingMetricsSheet = true
             }
         }
     }
@@ -113,7 +124,7 @@ struct SideBodyGuideView: View {
                     if let onBack = onBack {
                         onBack()
                     } else {
-                        viewModel.currentStep = .frontReview
+                        viewModel.currentStep = .frontGuide
                     }
                 } label: {
                     Image(systemName: "chevron.left")

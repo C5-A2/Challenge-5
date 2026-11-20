@@ -11,20 +11,17 @@ import SwiftData
 import UIKit
 #endif
 
-/// Personal Color Season result screen (C5-85).
+/// Personal Color Season result screen ("Analyze Result" — C5-85).
 ///
-/// Presents:
-/// 1. Color Season Wheel poster with the user's face in the center surrounded by chromatic palette wedges.
-/// 2. Foundation / neutral skin tone swatches.
-/// 3. Personalized skin undertone explanation.
-/// 4. Curated Pantone TCX swatches list with hex values.
-/// 5. Color styling rules and colors to avoid.
-/// 6. Action buttons for "Retake" and "Next" (proceeding to Body Scan).
+/// Mirrors the Color Season content in `ProfileHubView` (circular color wheel with face avatar,
+/// season title & definition, and "Color that suit you the most" / "Color doesn't suits you" 4x2 grids),
+/// plus bottom "Next" and "Retake the photo" actions.
 struct SkinResultView: View {
 
     // MARK: - State & Dependencies
 
     @Bindable var viewModel: SkinScanViewModel
+    var onDismiss: (() -> Void)? = nil
     var onNext: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
@@ -40,61 +37,86 @@ struct SkinResultView: View {
 
     var body: some View {
         ZStack {
-            AppColors.canvasBackground
+            Color.white
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // Top Sheet Drag Indicator
+                Capsule()
+                    .fill(Color(hex: "#D6D1CA"))
+                    .frame(width: 38, height: 5)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
+
                 headerBar
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppDimensions.sectionSpacing) {
-                        resultPosterCard
+                    VStack(spacing: 22) {
+                        #if canImport(UIKit)
+                        let resolvedFaceImage: ColorSeasonPlatformImage? = viewModel.capturedFaceImage
+                        #else
+                        let resolvedFaceImage: ColorSeasonPlatformImage? = nil
+                        #endif
 
-                        undertoneExplanationCard
+                        ColorSeasonResultContentView(
+                            season: activeSeason,
+                            faceImage: resolvedFaceImage
+                        )
 
-                        curatedSwatchesCard
-
-                        stylingGuidanceCard
-
-                        Spacer(minLength: 16)
+                        Spacer(minLength: 8)
                     }
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
+                    .padding(.top, 10)
+                    .padding(.bottom, 20)
                 }
 
                 bottomActionBar
             }
         }
+        .environment(\.colorScheme, .light)
     }
 
     // MARK: - Header Bar
 
     private var headerBar: some View {
         HStack {
-            CircularIconButton(systemName: "chevron.left") {
+            // Left: Back (<) Button
+            Button {
                 viewModel.currentStep = .review
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                    .frame(width: 44, height: 44)
+                    .background(Color(hex: "#EFEFF0"))
+                    .clipShape(Circle())
             }
+            .buttonStyle(.plain)
 
             Spacer()
 
             Text("Analyze Result")
-                .font(AppTypography.cardHeadline)
-                .foregroundStyle(AppColors.espressoTitle)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color(hex: "#1C1C1E"))
 
             Spacer()
 
+            // Right: Close (X) Button
             Button {
-                viewModel.retakePhoto()
+                if let onDismiss {
+                    onDismiss()
+                } else {
+                    dismiss()
+                }
             } label: {
-                Text("Retake")
-                    .font(AppTypography.caption.weight(.medium))
-                    .foregroundStyle(AppColors.espressoTitle)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(AppColors.circularButtonBackground)
-                    .clipShape(Capsule())
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                    .frame(width: 44, height: 44)
+                    .background(Color(hex: "#EFEFF0"))
+                    .clipShape(Circle())
             }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
         .padding(.top, 12)
@@ -340,21 +362,38 @@ struct SkinResultView: View {
     // MARK: - Bottom Action Bar
 
     private var bottomActionBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-
-            PrimaryPillButton(title: "Next") {
+        VStack(spacing: 14) {
+            Button {
                 _ = viewModel.saveToProfile(in: modelContext)
-                if let onNext = onNext {
+                if let onNext {
                     onNext()
                 } else {
                     dismiss()
                 }
+            } label: {
+                Text("Next")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(Color.black)
+                    .clipShape(Capsule())
             }
-            .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-            .padding(.vertical, 16)
+            .buttonStyle(.plain)
+
+            Button {
+                viewModel.retakePhoto()
+            } label: {
+                Text("Retake the photo")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color(hex: "#007AFF"))
+            }
+            .buttonStyle(.plain)
         }
-        .background(AppColors.cardBackground)
+        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+        .padding(.top, 10)
+        .padding(.bottom, 20)
+        .background(Color.white)
     }
 
     private func colorSeasonHighlightedDescription(for season: ColorSeason) -> Text {

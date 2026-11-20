@@ -7,7 +7,6 @@
 
 import SwiftUI
 import AVFoundation
-import PhotosUI
 
 /// Live AVFoundation camera capture screen for Side Body posture and silhouette analysis (C5-88).
 /// Features CoreMotion device verticality tracking, zoom toggles, and countdown capture.
@@ -18,11 +17,18 @@ struct SideBodyCameraView: View {
     @Bindable var viewModel: BodyScanViewModel
     @State private var cameraService = CameraService()
     @State private var motionManager = MotionLevelManager()
+    @State private var poseMonitor = LiveBodyPoseMonitor()
     @State private var isCapturing: Bool = false
     @State private var countdownRemaining: Int = 3
     @State private var countdownTask: Task<Void, Never>? = nil
-    @State private var selectedZoom: CGFloat = 1.0
-    @State private var selectedPickerItem: PhotosPickerItem? = nil
+
+    private var canTriggerShutter: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return poseMonitor.isReady
+        #endif
+    }
 
     // MARK: - Body
 
@@ -37,10 +43,7 @@ struct SideBodyCameraView: View {
             // 2. Top Control Bar (Back, Level Status Pill, Flash)
             topControlBar
 
-            // 3. Zoom Selector Bar (0.5x, 1x, 2x)
-            zoomSelectorBar
-
-            // 4. Countdown Overlay
+            // 3. Countdown Overlay
             if viewModel.isCountingDown {
                 CameraCountdownOverlay(remainingSeconds: countdownRemaining) {
                     cancelCountdown()
@@ -52,6 +55,9 @@ struct SideBodyCameraView: View {
         }
         .task {
             motionManager.startMonitoring()
+            cameraService.onSampleBuffer = { [poseMonitor] buffer in
+                poseMonitor.processSampleBuffer(buffer, expectedType: .side)
+            }
             do {
                 try await cameraService.startSession()
                 viewModel.startCamera()
@@ -61,6 +67,8 @@ struct SideBodyCameraView: View {
         }
         .onDisappear {
             cancelCountdown()
+            cameraService.onSampleBuffer = nil
+            poseMonitor.reset()
             motionManager.stopMonitoring()
             cameraService.stopSession()
             viewModel.stopCamera()
@@ -170,59 +178,27 @@ struct SideBodyCameraView: View {
                 isDisabled: isCapturing || viewModel.isCountingDown
             )
 
+            LiveBodyValidationPill(
+                result: poseMonitor.latestResult,
+                expectedType: .side
+            )
+            .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+
             Spacer()
         }
     }
 
-    // MARK: - 4. Zoom Selector Bar
-
-    private var zoomSelectorBar: some View {
-        VStack {
-            Spacer()
-
-            HStack(spacing: 16) {
-                zoomButton(factor: 0.5, label: "0.5")
-                zoomButton(factor: 1.0, label: "1x")
-                zoomButton(factor: 2.0, label: "2")
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color.black.opacity(0.50))
-            .clipShape(Capsule())
-            .padding(.bottom, 120)
-        }
-    }
-
-    private func zoomButton(factor: CGFloat, label: String) -> some View {
-        Button {
-            selectedZoom = factor
-            cameraService.setZoomFactor(factor)
-        } label: {
-            Text(label)
-                .font(.system(size: 13, weight: selectedZoom == factor ? .bold : .medium))
-                .foregroundStyle(selectedZoom == factor ? Color(hex: "#F5C249") : .white)
-                .frame(minWidth: 26)
-        }
-    }
-
-    // MARK: - 5. Bottom Control Bar
+    // MARK: - 3. Bottom Control Bar
 
     private var bottomControlBar: some View {
         VStack {
             Spacer()
 
             HStack(alignment: .center) {
-                // Left: Choose from Gallery Button
-                PhotosPicker(selection: $selectedPickerItem, matching: .images) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .frame(width: 48, height: 48)
-                        .background(Color.white.opacity(0.18))
-                        .clipShape(Circle())
-                }
-                .disabled(isCapturing || viewModel.isCountingDown)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                // Left spacer to keep shutter button centered
+                Color.clear
+                    .frame(width: 48, height: 48)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Center: Shutter Capture Button
                 Button {
@@ -230,17 +206,17 @@ struct SideBodyCameraView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .stroke(Color.white, lineWidth: 4)
+                            .stroke(canTriggerShutter ? Color.white : Color.orange.opacity(0.65), lineWidth: 4)
                             .frame(width: 76, height: 76)
 
                         Circle()
-                            .fill(Color.white)
+                            .fill(canTriggerShutter ? Color.white : Color.white.opacity(0.35))
                             .frame(width: 62, height: 62)
                     }
                     .scaleEffect(isCapturing ? 0.92 : 1.0)
                     .animation(.easeInOut(duration: 0.15), value: isCapturing)
                 }
-                .disabled(isCapturing || viewModel.isCountingDown)
+                .disabled(!canTriggerShutter || isCapturing || viewModel.isCountingDown)
 
                 // Right: Switch Camera (Front / Rear)
                 Button {
@@ -260,24 +236,12 @@ struct SideBodyCameraView: View {
             .padding(.horizontal, 32)
             .padding(.bottom, 36)
         }
-        .onChange(of: selectedPickerItem) { _, newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self),
-                   let uiImage = UIImage(data: data) {
-                    await MainActor.run {
-                        viewModel.setSidePhoto(uiImage)
-                        selectedPickerItem = nil
-                    }
-                }
-            }
-        }
     }
 
     // MARK: - Capture Actions
 
     private func triggerCaptureFlow() {
-        guard !isCapturing, !viewModel.isCountingDown else { return }
+        guard !isCapturing, !viewModel.isCountingDown, canTriggerShutter else { return }
 
         let duration = max(1, viewModel.countdownSeconds)
         viewModel.isCountingDown = true
@@ -294,6 +258,7 @@ struct SideBodyCameraView: View {
             if Task.isCancelled { return }
             viewModel.isCountingDown = false
             countdownTask = nil
+            guard canTriggerShutter else { return }
             executeCapture()
         }
     }

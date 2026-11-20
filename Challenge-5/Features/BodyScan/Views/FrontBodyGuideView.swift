@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import PhotosUI
 import SwiftData
 
 #if canImport(UIKit)
@@ -26,7 +25,6 @@ struct FrontBodyGuideView: View {
     // MARK: - State & Environment
 
     @Query private var userProfiles: [UserProfile]
-    @State private var selectedPickerItem: PhotosPickerItem? = nil
     @Environment(\.dismiss) private var dismiss
 
     private var hasExistingData: Bool {
@@ -59,24 +57,12 @@ struct FrontBodyGuideView: View {
                         illustrationCard
                             .padding(.top, 16)
 
-                        Text("For the most accurate results, stand upright facing the camera directly in fitted clothing against a plain, contrasting wall.")
+                        Text("For the most accurate results, put your hair in a high bun, go barefoot (no shoes), wear fitted clothing in a color that contrasts with the background, and stand upright facing the camera against a plain wall with your whole body in the frame.")
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(Color(hex: "#1C1C1E"))
                             .multilineTextAlignment(.center)
                             .lineSpacing(2.5)
                             .padding(.horizontal, 8)
-
-                        PhotosPicker(selection: $selectedPickerItem, matching: .images) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "photo.on.rectangle.angled")
-                                    .font(.system(size: 15, weight: .semibold))
-                                Text("Choose from Gallery")
-                                    .font(.system(size: 14, weight: .semibold))
-                            }
-                            .foregroundStyle(Color(hex: "#007AFF"))
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 16)
-                        }
 
                         Spacer(minLength: 16)
                     }
@@ -84,21 +70,6 @@ struct FrontBodyGuideView: View {
                 }
 
                 bottomActionBar
-            }
-        }
-        .onChange(of: selectedPickerItem) { _, newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self) {
-                    #if canImport(UIKit)
-                    if let uiImage = UIImage(data: data) {
-                        await MainActor.run {
-                            viewModel.setFrontPhoto(uiImage)
-                            selectedPickerItem = nil
-                        }
-                    }
-                    #endif
-                }
             }
         }
     }

@@ -29,7 +29,7 @@ struct BodyAnalysisResultView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @FocusState private var focusedMetric: EditableField?
+    @State private var focusedMetric: EditableField? = nil
 
     @State private var selectedPhotoTab: Int = 0 // 0 = Front View, 1 = Side View, 2 = Torso Length
     @State private var showSkeleton: Bool = true
@@ -102,9 +102,7 @@ struct BodyAnalysisResultView: View {
                         // 2. Editable Measurements Card: Bust, Waist, Hips, Torso
                         measurementsListCard
 
-                        // 3. Torso Proportion Card & Styling Direction
-                        torsoProportionCard
-
+                        // 3. Styling Direction
                         stylingPrincipleCard
 
                         Spacer(minLength: 24)
@@ -122,16 +120,6 @@ struct BodyAnalysisResultView: View {
         }
         .onChange(of: focusedMetric) { _, _ in
             syncTextFieldsFromViewModel()
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    focusedMetric = nil
-                }
-                .font(AppTypography.caption.weight(.semibold))
-                .foregroundStyle(Color.black)
-            }
         }
     }
 
@@ -221,7 +209,7 @@ struct BodyAnalysisResultView: View {
                 frameHeight: 360
             )
 
-            // Overlay Toggle Controls (Skeleton & Slice Lines — active on Front & Side views)
+            // Overlay Toggle Controls (Skeleton & Slice Lines — active across all views)
             HStack(spacing: 12) {
                 Toggle("Skeleton", isOn: $showSkeleton)
                     .toggleStyle(.button)
@@ -235,8 +223,6 @@ struct BodyAnalysisResultView: View {
 
                 Spacer()
             }
-            .opacity(selectedPhotoTab == 2 ? 0 : 1)
-            .disabled(selectedPhotoTab == 2)
 
             Divider()
                 .padding(.vertical, 2)
@@ -425,88 +411,7 @@ struct BodyAnalysisResultView: View {
         }
     }
 
-    // MARK: - 3. Torso Proportion & Height Percentage Card (Kept Below Body Type)
-
-    private var torsoProportionCard: some View {
-        let torsoPct = viewModel.torsoRatioPercent ?? 58.0
-        let lowerPct = viewModel.lowerBodyRatioPercent ?? (100.0 - torsoPct)
-        let torsoLen = viewModel.torsoLengthCm ?? round(viewModel.heightCm * 0.58)
-
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("PROPORSI TORSO & TINGGI BADAN")
-                    .font(AppTypography.caption.weight(.bold))
-                    .tracking(1.2)
-                    .foregroundStyle(AppColors.mutedCaption)
-
-                Spacer()
-
-                Text(activeTorsoBalance.rawValue)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppColors.espressoTitle)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(AppColors.pastelPeach.opacity(0.40))
-                    .clipShape(Capsule())
-            }
-
-            Text(LocalizedStringKey("Torsomu **\(String(format: "%.1f", torsoPct))%** dari badanmu (Panjang torso **\(String(format: "%.1f", torsoLen)) cm** dari total tinggi **\(Int(viewModel.heightCm)) cm**)"))
-                .font(AppTypography.cardHeadline)
-                .foregroundStyle(AppColors.espressoTitle)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(spacing: 6) {
-                GeometryReader { geo in
-                    let barW = geo.size.width
-                    let torsoW = barW * (CGFloat(torsoPct) / 100.0)
-                    let lowerW = max(CGFloat(0), barW - torsoW)
-
-                    HStack(spacing: 2) {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(AppColors.pastelPeach)
-                            .frame(width: max(CGFloat(10), torsoW))
-                            .overlay(
-                                Text(String(format: "%.0f%% Torso", torsoPct))
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(AppColors.espressoTitle)
-                            )
-
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(AppColors.pastelSage)
-                            .frame(width: max(CGFloat(10), lowerW))
-                            .overlay(
-                                Text(String(format: "%.0f%% Kaki", lowerPct))
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(AppColors.espressoTitle)
-                            )
-                    }
-                }
-                .frame(height: 26)
-
-                HStack {
-                    Text("Torso: \(String(format: "%.1f", torsoLen)) cm")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(AppColors.espressoTitle)
-
-                    Spacer()
-
-                    Text("Kaki & Tubuh Bawah: \(String(format: "%.1f", max(0, viewModel.heightCm - torsoLen))) cm")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(AppColors.espressoTitle)
-                }
-            }
-        }
-        .padding(AppDimensions.cardInternalPadding)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.black.opacity(0.04), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.05), radius: 12, x: 0, y: 4)
-    }
-
-    // MARK: - 4. Styling Principle Card (Act)
+    // MARK: - 3. Styling Principle Card (Act)
 
     private var stylingPrincipleCard: some View {
         VStack(alignment: .leading, spacing: 14) {

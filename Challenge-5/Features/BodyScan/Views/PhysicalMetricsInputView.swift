@@ -38,21 +38,25 @@ struct PhysicalMetricsInputView: View {
             VStack(spacing: 0) {
                 headerBar
 
-                VStack(spacing: 18) {
-                    instructionHeader
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 18) {
+                        instructionHeader
 
-                    heightFormCard
+                        heightFormCard
 
-                    if let error = heightError, !heightText.isEmpty {
-                        validationBanner(error)
+                        barefootReminderNote
+
+                        if let error = heightError, !heightText.isEmpty {
+                            validationBanner(error)
+                        }
+
+                        Spacer(minLength: 16)
                     }
-
-                    Spacer(minLength: 8)
+                    .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+                    .padding(.top, 8)
+                    .padding(.bottom, 20)
                 }
-                .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-                .padding(.top, 8)
-
-                bottomActionBar
+                .scrollDismissesKeyboard(.interactively)
             }
 
             if viewModel.isAnalyzing {
@@ -60,7 +64,7 @@ struct PhysicalMetricsInputView: View {
             }
         }
         .environment(\.colorScheme, .light)
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
         .onAppear {
@@ -82,6 +86,9 @@ struct PhysicalMetricsInputView: View {
                 Spacer()
                 Button("Done") {
                     isHeightFocused = false
+                    #if canImport(UIKit)
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    #endif
                 }
                 .font(AppTypography.caption.weight(.semibold))
                 .foregroundStyle(AppColors.espressoTitle)
@@ -94,11 +101,7 @@ struct PhysicalMetricsInputView: View {
     private var headerBar: some View {
         HStack {
             CircularIconButton(systemName: "xmark") {
-                if viewModel.frontImageData != nil {
-                    viewModel.currentStep = .sideReview
-                } else {
-                    dismiss()
-                }
+                dismiss()
             }
 
             Spacer()
@@ -109,9 +112,29 @@ struct PhysicalMetricsInputView: View {
 
             Spacer()
 
-            // Balance circular icon button on the left
-            Color.clear
-                .frame(width: AppDimensions.circularIconSize, height: AppDimensions.circularIconSize)
+            // Confirm (Checkmark) Button — Runs body analysis & advances to Analyze Result
+            Button {
+                isHeightFocused = false
+                #if canImport(UIKit)
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                #endif
+                Task {
+                    await viewModel.runBodyAnalysis()
+                    if let onComplete = onComplete {
+                        onComplete()
+                    }
+                }
+            } label: {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: AppDimensions.circularIconSize, height: AppDimensions.circularIconSize)
+                    .background(isHeightValid && !viewModel.isAnalyzing ? Color.black : Color.black.opacity(0.35))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!isHeightValid || viewModel.isAnalyzing)
+            .accessibilityLabel("Confirm height and analyze")
         }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
         .padding(.top, 16)
@@ -121,11 +144,32 @@ struct PhysicalMetricsInputView: View {
     // MARK: - Instruction Header
 
     private var instructionHeader: some View {
-        Text("Enter your height so our vision engine can normalize pixel distances and accurately classify your body proportions.")
+        Text("Enter your barefoot height so our vision engine can accurately scale and classify your body proportions.")
             .font(AppTypography.bodyRegular)
             .foregroundStyle(Color(hex: "#1C1C1E"))
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var barefootReminderNote: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "info.circle")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color(hex: "#8E8E93"))
+                .padding(.top, 1)
+
+            Text("Make sure the height you enter matches your barefoot height, and that your scanned photos were taken barefoot (without shoes) for accurate sizing.")
+                .font(.system(size: 12))
+                .foregroundStyle(Color(hex: "#6E6E73"))
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(hex: "#F5F5F7"))
+        )
     }
 
     // MARK: - Height Form Card
@@ -209,29 +253,6 @@ struct PhysicalMetricsInputView: View {
         .padding(.vertical, 10)
         .background(Color.orange.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-
-    // MARK: - Bottom Action Bar
-
-    private var bottomActionBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-
-            PrimaryPillButton(title: "Next") {
-                isHeightFocused = false
-                Task {
-                    await viewModel.runBodyAnalysis()
-                    if let onComplete = onComplete {
-                        onComplete()
-                    }
-                }
-            }
-            .disabled(!isHeightValid || viewModel.isAnalyzing)
-            .opacity(isHeightValid ? 1.0 : 0.45)
-            .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-            .padding(.vertical, 16)
-        }
-        .background(AppColors.cardBackground)
     }
 
     // MARK: - Analyzing Loading Overlay
