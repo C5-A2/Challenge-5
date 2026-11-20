@@ -762,6 +762,183 @@ struct ProfileHubView: View {
 
     // MARK: - Formatting & Palette Helpers
 
+    private func seasonDisplayName(for season: ColorSeason) -> String {
+        season.rawValue
+    }
+
+    private func undertoneHighlightedText(for season: ColorSeason) -> Text {
+        switch season {
+        case .brightSpring:
+            return Text.highlighted([
+                ("You have a ", false),
+                ("bright, clear complexion", true),
+                (" with ", false),
+                ("neutral-warm (golden or peach) undertones", true),
+                (" and ", false),
+                ("high natural contrast", true),
+                (" across your face. Because your natural coloring is ", false),
+                ("vivid with zero greyness", true),
+                (", so ", false),
+                ("intensely saturated and clear hues", true),
+                (" such as vivid coral, sunny yellow, bright turquoise, apple green, and lively pink mirror your natural luminosity without muting you.", false)
+            ])
+        case .trueSpring:
+            return Text.highlighted([
+                ("You have ", false),
+                ("purely warm (golden or honey) undertones", true),
+                (" with ", false),
+                ("medium contrast", true),
+                (" and a ", false),
+                ("fresh, sunlit clarity", true),
+                (". Since your features have ", false),
+                ("zero coolness", true),
+                (", ", false),
+                ("rich, yellow-based, so vibrant shades", true),
+                (" such as warm coral, tomato red, golden yellow, clear turquoise, apple green, and warm camel harmonize with your natural warmth and keep you glowing.", false)
+            ])
+        case .lightSpring:
+            return Text.highlighted([
+                ("You have ", false),
+                ("light, delicate features", true),
+                (" with ", false),
+                ("low contrast", true),
+                (" and ", false),
+                ("neutral-warm (golden or peach) undertones", true),
+                (". Because your overall coloring is ", false),
+                ("airy without heavy depth", true),
+                (", a ", false),
+                ("light warm pastels and soft neutrals", true),
+                (" such as peach, soft coral, mint green, cherry blossom pink, warm ivory, and light camel flatter your gentleness without overpowering you.", false)
+            ])
+        case .lightSummer:
+            return Text.highlighted([
+                ("You have ", false),
+                ("very light, delicate features", true),
+                (" with ", false),
+                ("low contrast", true),
+                (" and ", false),
+                ("neutral-cool (blue or pink) undertones", true),
+                (". Because your coloring is ", false),
+                ("pale and airy", true),
+                (", a ", false),
+                ("fresh, blue-based pastels and soft cool neutrals", true),
+                (" such as powder blue, soft lavender, cool blush pink, pale mint, periwinkle, and dove grey keep your look balanced and luminous.", false)
+            ])
+        case .trueSummer:
+            return Text.highlighted([
+                ("You have ", false),
+                ("purely cool (blue or rose) undertones", true),
+                (" with ", false),
+                ("medium contrast", true),
+                (" and a ", false),
+                ("soft, gently blended appearance", true),
+                (". Since your features contain ", false),
+                ("no warmth", true),
+                (", a ", false),
+                ("calm, cool, medium-depth shades", true),
+                (" such as raspberry, cool teal, soft rose, dusty orchid, misty slate blue, and cool navy echo your natural coolness without looking harsh.", false)
+            ])
+        case .softSummer:
+            return Text.highlighted([
+                ("You have ", false),
+                ("muted, softly blended features", true),
+                (" with ", false),
+                ("low-to-medium contrast", true),
+                (" and ", false),
+                ("neutral-cool undertones", true),
+                (". Because your coloring has a ", false),
+                ("gentle, smoky quality", true),
+                (", ", false),
+                ("desaturated, so grey-tinted cool tones", true),
+                (" such as dusty rose, mauve, sage green, muted teal, slate blue, and cocoa taupe enhance your understated harmony without overwhelming you.", false)
+            ])
+        case .softAutumn:
+            return Text.highlighted([
+                ("You have ", false),
+                ("muted, understated features", true),
+                (" with ", false),
+                ("low-to-medium contrast", true),
+                (" and ", false),
+                ("neutral-warm undertones", true),
+                (" that blend smoothly together. Because your coloring is ", false),
+                ("soft rather than stark", true),
+                (", so ", false),
+                ("earthy, desaturated, low-contrast shades", true),
+                (" such as sage green, warm taupe, dusty rose, muted terracotta, camel, and soft olive complement your gentle warmth naturally.", false)
+            ])
+        case .trueAutumn:
+            return Text.highlighted([
+                ("You have ", false),
+                ("purely warm (golden or bronze) undertones", true),
+                (" with ", false),
+                ("medium contrast", true),
+                (" and a ", false),
+                ("rich, earthy softness", true),
+                (". Since your features radiate ", false),
+                ("warm, sunlit depth", true),
+                (" and ", false),
+                ("rich autumn-forest hues", true),
+                (" such as terracotta, rust, mustard yellow, warm olive green, caramel, and burnt sienna bring out your natural richness and warmth.", false)
+            ])
+        case .darkAutumn:
+            return Text.highlighted([
+                ("You have a ", false),
+                ("deep, rich complexion", true),
+                (" with ", false),
+                ("high contrast", true),
+                (" and ", false),
+                ("neutral-warm (golden or olive) undertones", true),
+                (". Because ", false),
+                ("depth is your most prominent trait", true),
+                (", then ", false),
+                ("rich, saturated, and heavier warm shades", true),
+                (" such as deep olive, espresso brown, burnt orange, warm burgundy, deep teal, and rich gold balance your intensity without washing you out.", false)
+            ])
+        case .darkWinter:
+            return Text.highlighted([
+                ("You have ", false),
+                ("prominent dark features", true),
+                (" with ", false),
+                ("high contrast", true),
+                (" and ", false),
+                ("neutral-cool undertones", true),
+                (". Because your coloring combines ", false),
+                ("deep intensity with a hint of frost", true),
+                (", rich, a ", false),
+                ("cool-leaning dark shades and crisp accents", true),
+                (" such as deep pine green, true burgundy, deep plum, midnight blue, charcoal, and crisp white match your natural depth and contrast.", false)
+            ])
+        case .trueWinter:
+            return Text.highlighted([
+                ("You have ", false),
+                ("purely cool (icy, blue-based) undertones", true),
+                (" with ", false),
+                ("high contrast", true),
+                (" and ", false),
+                ("sharp, dramatic clarity", true),
+                (". Since your features have ", false),
+                ("zero warmth or softness", true),
+                (", bold, crisp, so ", false),
+                ("pure cool tones", true),
+                (" such as royal blue, emerald green, ruby red, sharp fuchsia, true black, and icicle white highlight your cool brilliance effortlessly.", false)
+            ])
+        case .brightWinter:
+            return Text.highlighted([
+                ("You have ", false),
+                ("ultra-clear, bright features", true),
+                (" with ", false),
+                ("very high contrast", true),
+                (" and ", false),
+                ("neutral-cool undertones", true),
+                (". Because your coloring is ", false),
+                ("crisp and high-energy with zero muddiness", true),
+                (", so ", false),
+                ("electric and hyper-saturated shades", true),
+                (" such as electric blue, vivid magenta, bright fuchsia, clear turquoise, optic white, and pure black match your natural intensity.", false)
+            ])
+        }
+    }
+
     private func bodyTypeHighlightedText(for bodyType: BodyType) -> Text {
         switch bodyType {
         case .hourglass:

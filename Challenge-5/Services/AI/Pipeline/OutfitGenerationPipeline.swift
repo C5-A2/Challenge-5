@@ -121,6 +121,14 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         profile: UserProfile,
         onStageChange: (@MainActor @Sendable (_ title: String, _ subtitle: String, _ vlmDescriptions: [String]) -> Void)?
     ) async throws -> [OutfitLook] {
+        // If models are not yet downloaded, auto-download them seamlessly in the background!
+        if !ModelDownloadManager.shared.isAllModelsDownloaded {
+            onStageChange?("Preparing AI Stylist...", "Downloading styling models in the background (one-time setup)...", [])
+            try await ModelDownloadManager.shared.ensureModelsDownloaded { progress, status in
+                onStageChange?("Preparing AI Stylist...", status, [])
+            }
+        }
+
         // Validate the GGUF model file is present before attempting inference.
         try LLMResource.validateModelAvailability()
 
@@ -192,6 +200,9 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         existingLooks: [OutfitLook],
         temperature: Float = 0.75
     ) async throws -> OutfitLook {
+        if !ModelDownloadManager.shared.isAllModelsDownloaded {
+            try await ModelDownloadManager.shared.ensureModelsDownloaded()
+        }
         // Validate the GGUF model file is present before attempting inference.
         try LLMResource.validateModelAvailability()
 
@@ -603,8 +614,10 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         for occasion: OccasionItem,
         profile: UserProfile
     ) throws -> [OutfitLook] {
-        // Validate that LLM can be used. Throws LLMError if model is missing or unreadable.
-        try LLMResource.validateModelAvailability()
+        // Validate that LLM can be used if models are already present on disk.
+        if ModelDownloadManager.shared.isAllModelsDownloaded {
+            try LLMResource.validateModelAvailability()
+        }
 
         // 1. If an injected LLM response JSON is available (prompt testing), decode directly:
         if let injectedJSON = OutfitGenerationPipeline.injectedLLMResponseJSON, !injectedJSON.isEmpty {

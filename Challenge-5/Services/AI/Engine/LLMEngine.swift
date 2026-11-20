@@ -84,15 +84,24 @@ public actor LLMEngine {
     
     // MARK: - Model Location
     
-    /// Finds the path of the GGUF model in the app bundle, Documents directory, or shared container.
+    /// Finds the path of the GGUF model in Application Support, app bundle, Documents directory, or shared container.
     public func locateModelPath(filename: String? = nil) -> String? {
-        let targets: [String]
         if let specific = filename {
-            targets = [specific]
-        } else {
-            targets = LLMResource.supportedModelFilenames.map { "\($0).gguf" }
+            let nameOnly = (specific as NSString).deletingPathExtension
+            if let url = LLMResource.candidateURL(for: nameOnly) ?? LLMResource.candidateURL(for: specific) {
+                return url.path
+            }
+            if let path = checkCandidatePaths(filename: specific), LLMResource.isUsableModelFile(atPath: path) {
+                return path
+            }
+            return nil
         }
 
+        if let modelURL = LLMResource.modelURL {
+            return modelURL.path
+        }
+
+        let targets = LLMResource.supportedModelFilenames.map { "\($0).gguf" }
         // Skip Git LFS pointers (model not downloaded), so the next model in the list is used.
         for target in targets {
             if let path = checkCandidatePaths(filename: target), LLMResource.isUsableModelFile(atPath: path) {
@@ -106,6 +115,13 @@ public actor LLMEngine {
         let nsString = filename as NSString
         let nameOnly = nsString.deletingPathExtension
         let ext = nsString.pathExtension
+        
+        // 0. Check Application Support / AIModels (downloaded on demand)
+        if let localURL = ModelDownloadManager.localURL(for: nameOnly),
+           FileManager.default.fileExists(atPath: localURL.path),
+           LLMResource.isUsableModelFile(atPath: localURL.path) {
+            return localURL.path
+        }
         
         // 1. Check App Bundle root
         if let bundlePath = Bundle.main.path(forResource: nameOnly, ofType: ext) {
