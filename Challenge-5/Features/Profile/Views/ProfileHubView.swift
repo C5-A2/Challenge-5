@@ -836,16 +836,10 @@ private struct BodyScanFlowHostView: View {
             switch viewModel.currentStep {
             case .frontGuide:
                 FrontBodyGuideView(viewModel: viewModel, onDismiss: { dismiss() })
-            case .frontCamera:
+            case .frontCamera, .frontReview:
                 FrontBodyCameraView(viewModel: viewModel)
-            case .frontReview:
-                FrontBodyReviewView(viewModel: viewModel)
-            case .sideGuide:
+            case .sideGuide, .sideCamera, .sideReview, .metricsInput:
                 SideBodyGuideView(viewModel: viewModel, onDismiss: { dismiss() })
-            case .sideCamera:
-                SideBodyCameraView(viewModel: viewModel)
-            case .sideReview, .metricsInput:
-                SideBodyReviewView(viewModel: viewModel)
             case .analysisResult:
                 BodyAnalysisResultView(viewModel: viewModel) {
                     dismiss()

@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import PhotosUI
 import SwiftData
 
 #if canImport(UIKit)
@@ -27,7 +26,6 @@ struct SkinScanGuideView: View {
 
     @Query private var userProfiles: [UserProfile]
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedPickerItem: PhotosPickerItem? = nil
 
     private var hasExistingData: Bool {
         userProfiles.first?.colorSeason != nil
@@ -66,39 +64,12 @@ struct SkinScanGuideView: View {
                             .lineSpacing(2.5)
                             .padding(.horizontal, 8)
 
-                        PhotosPicker(selection: $selectedPickerItem, matching: .images) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "photo.on.rectangle.angled")
-                                    .font(.system(size: 15, weight: .semibold))
-                                Text("Choose from Gallery")
-                                    .font(.system(size: 14, weight: .semibold))
-                            }
-                            .foregroundStyle(Color(hex: "#007AFF"))
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 16)
-                        }
-
                         Spacer(minLength: 16)
                     }
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
                 }
 
                 bottomActionBar
-            }
-        }
-        .onChange(of: selectedPickerItem) { _, newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self) {
-                    #if canImport(UIKit)
-                    if let uiImage = UIImage(data: data) {
-                        await MainActor.run {
-                            viewModel.setCapturedPhoto(uiImage)
-                            selectedPickerItem = nil
-                        }
-                    }
-                    #endif
-                }
             }
         }
     }

@@ -74,8 +74,70 @@ public struct HumanDetector: Sendable {
         // 2. Deteksi Bounding Box Manusia
         let humanRectangles = await detectHumanRectangles(cgImage: cgImage)
 
+        return evaluateDetection(
+            joints: joints,
+            humanCount: humanRectangles.count,
+            expectedType: expectedType
+        )
+    }
+
+    /// Real-time evaluation directly from a camera `CVPixelBuffer` (intended to run on a background queue).
+    nonisolated public static func detectHuman(
+        pixelBuffer: CVPixelBuffer,
+        expectedType: BodyFacingOrientation
+    ) -> HumanDetectionResult {
+        let poseRequest = VNDetectHumanBodyPoseRequest()
+        let rectRequest = VNDetectHumanRectanglesRequest()
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
+
+        do {
+            try handler.perform([poseRequest, rectRequest])
+        } catch {
+            return HumanDetectionResult(
+                isHumanPresent: false,
+                isFullBody: false,
+                orientation: .uncertain,
+                isOrientationMatch: false,
+                message: "Gagal memproses frame kamera.",
+                confidence: 0
+            )
+        }
+
+        let humanCount = (rectRequest.results)?.count ?? 0
+        var jointsDict: [VNHumanBodyPoseObservation.JointName: VNRecognizedPoint]? = nil
+
+        if let observation = poseRequest.results?.first {
+            var dict: [VNHumanBodyPoseObservation.JointName: VNRecognizedPoint] = [:]
+            let jointNames: [VNHumanBodyPoseObservation.JointName] = [
+                .nose, .leftEye, .rightEye, .leftEar, .rightEar,
+                .neck, .leftShoulder, .rightShoulder,
+                .leftElbow, .rightElbow, .leftWrist, .rightWrist,
+                .leftHip, .rightHip, .root,
+                .leftKnee, .rightKnee,
+                .leftAnkle, .rightAnkle
+            ]
+            for name in jointNames {
+                if let point = try? observation.recognizedPoint(name) {
+                    dict[name] = point
+                }
+            }
+            jointsDict = dict
+        }
+
+        return evaluateDetection(
+            joints: jointsDict,
+            humanCount: humanCount,
+            expectedType: expectedType
+        )
+    }
+
+    nonisolated private static func evaluateDetection(
+        joints: [VNHumanBodyPoseObservation.JointName: VNRecognizedPoint]?,
+        humanCount: Int,
+        expectedType: BodyFacingOrientation
+    ) -> HumanDetectionResult {
         let hasJoints = (joints != nil && !joints!.isEmpty)
-        let hasBoundingBox = !humanRectangles.isEmpty
+        let hasBoundingBox = humanCount > 0
 
         // Jika tidak ada manusia sama sekali
         guard hasJoints || hasBoundingBox else {
@@ -90,13 +152,13 @@ public struct HumanDetector: Sendable {
         }
 
         // Jika terdeteksi lebih dari 1 orang
-        if humanRectangles.count > 1 {
+        if humanCount > 1 {
             return HumanDetectionResult(
                 isHumanPresent: true,
                 isFullBody: false,
                 orientation: .uncertain,
                 isOrientationMatch: false,
-                message: "Terdeteksi \(humanRectangles.count) orang di dalam foto. Pastikan hanya ada 1 orang.",
+                message: "Terdeteksi \(humanCount) orang di dalam foto. Pastikan hanya ada 1 orang.",
                 confidence: 0.8
             )
         }
@@ -212,7 +274,7 @@ public struct HumanDetector: Sendable {
 
     // MARK: - Facing Orientation Classifier (CobaBodyScan Section 3.3)
 
-    public static func classifyFacingOrientation(
+    nonisolated public static func classifyFacingOrientation(
         joints: [VNHumanBodyPoseObservation.JointName: VNRecognizedPoint]
     ) -> BodyFacingOrientation {
         let ls = joints[.leftShoulder]

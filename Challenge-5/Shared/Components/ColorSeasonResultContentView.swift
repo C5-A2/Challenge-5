@@ -75,6 +75,26 @@ struct ColorSeasonResultContentView: View {
 
                 swatchGrid(hexes: Array(avoidHexes(for: season).prefix(8)))
             }
+
+            // Accuracy disclaimer
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color(hex: "#8E8E93"))
+                    .padding(.top, 1)
+
+                Text("This result is an estimate from your photo and may not be 100% accurate. Lighting, camera quality, makeup, and skin conditions can affect it. Use it as a guide, and trust the colors that make you feel your best.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color(hex: "#8E8E93"))
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(hex: "#F5F5F7"))
+            )
         }
         .sheet(item: $activeColorSheet) { sheet in
             switch sheet {

@@ -86,23 +86,17 @@ struct ProfilingFlowHostView: View {
                 },
                 onDismiss: { closeFlow() }
             )
-        case .frontCamera:
+        case .frontCamera, .frontReview:
             FrontBodyCameraView(viewModel: bodyViewModel)
-        case .frontReview:
-            FrontBodyReviewView(viewModel: bodyViewModel)
-        case .sideGuide:
+        case .sideGuide, .sideCamera, .sideReview, .metricsInput:
             SideBodyGuideView(
                 viewModel: bodyViewModel,
                 showsBackButton: true,
                 onBack: {
-                    bodyViewModel.currentStep = .frontReview
+                    bodyViewModel.currentStep = .frontGuide
                 },
                 onDismiss: { closeFlow() }
             )
-        case .sideCamera:
-            SideBodyCameraView(viewModel: bodyViewModel)
-        case .sideReview, .metricsInput:
-            SideBodyReviewView(viewModel: bodyViewModel)
         case .analysisResult:
             BodyAnalysisResultView(viewModel: bodyViewModel) {
                 onComplete()

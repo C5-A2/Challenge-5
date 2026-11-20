@@ -7,7 +7,6 @@
 
 import SwiftUI
 import AVFoundation
-import PhotosUI
 
 /// Live AVFoundation camera capture screen for facial personal color analysis (C5-82 & C5-123).
 /// Features real-time video preview, golden facial framing grid, smart obstruction/pose/lighting HUD,
@@ -23,7 +22,6 @@ struct FaceCameraView: View {
     @State private var showWhiteScreenFlash: Bool = false
     @State private var countdownRemaining: Int = 3
     @State private var countdownTask: Task<Void, Never>? = nil
-    @State private var selectedPickerItem: PhotosPickerItem? = nil
 
     // MARK: - Body
 
@@ -260,30 +258,10 @@ struct FaceCameraView: View {
                 .padding(.horizontal, 16)
 
             HStack(alignment: .center) {
-                // Left: Photo Gallery Picker
-                PhotosPicker(selection: $selectedPickerItem, matching: .images) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .frame(width: 48, height: 48)
-                        .background(Color.white.opacity(0.18))
-                        .clipShape(Circle())
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .onChange(of: selectedPickerItem) { _, newItem in
-                    guard let newItem else { return }
-                    Task {
-                        if let data = try? await newItem.loadTransferable(type: Data.self),
-                           let uiImage = UIImage(data: data) {
-                            await MainActor.run {
-                                viewModel.setCapturedPhoto(uiImage)
-                            }
-                        }
-                        await MainActor.run {
-                            selectedPickerItem = nil
-                        }
-                    }
-                }
+                // Left spacer to keep shutter button centered
+                Color.clear
+                    .frame(width: 48, height: 48)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Center: Shutter Capture Button (Gated until C5-123 checks pass)
                 Button {
