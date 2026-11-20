@@ -25,15 +25,12 @@ struct ProfilePromptModal: View {
 
     var body: some View {
         ZStack {
-            Color.white
+            AppColors.cardBackground
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Top Sheet Drag Indicator
-                Capsule()
-                    .fill(Color(hex: "#D6D1CA"))
-                    .frame(width: 38, height: 5)
-                    .padding(.top, 10)
+                SheetDragHandle()
                     .padding(.bottom, 6)
 
                 // Top Header Bar (Close X | Permission | Checkmark)
@@ -43,8 +40,8 @@ struct ProfilePromptModal: View {
                     VStack(spacing: 28) {
                         // Intro Description
                         Text("Before we get started, let’s gather some details about you to personalize your color analysis, body type, and outfit recommendations.")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(Color(hex: "#1C1C1E"))
+                            .font(AppTypography.bodyRegular)
+                            .foregroundStyle(AppColors.bodyText)
                             .multilineTextAlignment(.center)
                             .lineSpacing(3)
                             .padding(.horizontal, 12)
@@ -70,42 +67,28 @@ struct ProfilePromptModal: View {
     private var headerBar: some View {
         HStack {
             // Left: Close (X) Button
-            Button {
+            CircularIconButton(systemName: "xmark") {
                 if let onDismiss {
                     onDismiss()
                 } else {
                     dismiss()
                 }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(Color(hex: "#1C1C1E"))
-                    .frame(width: 44, height: 44)
-                    .background(Color(hex: "#EFEFF0"))
-                    .clipShape(Circle())
             }
-            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
 
             Spacer()
 
             Text("Permission")
                 .font(.system(size: 17, weight: .bold).width(.expanded))
-                .foregroundStyle(Color(hex: "#1C1C1E"))
+                .foregroundStyle(AppColors.espressoTitle)
 
             Spacer()
 
             // Right: Confirm (Checkmark) Button
-            Button {
+            CircularIconButton(systemName: "checkmark", isFilled: true) {
                 onStartProfiling()
-            } label: {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Color.black)
-                    .clipShape(Circle())
             }
-            .buttonStyle(.plain)
+            .accessibilityLabel("Confirm")
         }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
         .padding(.vertical, 8)
@@ -116,8 +99,8 @@ struct ProfilePromptModal: View {
     private var stepsSection: some View {
         VStack(spacing: 16) {
             Text("Steps")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(Color(hex: "#1C1C1E"))
+                .font(AppTypography.sectionHeader)
+                .foregroundStyle(AppColors.espressoTitle)
 
             HStack(alignment: .top, spacing: 8) {
                 // Step 1: Skin Color Scan
@@ -131,8 +114,8 @@ struct ProfilePromptModal: View {
                         .frame(height: 148, alignment: .center)
 
                     Text("Skin Color Scan")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color(hex: "#1C1C1E"))
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.bodyText)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
@@ -148,8 +131,8 @@ struct ProfilePromptModal: View {
                         .frame(height: 148, alignment: .center)
 
                     Text("Body Type Scan\n(Front)")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color(hex: "#1C1C1E"))
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.bodyText)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
@@ -165,8 +148,8 @@ struct ProfilePromptModal: View {
                         .frame(height: 148, alignment: .center)
 
                     Text("Body Type Scan\n(Side)")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color(hex: "#1C1C1E"))
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.bodyText)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
@@ -181,16 +164,16 @@ struct ProfilePromptModal: View {
             HStack(spacing: 8) {
                 Image(systemName: "lock.shield")
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                    .foregroundStyle(AppColors.bodyText)
 
                 Text("Your privacy matters")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(Color(hex: "#1C1C1E"))
+                    .font(AppTypography.bodyMedium)
+                    .foregroundStyle(AppColors.espressoTitle)
             }
 
             Text("Your photos and personal information will be used to support your analysis and personalize your experience. Please review our Privacy Policy to learn how your data is stored and managed.")
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(Color(hex: "#2C2C2E"))
+                .font(AppTypography.caption1Medium)
+                .foregroundStyle(AppColors.secondaryText)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -199,12 +182,12 @@ struct ProfilePromptModal: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white)
-                .shadow(color: .black.opacity(0.06), radius: 14, x: 0, y: 4)
+                .fill(AppColors.cardBackground)
+                .shadow(color: Color.black.opacity(0.06), radius: 14, x: 0, y: 4)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.black.opacity(0.04), lineWidth: 1)
+                .stroke(AppColors.cardBorder, lineWidth: 1)
         )
     }
 }

@@ -81,15 +81,12 @@ struct BodyAnalysisResultView: View {
 
     var body: some View {
         ZStack {
-            Color.white
+            AppColors.cardBackground
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Top Sheet Drag Indicator
-                Capsule()
-                    .fill(Color(hex: "#D6D1CA"))
-                    .frame(width: 38, height: 5)
-                    .padding(.top, 10)
+                SheetDragHandle()
                     .padding(.bottom, 6)
 
                 headerBar
@@ -131,28 +128,21 @@ struct BodyAnalysisResultView: View {
     private var headerBar: some View {
         HStack {
             // Left: Back (<) Button
-            Button {
+            CircularIconButton(systemName: "chevron.left") {
                 viewModel.currentStep = .metricsInput
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(Color(hex: "#1C1C1E"))
-                    .frame(width: 44, height: 44)
-                    .background(Color(hex: "#EFEFF0"))
-                    .clipShape(Circle())
             }
-            .buttonStyle(.plain)
+            .accessibilityLabel("Back")
 
             Spacer()
 
             Text("Analyze Result")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color(hex: "#1C1C1E"))
+                .font(AppTypography.bodySemiBold)
+                .foregroundStyle(AppColors.espressoTitle)
 
             Spacer()
 
             // Right: Confirm (Checkmark) Button — Saves to Profile & Completes
-            Button {
+            CircularIconButton(systemName: "checkmark", isFilled: true) {
                 focusedMetric = nil
                 _ = viewModel.saveToProfile(in: modelContext)
                 if let onComplete = onComplete {
@@ -160,15 +150,8 @@ struct BodyAnalysisResultView: View {
                 } else {
                     dismiss()
                 }
-            } label: {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Color.black)
-                    .clipShape(Circle())
             }
-            .buttonStyle(.plain)
+            .accessibilityLabel("Confirm")
         }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
         .padding(.vertical, 8)

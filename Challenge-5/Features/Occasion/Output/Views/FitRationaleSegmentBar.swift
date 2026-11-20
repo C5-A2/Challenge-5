@@ -52,7 +52,7 @@ struct FitRationaleSegmentBar: View {
         .padding(3)
         .background(
             Capsule()
-                .fill(Color(hex: "#EFECE8"))
+                .fill(AppColors.tabSelectionHighlight)
         )
     }
 }

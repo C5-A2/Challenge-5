@@ -308,15 +308,15 @@ struct ProfileHubView: View {
                     }
                 } label: {
                     Text(tab.rawValue)
-                        .font(.system(size: 14, weight: isSelected ? .medium : .regular))
-                        .foregroundStyle(Color(hex: "#1C1C1E"))
+                        .font(isSelected ? AppTypography.calloutSemiBold : AppTypography.subheadlineRegular)
+                        .foregroundStyle(AppColors.bodyText)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
                         .background {
                             if isSelected {
                                 Capsule()
-                                    .fill(Color.white)
-                                    .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 1)
+                                    .fill(AppColors.cardBackground)
+                                    .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 1)
                                     .matchedGeometryEffect(id: "ActiveProfileTab", in: tabAnimationNamespace)
                             }
                         }
@@ -327,7 +327,7 @@ struct ProfileHubView: View {
         .padding(3)
         .background(
             Capsule()
-                .fill(Color(hex: "#EFEFF0"))
+                .fill(AppColors.circularButtonBackground)
         )
     }
 
@@ -336,10 +336,10 @@ struct ProfileHubView: View {
     private var mainContentCardContainer: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color(hex: "#F3F3F5"))
+                .fill(AppColors.cardBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                        .stroke(AppColors.cardBorder, lineWidth: 1)
                 )
 
             if isCurrentTabEmpty {
@@ -361,7 +361,7 @@ struct ProfileHubView: View {
                         } label: {
                             Text("Retake the photo")
                                 .font(AppTypography.calloutSemiBold)
-                                .foregroundStyle(Color(hex: "#007AFF"))
+                                .foregroundStyle(AppColors.primaryBlue)
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 10)
                         }

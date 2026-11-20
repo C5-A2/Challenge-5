@@ -56,13 +56,13 @@ public struct LibraryCardView: View {
                 .padding(.horizontal, 6)
                 .frame(maxWidth: .infinity)
                 .frame(height: cardHeight)
-                .background(Color.white)
+                .background(AppColors.cardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                        .strokeBorder(AppColors.cardBorder, lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.04), radius: 6, y: 3)
+                .shadow(color: Color.black.opacity(0.04), radius: 6, y: 3)
                 
                 // Bottom: Keterangan garment persis di bawah card biru
                 garmentDescriptionView
@@ -95,7 +95,7 @@ public struct LibraryCardView: View {
             // Row 1: Garment Title ("Polo") and Ellipsis ("...")
             HStack(alignment: .center) {
                 Text(title)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(AppTypography.calloutSemiBold)
                     .foregroundStyle(AppColors.bodyText)
                     .lineLimit(1)
                 
@@ -117,7 +117,7 @@ public struct LibraryCardView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(AppTypography.subheadlineMedium)
                         .foregroundStyle(AppColors.mutedCaption)
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
@@ -127,7 +127,7 @@ public struct LibraryCardView: View {
             
             // Row 2: Garment Material ("french terry Cotton")
             Text(material)
-                .font(.system(size: 13, weight: .regular))
+                .font(AppTypography.footnoteRegular)
                 .foregroundStyle(AppColors.mutedCaption)
                 .lineLimit(1)
             
@@ -139,7 +139,7 @@ public struct LibraryCardView: View {
                         .frame(width: 7, height: 7)
                     
                     Text(colorName)
-                        .font(.system(size: 13, weight: .regular))
+                        .font(AppTypography.footnoteRegular)
                         .foregroundStyle(AppColors.bodyText)
                 }
                 .padding(.top, 1)
