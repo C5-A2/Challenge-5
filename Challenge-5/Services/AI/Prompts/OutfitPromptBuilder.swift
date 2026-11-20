@@ -473,16 +473,19 @@ struct OutfitPromptBuilder: Sendable {
         var lines = ["OCCASION (every look is for this event; this matters most): '\(occasion.title)'."]
         let cleanDresscode = occasion.dresscode.trimmingCharacters(in: .whitespacesAndNewlines)
         let note = occasion.customNote ?? ""
+        // The dresscode and the title together ("Wisuda batik"), so a textile named only in the title still counts.
+        let requirements = DresscodeRequirements.forOccasion(title: occasion.title, dresscode: cleanDresscode)
+        let textileStyling = requirements.textileStyling(lookIndex: lookIndex, structure: structure)
 
         // Known occasions get a guide (formality, statement level, fabrics, a silhouette option for this look),
         // so the model doesn't have to guess what the title means or fall back to plain basics.
         if let guide = OccasionStyleBank.guide(forTitle: occasion.title, dresscode: cleanDresscode + " " + note) {
-            lines.append(guide.promptText(lookIndex: lookIndex, hasDress: structure.hasDress))
+            lines.append(guide.promptText(lookIndex: lookIndex, hasDress: structure.hasDress, hasTextileStyling: !textileStyling.isEmpty))
         } else {
             lines.append("Decide what this event needs: the likely venue, time of day, how formal it is and what she will do there. Then choose a striking, current outfit a stylish woman would really wear to it. Do not overdress a casual event or underdress a formal one.")
         }
 
-        if cleanDresscode.isEmpty {
+        if cleanDresscode.isEmpty && requirements.checklist.isEmpty {
             lines.append("No dresscode given: infer the right formality from the occasion.")
         } else {
             var checklist: [String] = []
@@ -492,10 +495,10 @@ struct OutfitPromptBuilder: Sendable {
             if DresscodeColorRule(dresscode: cleanDresscode, palette: []) != nil {
                 checklist.append("Colors: only the colors in DRESSCODE COLORS below.")
             }
-            let requirements = DresscodeRequirements(dresscode: cleanDresscode)
             checklist += requirements.checklist
-            checklist += requirements.textileStyling(lookIndex: lookIndex, structure: structure)
-            lines.append("DRESSCODE (hard rule for every look): \"\(cleanDresscode)\". Follow its formality, colors, textile, pattern, theme and garment exactly.")
+            checklist += textileStyling
+            let rule = cleanDresscode.isEmpty ? occasion.title : cleanDresscode
+            lines.append("DRESSCODE (hard rule for every look): \"\(rule)\". Follow its formality, colors, textile, pattern, theme and garment exactly.")
             let exclusions = DresscodeText.negated(cleanDresscode)
             if !exclusions.isEmpty {
                 checklist.append("Ruled out by the dresscode (never use in any piece): \(exclusions).")

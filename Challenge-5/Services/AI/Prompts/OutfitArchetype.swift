@@ -316,8 +316,10 @@ nonisolated struct OccasionStyleGuide: Sendable {
     var isContext: Bool = false
 
     /// The guide for one look, with the silhouette option picked for this look and its pieces.
-    func promptText(lookIndex: Int, hasDress: Bool) -> String {
-        let options = hasDress ? dressOptions : separatesOptions
+    /// - Parameter hasTextileStyling: a dresscode textile (batik, kebaya) gives its own cut for every look, so the
+    ///   guide's silhouette is left out; two different required cuts made the model drop the batik.
+    func promptText(lookIndex: Int, hasDress: Bool, hasTextileStyling: Bool = false) -> String {
+        let options = hasTextileStyling ? [] : (hasDress ? dressOptions : separatesOptions)
         var lines = [
             "OCCASION GUIDE (\(name)):",
             "- Formality: \(formality)",
@@ -904,7 +906,16 @@ nonisolated struct DresscodeRequirements: Sendable {
     /// (any word of a group is enough). Checked after generation.
     let requiredTermGroups: [[String]]
     /// Indonesian textiles named in the dresscode ("batik"), for the per-look styling.
+    /// A kebaya alone is styled with batik, the way it is usually worn.
     let textiles: [String]
+    /// Whether the dresscode asks for a kebaya ("batik kebaya", "kebaya modern").
+    let hasKebaya: Bool
+
+    /// The requirements of the occasion: the dresscode and the title together, so "Wisuda batik" with an empty
+    /// or generic dresscode still asks for batik.
+    static func forOccasion(title: String, dresscode: String) -> DresscodeRequirements {
+        DresscodeRequirements(dresscode: "\(dresscode) \(title)")
+    }
 
     private static let indonesianTextiles = ["batik", "tenun", "songket", "ulos", "lurik", "endek", "sasirangan", "jumputan"]
     private static let traditionalThemeWords = ["tradisional", "traditional", "adat", "nasional", "national", "etnik", "ethnic", "nusantara"]
@@ -952,9 +963,11 @@ nonisolated struct DresscodeRequirements: Sendable {
         for textile in Set(textiles).sorted() {
             lines.append("Textile \"\(textile)\": EVERY look is built around \(textile). The \(textile) covers a large area (the dress, the top, the skirt or a long outer), never a small trim or accessory, and is the focal point of the look. Put \"\(textile)\" in that garment's \"name\" and \"playgroundPrompt\".")
         }
-        if hasRoot("kebaya") {
-            termGroups.append(["kebaya"])
-            lines.append("Kebaya: EVERY look has a modern kebaya top (a current neckline, sleeve or corset-style fit, lace or embroidered brocade, a sleek fitted silhouette) and a modern skirt or trousers, not a costume-like traditional set.")
+        let kebaya = hasRoot("kebaya") || has("kutubaru")
+        if kebaya {
+            termGroups.append(["kebaya", "kutubaru", "corset", "bustier"])
+            lines.append("Kebaya: EVERY look has a modern kebaya top or a kebaya-inspired corset or off-shoulder bodice (fitted lace or brocade with beading, a scalloped or peplum hem, or boning) worn with a shaped batik skirt (draped, pleated, mermaid or high-low), like the looks young Indonesian women wear to graduations and weddings in 2026. Never a long straight tunic or a stiff costume.")
+            lines.append("Kebaya colors: the kebaya and the batik are one tonal story. The batik repeats the kebaya's color (a pink kebaya with a pink-brown batik), or it is a classic sogan brown batik, or black and white with a white kebaya. Never a random contrast such as a pink kebaya with a navy batik.")
         } else if textiles.isEmpty, Self.traditionalThemeWords.contains(where: has) {
             termGroups.append(["kebaya", "batik", "tenun", "songket", "ulos", "lurik", "endek", "sasirangan", "jumputan"])
             lines.append("Traditional Indonesian: EVERY look includes a modern take on an Indonesian piece (a modern kebaya top, or a batik, tenun or songket patterned piece), styled in a current way, not like a costume.")
@@ -978,16 +991,33 @@ nonisolated struct DresscodeRequirements: Sendable {
         checklist = lines
         hasTheme = !themes.isEmpty
         requiredTermGroups = termGroups
-        self.textiles = Set(textiles).sorted()
+        hasKebaya = kebaya
+        // A kebaya is worn with batik, so it gets the batik styling too (the batik isn't required by the check).
+        self.textiles = textiles.isEmpty && kebaya ? ["batik"] : Set(textiles).sorted()
     }
 
     /// Batik motifs that read clearly in a picture, one per look so the five looks differ.
+    /// Large bold motifs in cream and gold were drawn as old-fashioned paisley or damask, so the motifs are fine
+    /// hand-drawn batik tulis patterns.
     private static let batikMotifs = [
-        "parang (bold diagonal wave bands)",
-        "large buketan floral bouquets with leaves and birds",
-        "kawung (large four-petal geometric circles)",
-        "mega mendung (layered cloud shapes)",
-        "lereng (wide diagonal stripes filled with small motifs)"
+        "parang (diagonal wavy bands with small leaf shapes)",
+        "mega mendung (layered cloud swirls)",
+        "sekar jagad (a dense patchwork of small floral motifs)",
+        "kawung (large geometric four-petal circle medallions)",
+        "buketan (flowing floral bouquets with small birds)"
+    ]
+
+    /// Modern kebaya outfits (a kebaya top and a shaped batik bottom), rotated by look. Taken from the kebaya
+    /// young Indonesian women wear to graduations and weddings: a fitted lace or brocade top with a detail
+    /// (beading, a scalloped or asymmetric peplum hem, puff shoulders, a tulle cascade) and a draped, pleated or
+    /// high-low batik skirt, never a long straight lace tunic over a plain straight sarong.
+    /// ("Slit" and "sheer" are blocked by Image Playground, so a front opening is used.)
+    private static let kebayaOptions = [
+        "a fitted beaded lace kebaya with a high neck, puff shoulders, long sleeves and an asymmetric scalloped peplum hem, with a batik sarong skirt with front pleats",
+        "an off-shoulder boned corset bustier in lace or brocade, with a batik mermaid maxi skirt with large flowing motifs, a front opening and a small train",
+        "a short-sleeve lace kebaya with a long tulle panel cascading on one side, with a draped batik sarong skirt gathered at the front",
+        "a one-shoulder beaded corset bodice with a choker neckline, with a batik mermaid maxi skirt with large birds and flowers and a small train",
+        "an off-shoulder fitted lace kebaya with long asymmetric hem tails, with a full high-low batik maxi skirt with a front opening"
     ]
 
     /// How the textile is worn in this look, chosen from the look's structure and rotated by look,
@@ -997,6 +1027,16 @@ nonisolated struct DresscodeRequirements: Sendable {
         guard let textile = textiles.first else { return [] }
         let turn = max(lookIndex, 0)
         let options: [String]
+        if hasKebaya && structure.hasDress {
+            options = [
+                "a kebaya gown: a fitted beaded lace kebaya bodice with long sleeves and a flowing floor-length \(textile) skirt",
+                "a kebaya dress: an off-shoulder brocade kebaya bodice with a \(textile) mermaid skirt",
+                "a corset gown: a boned lace corset bodice with an off-shoulder neckline and a \(textile) mermaid maxi skirt with a small train",
+                "a kebaya midi dress: an embroidered lace kebaya bodice with a corset-style waist and a pleated \(textile) skirt"
+            ]
+        } else if hasKebaya {
+            options = Self.kebayaOptions
+        } else {
         switch structure {
         case .dress, .dressOptionalOuter:
             options = [
@@ -1024,14 +1064,16 @@ nonisolated struct DresscodeRequirements: Sendable {
                 "a matching \(textile) set: an asymmetric or wrap \(textile) top and a \(textile) pencil skirt or wide trousers in the same print"
             ]
         }
+        }
         var lines = ["\(textile.capitalized) styling for this look: \(options[turn % options.count]). Cut it in a current, polished way; never a plain boxy office uniform or a costume."]
         if textile == "batik" {
             let motif = Self.batikMotifs[turn % Self.batikMotifs.count]
-            lines.append("Batik motif for this look: \(motif). The motif is large, bold and clearly visible, in 2 or 3 colors with strong contrast (a dark color on a light ground, or a light color on a dark ground). Never a faint, tone-on-tone, damask, jacquard or brocade-like texture.")
+            let motifName = motif.components(separatedBy: " (").first ?? motif
+            lines.append("Batik motif for this look: \(motif), a traditional batik pattern in 2 or 3 colors that is clearly visible on the fabric. Put the motif name (\"\(motifName)\") in the batik piece's \"name\" and \"playgroundPrompt\". Use a different motif and a different skirt shape (draped wrap, pleated, pencil, mermaid, high-low) than the previous looks. Never paisley, damask, baroque or large gold ornaments, and never faint tone on tone.")
         } else {
             lines.append("\(textile.capitalized) pattern: large, clearly visible and in 2 or 3 contrasting colors, never faint or tone on tone.")
         }
-        lines.append("\(textile.capitalized) piece: its \"hexColor\" is the print's ground color from the allowed colors; its \"material\" is cotton or silk-cotton (never satin, which hides the print); the motif name goes in \"name\" only, and its \"playgroundPrompt\" is just the color, \"\(textile)\" and the cut (for example \"navy \(textile) peplum top\"). Any non-\(textile) piece is solid and plain, with no other print, in a color taken from the \(textile) or a light neutral.")
+        lines.append("\(textile.capitalized) piece: its \"hexColor\" is the print's ground color from the allowed colors; its \"material\" is cotton or silk-cotton (never satin, which hides the print); its \"name\" is a full garment name with the motif (for example \"Parang \(textile) peplum top\"), and its \"playgroundPrompt\" is the color, \"\(textile)\" and the cut (for example \"navy \(textile) peplum top\"). Any non-\(textile) piece is solid and plain, with no other print, in a color taken from the \(textile) or a light neutral.")
         return lines
     }
 }

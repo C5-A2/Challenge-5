@@ -304,7 +304,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         // keeps the reference colors and the surprise look may add one accent outside her palette.
         let dresscodeColors = DresscodeColorRule.forOccasion(title: occasion.title, dresscode: occasion.dresscode, note: occasion.customNote, palette: profile.colorSeason?.outfitSwatches ?? [])
         let keepsReferenceColors = archetype == .referenceMatch && referenceAnalysis != nil
-        let dresscodeRequirements = DresscodeRequirements(dresscode: occasion.dresscode)
+        let dresscodeRequirements = DresscodeRequirements.forOccasion(title: occasion.title, dresscode: occasion.dresscode)
         let excludedHexes = DresscodeColorRule.excludedHexes(
             dresscode: occasion.dresscode,
             occasionTitle: occasion.title,
@@ -316,6 +316,13 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         // Rejected repeats / style-check fallbacks are kept only when complete (never bottom-only / top-only).
         var avoidedLooks = previousLooks
         var bestCompleteFallback: OutfitLook?
+        // A complete look that misses the dresscode's textile ("batik") is only a last resort: any fallback that has
+        // the textile wins, and if none does, the textile is added to its main piece so the look is never plain.
+        var fallbackMissingDresscode: OutfitLook?
+        func lastResort() -> OutfitLook? {
+            if let bestCompleteFallback { return bestCompleteFallback }
+            return fallbackMissingDresscode.map { Self.addingMissingTextile(to: $0, requirements: dresscodeRequirements) }
+        }
         // Set when the prompt didn't fit the model's context: the next attempt uses the compact prompt.
         var forcesCompactPrompt = false
 
@@ -364,7 +371,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                     forcesCompactPrompt = true
                 }
                 if attempt == Self.maximumAttemptsPerLook - 1 {
-                    if let bestCompleteFallback { return bestCompleteFallback }
+                    if let fallback = lastResort() { return fallback }
                     throw error
                 }
                 continue
@@ -380,7 +387,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 let missing = missingCategories.map(\.rawValue)
                 print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) missing required categories \(missing) (got \(present) for \(structure.rawValue)). Generating it again.")
                 if attempt == Self.maximumAttemptsPerLook - 1 {
-                    if let bestCompleteFallback { return bestCompleteFallback }
+                    if let fallback = lastResort() { return fallback }
                     throw LLMError.invalidOutput("Look index \(lookIndex) is missing required garment category: \(missing.joined(separator: ", ")).")
                 }
                 continue
@@ -394,7 +401,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
                 }
             }) {
                 print("⚠️ [OutfitGenerationPipeline] Look \(lookIndex) misses the dresscode's \(missing.first ?? ""). Generating it again.")
-                if bestCompleteFallback == nil { bestCompleteFallback = parsedLook }
+                if fallbackMissingDresscode == nil { fallbackMissingDresscode = parsedLook }
                 continue
             }
 
@@ -446,10 +453,30 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         }
 
         // Every attempt repeated an earlier look or hit a soft check: keep the complete fallback rather than failing the whole set.
-        guard let bestCompleteFallback else {
+        guard let fallback = lastResort() else {
             throw LLMError.invalidOutput("Could not generate complete look index \(lookIndex).")
         }
-        return bestCompleteFallback
+        return fallback
+    }
+
+    /// Adds each missing dresscode textile to the look's main piece (a kebaya goes on the top, batik on the
+    /// dress or the bottom), so a look that never got the textile after every attempt still shows it.
+    private static func addingMissingTextile(to look: OutfitLook, requirements: DresscodeRequirements) -> OutfitLook {
+        for group in requirements.requiredTermGroups {
+            let hasTerm = look.garments.contains { garment in
+                let text = "\(garment.name) \(garment.material) \(garment.playgroundPrompt ?? "")".lowercased()
+                return group.contains { text.contains($0) }
+            }
+            guard !hasTerm, let term = group.first else { continue }
+            let order: [GarmentCategory] = term == "kebaya" ? [.top, .outer, .dress] : [.dress, .bottom, .top, .outer]
+            guard let category = order.first(where: { category in look.garments.contains { $0.category == category } }),
+                  let index = look.garments.firstIndex(where: { $0.category == category }) else { continue }
+            let garment = look.garments[index]
+            garment.name = "\(term.capitalized) \(garment.name)"
+            garment.playgroundPrompt = garment.playgroundPrompt.map { "\(term) \($0)" }
+            print("🧵 [OutfitGenerationPipeline] Look \(look.lookIndex) had no \(term) after every attempt; added it to \(garment.name).")
+        }
+        return look
     }
 
     /// Returns any categories required by `structure` that are absent from `look.garments`.
@@ -1090,85 +1117,11 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
         return outfit.sortedForOutfitDisplay()
     }
 
-    /// Converts any `#RRGGBB` hex color mathematically via HSL into a standard visual color name
-    /// so Image Playground matches the actual UI swatch without confusing literal Pantone names or stale LLM colors.
+    /// The fashion color name Image Playground understands that looks closest to `hex` (see `FashionColorName`).
+    /// Image Playground only reads words, never hex; the old hue/lightness rules named pastel pinks "soft red"
+    /// and Raspberry Sorbet just "pink", so the picture didn't match the swatch on the card.
     nonisolated static func visualColorName(fromHex hex: String) -> String? {
-        let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
-        guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
-        let r = Double((value >> 16) & 0xFF) / 255
-        let g = Double((value >> 8) & 0xFF) / 255
-        let b = Double(value & 0xFF) / 255
-
-        let maxC = max(r, g, b)
-        let minC = min(r, g, b)
-        let delta = maxC - minC
-        let lightness = (maxC + minC) / 2
-        let hsvSaturation = maxC == 0 ? 0 : delta / maxC
-
-        var hue = 0.0
-        if delta > 0 {
-            if maxC == r { hue = 60 * ((g - b) / delta).truncatingRemainder(dividingBy: 6) }
-            else if maxC == g { hue = 60 * ((b - r) / delta + 2) }
-            else { hue = 60 * ((r - g) / delta + 4) }
-            if hue < 0 { hue += 360 }
-        }
-
-        if lightness < 0.13 { return "black" }
-        // Very light pastels (Ballet Pink, Lavender, Seafoam) have a low saturation too, so light colors use a
-        // lower grey threshold; the light greys in the palettes stay below 0.11.
-        let greyThreshold = lightness > 0.74 ? 0.11 : 0.16
-        if lightness > 0.88 && hsvSaturation < greyThreshold {
-            return (hsvSaturation >= 0.06 && (15...75).contains(hue)) ? "cream" : "off-white"
-        }
-        if hsvSaturation < greyThreshold {
-            if lightness < 0.32 { return "charcoal grey" }
-            if lightness > 0.68 { return "light grey" }
-            return "grey"
-        }
-        // Light, softly saturated colors are pastels. Without this, pastel peach and butter yellow fell into
-        // the cream branch below and pastel pinks became "soft red", so Image Playground drew red.
-        let isPastel = lightness > 0.74 && hsvSaturation <= 0.4
-        if isPastel && lightness > 0.78 && hsvSaturation >= 0.18 {
-            if (15..<32).contains(hue) { return "pastel peach" }
-            if (46..<68).contains(hue) { return "pastel yellow" }
-        }
-        if hsvSaturation < 0.42 && (15...75).contains(hue) {
-            if lightness > 0.78 { return "cream" }
-            if lightness > 0.55 { return "beige" }
-            return "taupe brown"
-        }
-
-        // Strong, saturated mid-tones get "vivid" so Image Playground doesn't soften them (Raspberry Sorbet #D03168
-        // as plain "pink" was drawn as a pale dusty pink).
-        let isVivid = hsvSaturation >= 0.6 && (0.34...0.7).contains(lightness)
-        let shade = lightness < 0.34 ? "deep " : (isPastel ? "pastel " : (isVivid ? "vivid " : (lightness > 0.74 ? "soft " : "")))
-        let baseHue: String
-        switch hue {
-        // A light red is a pink in clothing ("Pastel Pink" #F4C2C2 used to become "soft red").
-        case 335..., ..<15:
-            if lightness < 0.34 { baseHue = "burgundy" }
-            else if lightness > 0.7 { baseHue = (!isPastel && (2..<15).contains(hue)) ? "coral" : "pink" }
-            // Greyed reds (Toadstool, Iron) are dusty rose or taupe, not red.
-            else if hsvSaturation < 0.3 { baseHue = (hue >= 330 || lightness > 0.55) ? "dusty rose" : "taupe brown" }
-            // Raspberry and bubblegum shades lean pink; light warm reds are coral.
-            else if (335..<350).contains(hue) && lightness > 0.5 { baseHue = "pink" }
-            else if lightness > 0.6 && hsvSaturation < 0.75 { baseHue = "coral" }
-            else { baseHue = "red" }
-        case 15..<42: baseHue = lightness < 0.45 ? "brown" : (lightness > 0.7 ? "peach" : "terracotta")
-        case 42..<68: baseHue = (lightness < 0.48 || hsvSaturation < 0.45) ? "olive" : "gold"
-        case 68..<165:
-            if isPastel { baseHue = hue >= 120 ? "mint green" : "sage green" }
-            else { baseHue = hsvSaturation < 0.42 ? "sage green" : "green" }
-        case 165..<200: baseHue = isPastel ? "aqua" : "teal"
-        case 200..<255: baseHue = lightness < 0.34 ? "navy blue" : "blue"
-        case 255..<305: baseHue = isPastel ? "lavender" : "purple"
-        default: baseHue = "pink"
-        }
-        // Avoid redundant "deep burgundy" / "deep navy blue"; a pastel keeps its "pastel" word.
-        if baseHue == "burgundy" || baseHue == "navy blue" || (baseHue == "sage green" && !isPastel) {
-            return baseHue
-        }
-        return "\(shade)\(baseHue)"
+        FashionColorName.nearest(toHex: hex)
     }
 
     /// Syncs `playgroundPrompt` with the resolved `hexColor` using HSL math so the avatar color matches
@@ -1209,6 +1162,24 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
     /// Converts one parsed `GarmentDTO` into a `GarmentItem`, snapping its color and playground prompt.
     /// Returns `nil` for pieces outside the wardrobe categories (shoes, accessories).
+    /// A garment name without a clothing noun ("peplum", "ruched") gets its category's noun ("peplum top"),
+    /// so the card and the Image Playground text always say what the piece is.
+    private static func namedGarment(_ name: String, category: GarmentCategory) -> String {
+        let words = name.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted.subtracting(CharacterSet(charactersIn: "-")))
+            .filter { !$0.isEmpty }
+        guard !words.contains(where: { OutfitPlaygroundPackage.garmentNouns.contains($0) }) else { return name }
+        let noun: String
+        switch category {
+        case .dress: noun = "dress"
+        case .top: noun = "top"
+        case .bottom: noun = "skirt"
+        case .outer: noun = "jacket"
+        }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? noun : "\(trimmed) \(noun)"
+    }
+
     private func makeGarmentItem(from dto: LLMOutfitGenerationResponse.GarmentDTO, options: ParseOptions) -> GarmentItem? {
         guard let category = GarmentCategory(generatedLabel: dto.category)
                 ?? GarmentCategory(generatedLabel: dto.name) else {
@@ -1224,7 +1195,7 @@ final class OutfitGenerationPipeline: OutfitGenerationPipelineProtocol {
 
         return GarmentItem(
             category: category,
-            name: dto.name,
+            name: Self.namedGarment(dto.name, category: category),
             material: dto.material,
             colorName: resolvedColor.name,
             hexColor: resolvedColor.hex,
@@ -1654,5 +1625,160 @@ public struct LLMOutfitGenerationResponse: Codable, Sendable {
 
     public init(looks: [LookDTO]) {
         self.looks = looks
+    }
+}
+
+// MARK: - Fashion color names
+
+/// Names a hex color with the closest well-known fashion color word, measured in CIELAB (ΔE), so the text sent to
+/// Image Playground draws the same color as the swatch. Tested on all 631 swatches in `ColorSeason`:
+/// median ΔE about 8 (hard to tell apart on clothing), only one swatch above 18.
+nonisolated enum FashionColorName {
+    /// Color words Image Playground knows, each with the hex it stands for.
+    private static let references: [(name: String, hex: String)] = [
+        ("black", "#1C1C1E"),
+        ("charcoal grey", "#45454A"),
+        ("grey", "#8E8E8E"),
+        ("light grey", "#CFCFCF"),
+        ("silver grey", "#B4B6B8"),
+        ("off-white", "#F5F3EE"),
+        ("white", "#FFFFFF"),
+        ("ivory", "#F8F4E3"),
+        ("cream", "#F1E6CF"),
+        ("beige", "#D9C7A7"),
+        ("sand beige", "#CDB891"),
+        ("camel", "#B88A57"),
+        ("tan", "#C9A27A"),
+        ("taupe", "#8E8072"),
+        ("mocha brown", "#7A5C4A"),
+        ("chocolate brown", "#4E3226"),
+        ("brown", "#7B4B2A"),
+        ("champagne", "#EAD8B3"),
+        ("khaki", "#B5A878"),
+        ("red", "#C41E3A"),
+        ("cherry red", "#A4161A"),
+        ("burgundy", "#6D1F2F"),
+        ("wine red", "#7B2335"),
+        ("maroon", "#5A1A23"),
+        ("brick red", "#9E3B2E"),
+        ("rust", "#A64B2A"),
+        ("terracotta", "#C46A4A"),
+        ("coral", "#F2795F"),
+        ("salmon pink", "#F49A8E"),
+        ("peach", "#F6B89A"),
+        ("pastel peach", "#F9D5BE"),
+        ("apricot", "#F5A96B"),
+        ("pastel pink", "#F4C6CB"),
+        ("baby pink", "#F7D7DE"),
+        ("blush pink", "#EBBFC7"),
+        ("dusty rose", "#C98F98"),
+        ("dusty pink", "#D7A3AE"),
+        ("rose pink", "#E57F9B"),
+        ("hot pink", "#E8478B"),
+        ("raspberry pink", "#D03168"),
+        ("fuchsia pink", "#CC2E86"),
+        ("magenta", "#B0286E"),
+        ("berry", "#8A2350"),
+        ("mauve", "#A27C8C"),
+        ("plum", "#5E2B4E"),
+        ("lavender", "#CDBBE6"),
+        ("lilac", "#BFA2CF"),
+        ("orchid purple", "#A65FA0"),
+        ("purple", "#6A3D9A"),
+        ("violet", "#7E5BBF"),
+        ("deep purple", "#45275C"),
+        ("periwinkle", "#A6ADE0"),
+        ("baby blue", "#BFD8EE"),
+        ("powder blue", "#AFC4DC"),
+        ("sky blue", "#7FB6E3"),
+        ("cornflower blue", "#6F8FD8"),
+        ("blue", "#3D6DB5"),
+        ("cobalt blue", "#1F4FB0"),
+        ("royal blue", "#24399A"),
+        ("denim blue", "#4C6A92"),
+        ("dusty blue", "#7F95AE"),
+        ("navy blue", "#1F2A48"),
+        ("midnight navy", "#171C30"),
+        ("mint green", "#BDE5D0"),
+        ("pastel sage", "#D2E0C4"),
+        ("sage green", "#9CAF88"),
+        ("olive green", "#6F6B3A"),
+        ("moss green", "#5B6B3A"),
+        ("emerald green", "#127A58"),
+        ("forest green", "#2B4A33"),
+        ("kelly green", "#2E9E55"),
+        ("lime green", "#A8C83A"),
+        ("teal", "#0A7C7A"),
+        ("turquoise", "#28B5B0"),
+        ("aqua", "#8ED8D2"),
+        ("pastel aqua", "#C2E8E3"),
+        ("butter yellow", "#F7E7A1"),
+        ("pastel yellow", "#FAF0BC"),
+        ("lemon yellow", "#F2DE48"),
+        ("mustard yellow", "#C9A227"),
+        ("gold", "#C8A040"),
+        ("orange", "#E8742C"),
+        ("burnt orange", "#BF5A1F"),
+        ("tangerine", "#F28F35"),
+        ("electric blue", "#1638F0"),
+        ("neon green", "#39FF14"),
+        ("neon yellow", "#E7FF2E"),
+        ("apple green", "#86BF5C"),
+        ("pistachio green", "#C3DE85"),
+        ("chartreuse", "#C2D93C"),
+        ("jade green", "#14B08C"),
+        ("seafoam green", "#6FD8BF"),
+        ("cyan blue", "#17A3C6"),
+        ("petrol blue", "#1A5560"),
+        ("teal blue", "#05768E"),
+        ("indigo", "#2B2F7A"),
+        ("deep indigo", "#260A55"),
+        // Blue-violet darks: "deep purple" was drawn as a plum (Deep Indigo Navy #302453).
+        ("dark indigo", "#2F2654"),
+        ("indigo blue", "#3E3F78"),
+        ("marigold yellow", "#FCC352"),
+        ("light yellow", "#F4E87C"),
+        ("muted teal", "#5C9DA3"),
+        ("sea green", "#61948A"),
+        ("dusty purple", "#76508A"),
+        ("dusty plum", "#844A5E"),
+        ("orchid pink", "#D9679F"),
+        ("ocean blue", "#0084B6"),
+        ("neon orange", "#FF6B1A"),
+        ("rose red", "#B8505F"),
+        ("watermelon pink", "#EC5E6C"),
+        ("bubblegum pink", "#EFA2C8"),
+        ("olive yellow", "#A29E44"),
+    ]
+
+    private static let referenceLab: [(name: String, lab: (Double, Double, Double))] = references.compactMap { entry in
+        lab(fromHex: entry.hex).map { (entry.name, $0) }
+    }
+
+    static func nearest(toHex hex: String) -> String? {
+        guard let target = lab(fromHex: hex) else { return nil }
+        return referenceLab.min { distance($0.lab, target) < distance($1.lab, target) }?.name
+    }
+
+    private static func distance(_ a: (Double, Double, Double), _ b: (Double, Double, Double)) -> Double {
+        let dl = a.0 - b.0, da = a.1 - b.1, db = a.2 - b.2
+        return (dl * dl + da * da + db * db).squareRoot()
+    }
+
+    /// sRGB hex to CIELAB (D65).
+    private static func lab(fromHex hex: String) -> (Double, Double, Double)? {
+        let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
+        func linear(_ channel: UInt32) -> Double {
+            let c = Double(channel & 0xFF) / 255
+            return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let r = linear(value >> 16), g = linear(value >> 8), b = linear(value)
+        let x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047
+        let y = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        let z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883
+        func f(_ t: Double) -> Double { t > 0.008856 ? pow(t, 1.0 / 3.0) : 7.787 * t + 16.0 / 116.0 }
+        let fx = f(x), fy = f(y), fz = f(z)
+        return (116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz))
     }
 }
