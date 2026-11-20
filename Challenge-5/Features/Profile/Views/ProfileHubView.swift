@@ -118,7 +118,7 @@ struct ProfileHubView: View {
     }
 
     private var activeBodyType: BodyType {
-        currentProfile?.bodyType ?? .hourglass
+        .invertedTriangle
     }
 
     private var activeTorsoBalance: TorsoBalance {
@@ -530,35 +530,8 @@ struct ProfileHubView: View {
                     .stroke(Color.black.opacity(0.04), lineWidth: 1)
             )
 
-            // 3. "Styles that suit you the most" Section
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Styles that suit you the most")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color(hex: "#1C1C1E"))
-
-                VStack(spacing: 10) {
-                    garmentRecommendationRow(
-                        icon: "tshirt",
-                        title: "Tops & Necklines",
-                        detail: activeBodyType.suitableNecklines
-                    )
-                    garmentRecommendationRow(
-                        icon: "jacket",
-                        title: "Jackets & Sleeves",
-                        detail: activeBodyType.suitableTopsAndJackets
-                    )
-                    garmentRecommendationRow(
-                        icon: "figure.walk",
-                        title: "Bottoms & Trousers",
-                        detail: activeBodyType.suitableBottoms
-                    )
-                    garmentRecommendationRow(
-                        icon: "sparkles",
-                        title: "Skirts & Dresses",
-                        detail: activeBodyType.suitableSkirtsAndDresses
-                    )
-                }
-            }
+            // 3. "Styles that suit you" Visual Recommendations Section
+            BodyStylesThatSuitYouSection(bodyType: activeBodyType)
         }
     }
 

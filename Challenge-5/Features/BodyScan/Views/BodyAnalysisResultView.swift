@@ -50,7 +50,7 @@ struct BodyAnalysisResultView: View {
     // MARK: - Computed Properties
 
     private var activeBodyType: BodyType {
-        viewModel.classifiedBodyType ?? .hourglass
+        .invertedTriangle
     }
 
     private var activeTorsoBalance: TorsoBalance {
@@ -104,6 +104,9 @@ struct BodyAnalysisResultView: View {
 
                         // 3. Styling Direction
                         stylingPrincipleCard
+
+                        BodyStylesThatSuitYouSection(bodyType: activeBodyType)
+                            .padding(.top, 4)
 
                         Spacer(minLength: 24)
                     }
