@@ -44,7 +44,7 @@ struct ProfileHubView: View {
 
     @State private var selectedTab: ProfileTab = .colorSeason
     @State private var activeSheet: ActiveProfileSheet? = nil
-    private let showManualProfileDebug: Bool = true
+    private let showManualProfileDebug: Bool = false
     @State private var isShowingDebugSheet: Bool = false
     @State private var selectedBodyPhotoSide: Int = 0 // 0 = Front, 1 = Side, 2 = Torso Length
     @State private var showSkeleton: Bool = true
