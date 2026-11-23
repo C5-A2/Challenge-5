@@ -22,7 +22,7 @@ public struct StyleGarmentItem: Identifiable, Sendable, Hashable {
     }
 }
 
-/// Category grouping for style recommendations (e.g. Necklines, Sleeves, Bottoms, Skirts & Dresses, Shorts).
+/// Category grouping for style recommendations (e.g. Necklines, Sleeves, Tops, Coats, Bottoms, Skirts & Dresses, Shorts).
 public struct StyleGarmentCategory: Identifiable, Sendable, Hashable {
     public let id: String
     public let title: String
@@ -46,52 +46,52 @@ extension BodyType {
                 StyleGarmentCategory(
                     title: "Necklines",
                     items: [
-                        StyleGarmentItem(name: "Deep V-neck", assetName: "style_inverted_triangle_necklines_deep_v_neck", systemFallbackIcon: "v.circle"),
-                        StyleGarmentItem(name: "Scoop", assetName: "style_inverted_triangle_necklines_scoop", systemFallbackIcon: "oval"),
-                        StyleGarmentItem(name: "U-neck", assetName: "style_inverted_triangle_necklines_u_neck", systemFallbackIcon: "u.circle"),
                         StyleGarmentItem(name: "Asymmetric Necklines", assetName: "style_inverted_triangle_necklines_asymmetric_necklines", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Halter necks", assetName: "style_inverted_triangle_necklines_halter_necks", systemFallbackIcon: "triangle")
+                        StyleGarmentItem(name: "Deep V-Neck", assetName: "style_inverted_triangle_necklines_deep_v_neck", systemFallbackIcon: "v.circle"),
+                        StyleGarmentItem(name: "Halter Necks", assetName: "style_inverted_triangle_necklines_halter_necks", systemFallbackIcon: "triangle"),
+                        StyleGarmentItem(name: "Scoop", assetName: "style_inverted_triangle_necklines_scoop", systemFallbackIcon: "oval"),
+                        StyleGarmentItem(name: "U-Neck", assetName: "style_inverted_triangle_necklines_u_neck", systemFallbackIcon: "u.circle")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Sleeves",
                     items: [
-                        StyleGarmentItem(name: "Tight Tapered Short Sleeves", assetName: "style_inverted_triangle_sleeves_tight_tapered_short_sleeves", systemFallbackIcon: "tshirt"),
                         StyleGarmentItem(name: "Dropped Shoulder Points", assetName: "style_inverted_triangle_sleeves_dropped_shoulder_points", systemFallbackIcon: "tshirt"),
                         StyleGarmentItem(name: "Soft Flaring Long Sleeves", assetName: "style_inverted_triangle_sleeves_soft_flaring_long_sleeves", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Tight Tapered Short Sleeves", assetName: "style_inverted_triangle_sleeves_tight_tapered_short_sleeves", systemFallbackIcon: "tshirt"),
                         StyleGarmentItem(name: "Wide Straps", assetName: "style_inverted_triangle_sleeves_wide_straps", systemFallbackIcon: "tshirt")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Bottoms",
                     items: [
-                        StyleGarmentItem(name: "Wide Leg", assetName: "style_inverted_triangle_bottoms_wide_leg", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Palazzo", assetName: "style_inverted_triangle_bottoms_palazzo", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Cargo", assetName: "style_inverted_triangle_bottoms_cargo", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Flare", assetName: "style_inverted_triangle_bottoms_flare", systemFallbackIcon: "figure.walk"),
                         StyleGarmentItem(name: "Bootcut", assetName: "style_inverted_triangle_bottoms_bootcut", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Boyfriend Styles", assetName: "style_inverted_triangle_bottoms_boyfriend_styles", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Cargo", assetName: "style_inverted_triangle_bottoms_cargo", systemFallbackIcon: "figure.walk"),
                         StyleGarmentItem(name: "Culotte", assetName: "style_inverted_triangle_bottoms_culotte", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Boyfriend Styles", assetName: "style_inverted_triangle_bottoms_boyfriend_styles", systemFallbackIcon: "figure.walk")
+                        StyleGarmentItem(name: "Flare", assetName: "style_inverted_triangle_bottoms_flare", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Palazzo", assetName: "style_inverted_triangle_bottoms_palazzo", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Wide Leg", assetName: "style_inverted_triangle_bottoms_wide_leg", systemFallbackIcon: "figure.walk")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Skirts & Dresses",
                     items: [
                         StyleGarmentItem(name: "A-Line", assetName: "style_inverted_triangle_skirts_dresses_a_line", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Pleated", assetName: "style_inverted_triangle_skirts_dresses_pleated", systemFallbackIcon: "sparkles"),
                         StyleGarmentItem(name: "Bias Cut", assetName: "style_inverted_triangle_skirts_dresses_bias_cut", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Pleated", assetName: "style_inverted_triangle_skirts_dresses_pleated", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Strapless", assetName: "style_inverted_triangle_skirts_dresses_strapless", systemFallbackIcon: "sparkles"),
                         StyleGarmentItem(name: "Tulip", assetName: "style_inverted_triangle_skirts_dresses_tulip", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Wrap Dresses Flaring at the Hips", assetName: "style_inverted_triangle_skirts_dresses_wrap_dresses_flaring_at_the_hips", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Strapless", assetName: "style_inverted_triangle_skirts_dresses_strapless", systemFallbackIcon: "sparkles")
+                        StyleGarmentItem(name: "Wrap Dresses Flaring at the Hips", assetName: "style_inverted_triangle_skirts_dresses_wrap_dresses_flaring_at_the_hips", systemFallbackIcon: "sparkles")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Shorts",
                     items: [
-                        StyleGarmentItem(name: "Wide", assetName: "style_inverted_triangle_shorts_wide", systemFallbackIcon: "figure.walk"),
                         StyleGarmentItem(name: "Baggy", assetName: "style_inverted_triangle_shorts_baggy", systemFallbackIcon: "figure.walk"),
                         StyleGarmentItem(name: "Pleated", assetName: "style_inverted_triangle_shorts_pleated", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Printed Shorts", assetName: "style_inverted_triangle_shorts_printed_shorts", systemFallbackIcon: "figure.walk")
+                        StyleGarmentItem(name: "Printed Shorts", assetName: "style_inverted_triangle_shorts_printed_shorts", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Wide", assetName: "style_inverted_triangle_shorts_wide", systemFallbackIcon: "figure.walk")
                     ]
                 )
             ]
@@ -101,49 +101,66 @@ extension BodyType {
                 StyleGarmentCategory(
                     title: "Necklines",
                     items: [
-                        StyleGarmentItem(name: "Square", systemFallbackIcon: "square"),
-                        StyleGarmentItem(name: "Bateau", systemFallbackIcon: "oval"),
-                        StyleGarmentItem(name: "Sabrina", systemFallbackIcon: "oval"),
-                        StyleGarmentItem(name: "Off-shoulder", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Cowl collar", systemFallbackIcon: "circle"),
-                        StyleGarmentItem(name: "Big collar", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Lace trim", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Ruffles", systemFallbackIcon: "sparkles")
+                        StyleGarmentItem(name: "Bateau", assetName: "style_pear_necklines_bateu", systemFallbackIcon: "oval"),
+                        StyleGarmentItem(name: "Big Collar", assetName: "style_pear_necklines_big_collar", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Cowl Collar", assetName: "style_pear_necklines_cowl_collar", systemFallbackIcon: "circle"),
+                        StyleGarmentItem(name: "Lace Trim", assetName: "style_pear_necklines_lace_trim", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Off-Shoulder", assetName: "style_pear_necklines_off_shoulder", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Ruffles", assetName: "style_pear_necklines_ruffles", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Sabrina", assetName: "style_pear_necklines_sabrina", systemFallbackIcon: "oval"),
+                        StyleGarmentItem(name: "Square", assetName: "style_pear_necklines_square", systemFallbackIcon: "square")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Sleeves",
                     items: [
-                        StyleGarmentItem(name: "Flutter", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Bell", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Batwing", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Puff", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Cap sleeves", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Shoulder pads", systemFallbackIcon: "tshirt")
+                        StyleGarmentItem(name: "Batwing", assetName: "style_pear_sleeves_batwing", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Bell", assetName: "style_pear_sleeves_bell", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Cap Sleeves", assetName: "style_pear_sleeves_cap_sleeves", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Flutter", assetName: "style_pear_sleeves_flutter", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Puff", assetName: "style_pear_sleeves_puff", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Shoulder Pads", assetName: "style_pear_sleeves_shoulder_pads", systemFallbackIcon: "tshirt")
+                    ]
+                ),
+                StyleGarmentCategory(
+                    title: "Tops",
+                    items: [
+                        StyleGarmentItem(name: "Horizontal Stripes", assetName: "style_pear_tops_horizontal_stripes", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Nipped-in Top", assetName: "style_pear_tops_nipped_top", systemFallbackIcon: "tshirt")
+                    ]
+                ),
+                StyleGarmentCategory(
+                    title: "Coats & Jackets",
+                    items: [
+                        StyleGarmentItem(name: "A-Line Coat", assetName: "style_pear_coats_a_line", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Belted Trench Coat", assetName: "style_pear_coats_belted_trench", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Mid-Thigh Coat", assetName: "style_pear_coats_mid_thigh", systemFallbackIcon: "tshirt")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Bottoms",
                     items: [
-                        StyleGarmentItem(name: "Straight-leg", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Bootcut", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Trouser-cut", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Flare jeans", systemFallbackIcon: "figure.walk")
+                        StyleGarmentItem(name: "Bootcut", assetName: "style_pear_bottoms_bootcut", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Flare", assetName: "style_pear_bottoms_flare", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "High-Waisted Flat-Front", assetName: "style_pear_bottoms_high_waisted_flat_front", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Straight-Leg", assetName: "style_pear_bottoms_straight_leg", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Trouser-Cut", assetName: "style_pear_bottoms_trouser_cut", systemFallbackIcon: "figure.walk")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Skirts & Dresses",
                     items: [
-                        StyleGarmentItem(name: "Lightly gathered A-line skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Bias-cut skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "A-line dress", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Fit-and-flare dress", systemFallbackIcon: "sparkles")
+                        StyleGarmentItem(name: "A-Line Dress", assetName: "style_pear_skirts_dresses_a_line_dress", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Bias-Cut Skirt", assetName: "style_pear_skirts_dresses_bias_cut_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Fit-and-Flare Dress", assetName: "style_pear_skirts_dresses_fit_and_flare", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Lightly Gathered A-Line Skirt", assetName: "style_pear_skirts_dresses_lighty_gathered_a_line_skirt", systemFallbackIcon: "sparkles")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Shorts",
                     items: [
-                        StyleGarmentItem(name: "Tailored high-waisted wide-leg shorts", systemFallbackIcon: "figure.walk")
+                        StyleGarmentItem(name: "High-Waisted Wide-Leg Shorts", assetName: "style_pear_shorts_high_waisted_wide_leg_shorts", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Jumpsuit", assetName: "style_pear_shorts_jumpsuit", systemFallbackIcon: "figure.walk")
                     ]
                 )
             ]
@@ -153,50 +170,56 @@ extension BodyType {
                 StyleGarmentCategory(
                     title: "Necklines",
                     items: [
-                        StyleGarmentItem(name: "Oval", systemFallbackIcon: "oval"),
-                        StyleGarmentItem(name: "Deep oval", systemFallbackIcon: "oval"),
-                        StyleGarmentItem(name: "Jewel", systemFallbackIcon: "circle"),
-                        StyleGarmentItem(name: "Scoop", systemFallbackIcon: "oval"),
-                        StyleGarmentItem(name: "Sweetheart", systemFallbackIcon: "heart"),
-                        StyleGarmentItem(name: "V-neck", systemFallbackIcon: "v.circle")
+                        StyleGarmentItem(name: "Deep Oval", assetName: "style_hourglass_necklines_deep_oval", systemFallbackIcon: "oval"),
+                        StyleGarmentItem(name: "Jewel", assetName: "style_hourglass_necklines_jewel", systemFallbackIcon: "circle"),
+                        StyleGarmentItem(name: "Oval", assetName: "style_hourglass_necklines_oval", systemFallbackIcon: "oval"),
+                        StyleGarmentItem(name: "Scoop", assetName: "style_hourglass_necklines_scoop", systemFallbackIcon: "oval"),
+                        StyleGarmentItem(name: "Sweetheart", assetName: "style_hourglass_necklines_sweethearts", systemFallbackIcon: "heart"),
+                        StyleGarmentItem(name: "V-Neck", assetName: "style_hourglass_necklines_v_neck", systemFallbackIcon: "v.circle")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Sleeves",
                     items: [
-                        StyleGarmentItem(name: "Fitted sleeves", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Set-in sleeves", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Light cap sleeves", systemFallbackIcon: "tshirt")
+                        StyleGarmentItem(name: "Cap Sleeves", assetName: "style_hourglass_sleeves_cap_sleeves", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Fitted Sleeves", assetName: "style_hourglass_sleeves_fitted_sleeves", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Set-in Sleeves", assetName: "style_hourglass_sleeves_set_in_sleeves", systemFallbackIcon: "tshirt")
+                    ]
+                ),
+                StyleGarmentCategory(
+                    title: "Tops",
+                    items: [
+                        StyleGarmentItem(name: "Belted Top", assetName: "style_hourglass_tops_belted_top", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Wrap Top", assetName: "style_hourglass_tops_wrap_top", systemFallbackIcon: "tshirt")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Bottoms",
                     items: [
-                        StyleGarmentItem(name: "Wide-leg", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Loose-fitting", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Bootcut", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Flare", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Slightly tapered", systemFallbackIcon: "figure.walk")
+                        StyleGarmentItem(name: "Bootcut", assetName: "style_hourglass_bottoms_bootcut", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Flare", assetName: "style_hourglass_bottoms_flare", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Loose-Fitting", assetName: "style_hourglass_bottoms_loose_fitting", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Slightly Tapered", assetName: "style_hourglass_bottoms_slightly_tapered", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Wide Leg", assetName: "style_hourglass_bottoms_wide_leg", systemFallbackIcon: "figure.walk")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Skirts & Dresses",
                     items: [
-                        StyleGarmentItem(name: "High-waisted pencil skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Flip skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Bias skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "A-line skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Full circle skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Tulip skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Nipped/belted dress", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Wrap dress", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Full-skirt dress", systemFallbackIcon: "sparkles")
+                        StyleGarmentItem(name: "A-Line Skirt", assetName: "style_hourglass_skirts_dresses_a_line_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Bias-Cut Skirt", assetName: "style_hourglass_skirts_dresses_bias_cut_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Bias-Cut Skirt (Set-in)", assetName: "style_hourglass_skirts_dresses_bias_cut_skirt_set_in_sleeves", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Flip Skirt", assetName: "style_hourglass_skirts_dresses_flip_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "High-Waisted Pencil Skirt", assetName: "style_hourglass_skirts_dresses_high_waisted_pencil_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Tulip Skirt", assetName: "style_hourglass_skirts_dresses_tulip_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Wrap Dress", assetName: "style_hourglass_skirts_dresses_wrap_dress", systemFallbackIcon: "sparkles")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Shorts",
                     items: [
-                        StyleGarmentItem(name: "High-waisted contoured shorts", systemFallbackIcon: "figure.walk")
+                        StyleGarmentItem(name: "Form-Fitted Belted Jumpsuit", assetName: "style_hourglass_shorts_form_fitted_belted_jumpsuit", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "High-Waisted Shorts", assetName: "style_hourglass_shorts_high_waisted_shorts", systemFallbackIcon: "figure.walk")
                     ]
                 )
             ]
@@ -206,57 +229,57 @@ extension BodyType {
                 StyleGarmentCategory(
                     title: "Necklines",
                     items: [
-                        StyleGarmentItem(name: "Scoop", systemFallbackIcon: "oval"),
-                        StyleGarmentItem(name: "Jewel", systemFallbackIcon: "circle"),
-                        StyleGarmentItem(name: "Wide V-neck", systemFallbackIcon: "v.circle"),
-                        StyleGarmentItem(name: "Slash", systemFallbackIcon: "line.diagonal"),
-                        StyleGarmentItem(name: "Sweetheart", systemFallbackIcon: "heart"),
-                        StyleGarmentItem(name: "Big collar", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Lace trim", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Ruffles", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Turtleneck", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Halter", systemFallbackIcon: "triangle")
+                        StyleGarmentItem(name: "Big Collar", assetName: "style_rectangle_necklines_big_collar", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Halter Necks", assetName: "style_rectangle_necklines_halter_necks", systemFallbackIcon: "triangle"),
+                        StyleGarmentItem(name: "Jewel", assetName: "style_rectangle_necklines_jewel", systemFallbackIcon: "circle"),
+                        StyleGarmentItem(name: "Lace Trim", assetName: "style_rectangle_necklines_lace_trim", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Ruffles", assetName: "style_rectangle_necklines_ruffles", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Scoop", assetName: "style_rectangle_necklines_scoop", systemFallbackIcon: "oval"),
+                        StyleGarmentItem(name: "Turtleneck", assetName: "style_rectangle_necklines_turtleneck", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Wide V-Neck", assetName: "style_rectangle_necklines_wide_v_neck", systemFallbackIcon: "v.circle")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Sleeves",
                     items: [
-                        StyleGarmentItem(name: "Flared", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Princess", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Puff", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Flutter", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Embellished sleeves", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Cuffed sleeves", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Rolled-up sleeves", systemFallbackIcon: "tshirt")
+                        StyleGarmentItem(name: "Flared", assetName: "style_rectangle_sleeves_flared", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Flutter", assetName: "style_rectangle_sleeves_flutter", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Princess", assetName: "style_rectangle_sleeves_princess", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Puff", assetName: "style_rectangle_sleeves_puff", systemFallbackIcon: "tshirt")
+                    ]
+                ),
+                StyleGarmentCategory(
+                    title: "Tops",
+                    items: [
+                        StyleGarmentItem(name: "Belted Top", assetName: "style_rectangle_tops_belted_top", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Nipped Top", assetName: "style_rectangle_tops_nipped_top", systemFallbackIcon: "tshirt")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Bottoms",
                     items: [
-                        StyleGarmentItem(name: "Bootcut", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Wide-leg", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Flare", systemFallbackIcon: "figure.walk")
+                        StyleGarmentItem(name: "Bootcut", assetName: "style_rectangle_bottoms_bootcut", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Flare", assetName: "style_rectangle_bottoms_flare", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Wide Leg", assetName: "style_rectangle_bottoms_wide_leg", systemFallbackIcon: "figure.walk")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Skirts & Dresses",
                     items: [
-                        StyleGarmentItem(name: "Box pleat skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Bubble skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Panelled skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Full circle skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Trumpet skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Empire line dress", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Princess seam dress", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Wrap dress", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Tailored shift dress", systemFallbackIcon: "sparkles")
+                        StyleGarmentItem(name: "Box Pleat Skirt", assetName: "style_rectangle_skirts_dresses_box_pleat_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Bubble Skirt", assetName: "style_rectangle_skirts_dresses_bubble_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Empire-Line Dress", assetName: "style_rectangle_skirts_dresses_empire_line_dress", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Layered Skirt", assetName: "style_rectangle_skirts_dresses_layered_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Panelled Skirt", assetName: "style_rectangle_skirts_dresses_panelled_skirt", systemFallbackIcon: "sparkles")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Shorts",
                     items: [
-                        StyleGarmentItem(name: "Low/mid-waisted patterned shorts", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "High-waisted tie-waist flared shorts", systemFallbackIcon: "figure.walk")
+                        StyleGarmentItem(name: "Belted Wide-Leg Jumpsuit", assetName: "style_rectangle_shorts_belted_drawstring_wide_leg_jumpsuit", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Belted Wide-Leg Playsuit", assetName: "style_rectangle_shorts_belted_drawstring_wide_leg_playsuit", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Tie-Waist Flared Shorts", assetName: "style_rectangle_shorts_high_waisted_tie_waist_flared", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Patterned Shorts", assetName: "style_rectangle_shorts_pattern_shorts", systemFallbackIcon: "figure.walk")
                     ]
                 )
             ]
@@ -266,50 +289,59 @@ extension BodyType {
                 StyleGarmentCategory(
                     title: "Necklines",
                     items: [
-                        StyleGarmentItem(name: "Low V-neck", systemFallbackIcon: "v.circle"),
-                        StyleGarmentItem(name: "Deep scoop", systemFallbackIcon: "oval"),
-                        StyleGarmentItem(name: "Embellished neckline", systemFallbackIcon: "sparkles")
+                        StyleGarmentItem(name: "Deep Scoop", assetName: "style_apple_necklines_deep_scoop", systemFallbackIcon: "oval"),
+                        StyleGarmentItem(name: "Embellished Triangle", assetName: "style_apple_necklines_embellished_triangle", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Low V-Neck", assetName: "style_apple_necklines_low_v_neck", systemFallbackIcon: "v.circle")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Sleeves",
                     items: [
-                        StyleGarmentItem(name: "Slits", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Gathers", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Cuffs", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Draped fabrics", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Loose flared sleeves", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Cap sleeves", systemFallbackIcon: "tshirt"),
-                        StyleGarmentItem(name: "Shoulder pads", systemFallbackIcon: "tshirt")
+                        StyleGarmentItem(name: "Cap Sleeves", assetName: "style_apple_sleeves_cap_sleeves", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Draped Fabrics", assetName: "style_apple_sleeves_drapped_fabrics", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Loose Flared Sleeves", assetName: "style_apple_sleeves_loose_flared_sleeves", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Shoulder Pads", assetName: "style_apple_sleeves_shoulder_pads", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Slits", assetName: "style_apple_sleeves_slits", systemFallbackIcon: "tshirt")
+                    ]
+                ),
+                StyleGarmentCategory(
+                    title: "Tops",
+                    items: [
+                        StyleGarmentItem(name: "Untucked Tops", assetName: "style_apple_tops_untucked_tops", systemFallbackIcon: "tshirt"),
+                        StyleGarmentItem(name: "Wrap Top", assetName: "style_apple_tops_wrap_top", systemFallbackIcon: "tshirt")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Bottoms",
                     items: [
-                        StyleGarmentItem(name: "Wide-leg", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Bootcut", systemFallbackIcon: "figure.walk"),
-                        StyleGarmentItem(name: "Flare", systemFallbackIcon: "figure.walk")
+                        StyleGarmentItem(name: "Bootcut", assetName: "style_apple_bottoms_bootcut", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Cargo", assetName: "style_apple_bottoms_cargo", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Flare", assetName: "style_apple_bottoms_flare", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Wide Leg", assetName: "style_apple_bottoms_wide_leg", systemFallbackIcon: "figure.walk")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Skirts & Dresses",
                     items: [
-                        StyleGarmentItem(name: "Full skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Flared skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "A-line skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Panelled skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Bias-cut skirt", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Empire-line dress", systemFallbackIcon: "sparkles"),
-                        StyleGarmentItem(name: "Wrap dress", systemFallbackIcon: "sparkles")
+                        StyleGarmentItem(name: "A-Line Skirt", assetName: "style_apple_skirts_dresses_a_line_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Bias-Cut Dress", assetName: "style_apple_skirts_dresses_bias_cut_dress", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Bias-Cut Skirt", assetName: "style_apple_skirts_dresses_bias_cut_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Empire-Line Dress", assetName: "style_apple_skirts_dresses_empire_line_dress", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Flared Skirt", assetName: "style_apple_skirts_dresses_flared_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Panelled Skirt", assetName: "style_apple_skirts_dresses_panelled_skirt", systemFallbackIcon: "sparkles"),
+                        StyleGarmentItem(name: "Wrap Dress", assetName: "style_apple_skirts_dresses_wrap_dress", systemFallbackIcon: "sparkles")
                     ]
                 ),
                 StyleGarmentCategory(
                     title: "Shorts",
                     items: [
-                        StyleGarmentItem(name: "Loose knee-length shorts", systemFallbackIcon: "figure.walk")
+                        StyleGarmentItem(name: "Empire High-Waisted Jumpsuit", assetName: "style_apple_shorts_empire_high_waisted_jumpsuit", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Loose Knee-Length Shorts", assetName: "style_apple_shorts_loose_knee_length_shorts", systemFallbackIcon: "figure.walk"),
+                        StyleGarmentItem(name: "Short Wrap Playsuit", assetName: "style_apple_shorts_short_wrap_playsuit", systemFallbackIcon: "figure.walk")
                     ]
                 )
             ]
+
         }
     }
 }

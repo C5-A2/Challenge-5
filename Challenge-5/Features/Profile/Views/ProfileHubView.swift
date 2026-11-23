@@ -44,8 +44,6 @@ struct ProfileHubView: View {
 
     @State private var selectedTab: ProfileTab = .colorSeason
     @State private var activeSheet: ActiveProfileSheet? = nil
-    private let showManualProfileDebug: Bool = false
-    @State private var isShowingDebugSheet: Bool = false
     @State private var selectedBodyPhotoSide: Int = 0 // 0 = Front, 1 = Side, 2 = Torso Length
     @State private var showSkeleton: Bool = true
     @State private var showSlices: Bool = true
@@ -118,7 +116,7 @@ struct ProfileHubView: View {
     }
 
     private var activeBodyType: BodyType {
-        .invertedTriangle
+        currentProfile?.bodyType ?? .hourglass
     }
 
     private var activeTorsoBalance: TorsoBalance {
@@ -153,12 +151,6 @@ struct ProfileHubView: View {
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
                     .padding(.bottom, 12)
 
-                if showManualProfileDebug {
-                    debugAutoFillSection
-                        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-                        .padding(.bottom, 12)
-                }
-
                 segmentedTabBar
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
                     .padding(.bottom, 16)
@@ -180,9 +172,6 @@ struct ProfileHubView: View {
             case .bodyScan:
                 BodyScanFlowHostView()
             }
-        }
-        .sheet(isPresented: $isShowingDebugSheet) {
-            TemporaryProfileFormSheet()
         }
         .environment(\.colorScheme, .light)
         .onAppear {
@@ -263,37 +252,6 @@ struct ProfileHubView: View {
             .font(AppTypography.titleBold)
             .foregroundStyle(AppColors.espressoTitle)
             .padding(.top, 2)
-    }
-
-    // MARK: - Debug Manual Profile Form Section (from dev)
-
-    private var debugAutoFillSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button {
-                isShowingDebugSheet = true
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 15, weight: .semibold))
-
-                    Text("Set Profile Manually (Debug)")
-                        .font(.system(size: 14.5, weight: .semibold))
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
-                .background(AppColors.primaryBlack)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
-            }
-            .buttonStyle(.plain)
-        }
     }
 
     // MARK: - Segmented Tab Bar (Color Season | Body Type)

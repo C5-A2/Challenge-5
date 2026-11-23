@@ -50,7 +50,7 @@ struct BodyAnalysisResultView: View {
     // MARK: - Computed Properties
 
     private var activeBodyType: BodyType {
-        .invertedTriangle
+        viewModel.classifiedBodyType ?? .hourglass
     }
 
     private var activeTorsoBalance: TorsoBalance {
