@@ -145,7 +145,7 @@ struct FrontBodyCameraView: View {
                 // Motion Level Status Pill
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(motionManager.isLevel ? Color(hex: "#34C759") : Color.orange)
+                        .fill(motionManager.isLevel ? AppColors.lightingOptimal : AppColors.lightingWarning)
                         .frame(width: 8, height: 8)
 
                     Text(motionManager.isLevel ? "Device Level" : "Keep Phone Upright")
@@ -207,7 +207,7 @@ struct FrontBodyCameraView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .stroke(canTriggerShutter ? Color.white : Color.orange.opacity(0.65), lineWidth: 4)
+                            .stroke(canTriggerShutter ? Color.white : AppColors.lightingWarning.opacity(0.65), lineWidth: 4)
                             .frame(width: 76, height: 76)
 
                         Circle()

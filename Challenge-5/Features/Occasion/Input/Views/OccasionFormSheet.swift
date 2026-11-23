@@ -315,17 +315,17 @@ public struct OccasionFormSheet: View {
                 HStack {
                     if viewModel.title.count > OccasionInputViewModel.maxTitleLength {
                         Text("Maximum \(OccasionInputViewModel.maxTitleLength) characters allowed")
-                            .font(.system(size: 11.5, weight: .medium))
-                            .foregroundStyle(Color(hex: "#FF3B30"))
+                            .font(AppTypography.caption2SemiBold)
+                            .foregroundStyle(AppColors.destructiveRed)
                     }
                     
                     Spacer()
                     
                     Text("\(viewModel.title.count)/\(OccasionInputViewModel.maxTitleLength)")
-                        .font(.system(size: 11.5, weight: .regular))
+                        .font(AppTypography.caption2Regular)
                         .foregroundStyle(
                             viewModel.title.count > OccasionInputViewModel.maxTitleLength
-                                ? Color(hex: "#FF3B30")
+                                ? AppColors.destructiveRed
                                 : AppColors.mutedCaption
                         )
                 }

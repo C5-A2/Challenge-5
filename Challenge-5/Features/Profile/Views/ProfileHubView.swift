@@ -44,8 +44,6 @@ struct ProfileHubView: View {
 
     @State private var selectedTab: ProfileTab = .colorSeason
     @State private var activeSheet: ActiveProfileSheet? = nil
-    private let showManualProfileDebug: Bool = false
-    @State private var isShowingDebugSheet: Bool = false
     @State private var selectedBodyPhotoSide: Int = 0 // 0 = Front, 1 = Side, 2 = Torso Length
     @State private var showSkeleton: Bool = true
     @State private var showSlices: Bool = true
@@ -153,12 +151,6 @@ struct ProfileHubView: View {
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
                     .padding(.bottom, 12)
 
-                if showManualProfileDebug {
-                    debugAutoFillSection
-                        .padding(.horizontal, AppDimensions.screenHorizontalPadding)
-                        .padding(.bottom, 12)
-                }
-
                 segmentedTabBar
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
                     .padding(.bottom, 16)
@@ -180,9 +172,6 @@ struct ProfileHubView: View {
             case .bodyScan:
                 BodyScanFlowHostView()
             }
-        }
-        .sheet(isPresented: $isShowingDebugSheet) {
-            TemporaryProfileFormSheet()
         }
         .environment(\.colorScheme, .light)
         .onAppear {
@@ -265,37 +254,6 @@ struct ProfileHubView: View {
             .padding(.top, 2)
     }
 
-    // MARK: - Debug Manual Profile Form Section (from dev)
-
-    private var debugAutoFillSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button {
-                isShowingDebugSheet = true
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 15, weight: .semibold))
-
-                    Text("Set Profile Manually (Debug)")
-                        .font(.system(size: 14.5, weight: .semibold))
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
-                .background(AppColors.primaryBlack)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
     // MARK: - Segmented Tab Bar (Color Season | Body Type)
 
     private var segmentedTabBar: some View {
@@ -308,15 +266,15 @@ struct ProfileHubView: View {
                     }
                 } label: {
                     Text(tab.rawValue)
-                        .font(.system(size: 14, weight: isSelected ? .medium : .regular))
-                        .foregroundStyle(Color(hex: "#1C1C1E"))
+                        .font(isSelected ? AppTypography.calloutSemiBold : AppTypography.subheadlineRegular)
+                        .foregroundStyle(AppColors.bodyText)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
                         .background {
                             if isSelected {
                                 Capsule()
-                                    .fill(Color.white)
-                                    .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 1)
+                                    .fill(AppColors.cardBackground)
+                                    .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 1)
                                     .matchedGeometryEffect(id: "ActiveProfileTab", in: tabAnimationNamespace)
                             }
                         }
@@ -327,7 +285,7 @@ struct ProfileHubView: View {
         .padding(3)
         .background(
             Capsule()
-                .fill(Color(hex: "#EFEFF0"))
+                .fill(AppColors.circularButtonBackground)
         )
     }
 
@@ -336,10 +294,10 @@ struct ProfileHubView: View {
     private var mainContentCardContainer: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color(hex: "#F3F3F5"))
+                .fill(AppColors.cardBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                        .stroke(AppColors.cardBorder, lineWidth: 1)
                 )
 
             if isCurrentTabEmpty {
@@ -361,7 +319,7 @@ struct ProfileHubView: View {
                         } label: {
                             Text("Retake the photo")
                                 .font(AppTypography.calloutSemiBold)
-                                .foregroundStyle(Color(hex: "#007AFF"))
+                                .foregroundStyle(AppColors.primaryBlue)
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 10)
                         }
@@ -530,35 +488,8 @@ struct ProfileHubView: View {
                     .stroke(Color.black.opacity(0.04), lineWidth: 1)
             )
 
-            // 3. "Styles that suit you the most" Section
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Styles that suit you the most")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color(hex: "#1C1C1E"))
-
-                VStack(spacing: 10) {
-                    garmentRecommendationRow(
-                        icon: "tshirt",
-                        title: "Tops & Necklines",
-                        detail: activeBodyType.suitableNecklines
-                    )
-                    garmentRecommendationRow(
-                        icon: "jacket",
-                        title: "Jackets & Sleeves",
-                        detail: activeBodyType.suitableTopsAndJackets
-                    )
-                    garmentRecommendationRow(
-                        icon: "figure.walk",
-                        title: "Bottoms & Trousers",
-                        detail: activeBodyType.suitableBottoms
-                    )
-                    garmentRecommendationRow(
-                        icon: "sparkles",
-                        title: "Skirts & Dresses",
-                        detail: activeBodyType.suitableSkirtsAndDresses
-                    )
-                }
-            }
+            // 3. "Styles that suit you" Visual Recommendations Section
+            BodyStylesThatSuitYouSection(bodyType: activeBodyType)
         }
     }
 
