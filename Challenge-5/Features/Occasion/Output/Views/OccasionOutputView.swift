@@ -30,7 +30,7 @@ struct OccasionOutputView: View {
     @State private var attemptedPlaygroundLookIDs: Set<UUID> = []
     @State private var playgroundVariationByLookID: [UUID: Int] = [:]
     @State private var simulatorMockCycle: Int = 0
-    private let showVLMDebug: Bool = true
+    private let showVLMDebug: Bool = false
     @State private var isVLMDebugExpanded: Bool = true
     
     
