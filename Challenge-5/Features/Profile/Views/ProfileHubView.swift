@@ -96,6 +96,23 @@ struct ProfileHubView: View {
         userProfiles.first
     }
 
+    private var hasSkinData: Bool {
+        currentProfile?.hasCompletedSkinScan == true
+    }
+
+    private var hasBodyData: Bool {
+        currentProfile?.hasCompletedBodyScan == true
+    }
+
+    private var isCurrentTabEmpty: Bool {
+        switch selectedTab {
+        case .colorSeason:
+            return !hasSkinData
+        case .bodyType:
+            return !hasBodyData
+        }
+    }
+
     private var activeSeason: ColorSeason {
         currentProfile?.colorSeason ?? .trueSpring
     }
@@ -150,7 +167,13 @@ struct ProfileHubView: View {
                     .padding(.horizontal, AppDimensions.screenHorizontalPadding)
             }
         }
-        .fullScreenCover(item: $activeSheet) { sheet in
+        .fullScreenCover(item: $activeSheet, onDismiss: {
+            refreshCachedImages()
+            syncProfileMetricInputs()
+            if selectedTab == .bodyType {
+                runOverlayPoseDetectionIfNeeded(force: true)
+            }
+        }) { sheet in
             switch sheet {
             case .skinScan:
                 SkinScanFlowHostView()
@@ -319,37 +342,64 @@ struct ProfileHubView: View {
                         .stroke(Color.black.opacity(0.05), lineWidth: 1)
                 )
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 22) {
-                    switch selectedTab {
-                    case .colorSeason:
-                        colorSeasonTabContent
-                    case .bodyType:
-                        bodyTypeTabContent
-                    }
+            if isCurrentTabEmpty {
+                emptyStateContent
+                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 22) {
+                        switch selectedTab {
+                        case .colorSeason:
+                            colorSeasonTabContent
+                        case .bodyType:
+                            bodyTypeTabContent
+                        }
 
-                    // Bottom "Retake the photo" Button (inside ScrollView, not floating)
-                    Button {
-                        handleRetakeTap()
-                    } label: {
-                        Text("Retake the photo")
-                            .font(AppTypography.calloutSemiBold)
-                            .foregroundStyle(Color(hex: "#007AFF"))
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 10)
+                        // Bottom "Retake the photo" Button (inside ScrollView, not floating)
+                        Button {
+                            handleRetakeTap()
+                        } label: {
+                            Text("Retake the photo")
+                                .font(AppTypography.calloutSemiBold)
+                                .foregroundStyle(Color(hex: "#007AFF"))
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 4)
                     }
-                    .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 4)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 18)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 18)
-                .padding(.bottom, 24)
+                .scrollDismissesKeyboard(.interactively)
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
             }
-            .scrollDismissesKeyboard(.interactively)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         }
         .padding(.bottom, 8)
+    }
+
+    @ViewBuilder
+    private var emptyStateContent: some View {
+        switch selectedTab {
+        case .colorSeason:
+            ProfileEmptyStateCard(
+                imageName: "empty_state_skin",
+                title: "Find the colors that feel like you.",
+                subtitle: "Discover your personal color palette and see which shades complement your natural features.",
+                buttonTitle: "Discover My Colors",
+                action: handleRetakeTap
+            )
+        case .bodyType:
+            ProfileEmptyStateCard(
+                imageName: "empty_state_body",
+                title: "Let's find the perfect look for you.",
+                subtitle: "Every body is different. Let's explore your body shape and proportions to help you find silhouettes that work for you.",
+                buttonTitle: "Start your Body Analysis",
+                action: handleRetakeTap
+            )
+        }
     }
 
     // MARK: - Tab 1: Color Season Content
@@ -976,6 +1026,64 @@ struct ProfileHubView: View {
                 (" paired with ", false),
                 ("slender legs and narrow hips.", true)
             ])
+        }
+    }
+}
+
+// MARK: - Empty State Card
+
+/// Empty state shown inside ProfileHubView when a tab has not been scanned yet.
+private struct ProfileEmptyStateCard: View {
+    let imageName: String
+    let title: String
+    let subtitle: String
+    let buttonTitle: String
+    let action: () -> Void
+
+    var body: some View {
+        GeometryReader { proxy in
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 16)
+
+                    Image(imageName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 196)
+                        .padding(.bottom, 28)
+
+                    Text(title)
+                        .font(AppTypography.cardHeadline)
+                        .foregroundStyle(AppColors.espressoTitle)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+
+                    Text(subtitle)
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.mutedCaption)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(2)
+                        .padding(.top, 8)
+                        .padding(.horizontal, 28)
+
+                    Button(action: action) {
+                        Text(buttonTitle)
+                            .font(AppTypography.buttonLabel)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .background(AppColors.primaryBlack)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 26)
+                    .padding(.horizontal, 28)
+
+                    Spacer(minLength: 16)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: proxy.size.height)
+            }
         }
     }
 }
