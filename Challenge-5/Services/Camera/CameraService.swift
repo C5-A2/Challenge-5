@@ -37,7 +37,7 @@ public final class CameraService: NSObject, CameraServiceProtocol {
     private let sampleQueue = DispatchQueue(label: "com.challenge5.camera.sampleQueue")
 
     @ObservationIgnored nonisolated(unsafe) private var currentInput: AVCaptureDeviceInput?
-    @ObservationIgnored nonisolated(unsafe) private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    @ObservationIgnored private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
     private var photoContinuation: CheckedContinuation<UIImage, Error>?
     private var frameBurstContinuation: CheckedContinuation<[UIImage], Error>?
     private var frameBurstBuffer: [UIImage] = []
@@ -373,16 +373,14 @@ public final class CameraService: NSObject, CameraServiceProtocol {
     ) {
         guard let connection = connection else { return }
 
-        if connection.isVideoOrientationSupported {
-            connection.videoOrientation = .portrait
-        }
-
         if let device = currentInput?.device {
             let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
             let captureAngle = coordinator.videoRotationAngleForHorizonLevelCapture
             if connection.isVideoRotationAngleSupported(captureAngle) {
                 connection.videoRotationAngle = captureAngle
             }
+        } else if connection.isVideoRotationAngleSupported(90) {
+            connection.videoRotationAngle = 90
         }
 
         if connection.isVideoMirroringSupported {

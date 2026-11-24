@@ -86,11 +86,11 @@ public final class SkinScanViewModel {
 
     public var lightingStatusColor: Color {
         if isReadyForOptimalCapture {
-            return Color(hex: "#34C759") // Green
+            return AppColors.lightingOptimal
         } else if obstructionReason != nil {
-            return Color(hex: "#FF3B30") // Red when obstructed by glasses/mask/hair/makeup
+            return AppColors.destructiveRed
         } else {
-            return Color(hex: "#FF9500") // Orange when adjusting position/angle/lighting
+            return AppColors.lightingWarning
         }
     }
 

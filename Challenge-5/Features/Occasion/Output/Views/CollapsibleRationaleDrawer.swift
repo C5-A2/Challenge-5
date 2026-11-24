@@ -374,11 +374,11 @@ struct CollapsibleRationaleDrawer: View {
                     path.addLine(to: CGPoint(x: 48, y: CGFloat(i) * 12))
                 }
             }
-            .stroke(Color(hex: "#007AFF").opacity(0.4), lineWidth: 0.8)
+            .stroke(AppColors.primaryBlue.opacity(0.4), lineWidth: 0.8)
             
             Image(systemName: "tshirt")
                 .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(Color(hex: "#007AFF"))
+                .foregroundStyle(AppColors.primaryBlue)
         }
     }
     
@@ -486,11 +486,11 @@ struct CollapsibleRationaleDrawer: View {
                     path.addLine(to: CGPoint(x: 48, y: CGFloat(i) * 12))
                 }
             }
-            .stroke(Color(hex: "#007AFF").opacity(0.4), lineWidth: 0.8)
+            .stroke(AppColors.primaryBlue.opacity(0.4), lineWidth: 0.8)
             
             Image(systemName: "paintpalette.fill")
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(Color(hex: "#007AFF"))
+                .foregroundStyle(AppColors.primaryBlue)
         }
     }
     
@@ -620,11 +620,11 @@ struct CollapsibleRationaleDrawer: View {
                     path.addLine(to: CGPoint(x: 48, y: CGFloat(i) * 12))
                 }
             }
-            .stroke(Color(hex: "#007AFF").opacity(0.4), lineWidth: 0.8)
+            .stroke(AppColors.primaryBlue.opacity(0.4), lineWidth: 0.8)
             
             Image(systemName: "ruler.fill")
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(Color(hex: "#007AFF"))
+                .foregroundStyle(AppColors.primaryBlue)
         }
     }
 }

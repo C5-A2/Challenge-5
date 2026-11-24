@@ -40,15 +40,12 @@ struct SideBodyGuideView: View {
 
     var body: some View {
         ZStack {
-            Color.white
+            AppColors.cardBackground
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Top Sheet Drag Indicator
-                Capsule()
-                    .fill(Color(hex: "#D6D1CA"))
-                    .frame(width: 38, height: 5)
-                    .padding(.top, 10)
+                SheetDragHandle()
                     .padding(.bottom, 6)
 
                 headerBar
@@ -59,8 +56,8 @@ struct SideBodyGuideView: View {
                             .padding(.top, 16)
 
                         Text("For the most accurate results, put your hair in a high bun, go barefoot (no shoes), wear fitted clothing in a color that contrasts with the background, and stand sideways (90°) in a natural upright posture against a plain wall with arms relaxed by your side and your whole body in the frame.")
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(Color(hex: "#1C1C1E"))
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.bodyText)
                             .multilineTextAlignment(.center)
                             .lineSpacing(2.5)
                             .padding(.horizontal, 8)
@@ -120,21 +117,14 @@ struct SideBodyGuideView: View {
         HStack {
             // Left: Back (<) Button — shown only when no existing data (first time)
             if shouldShowBackButton {
-                Button {
+                CircularIconButton(systemName: "chevron.left") {
                     if let onBack = onBack {
                         onBack()
                     } else {
                         viewModel.currentStep = .frontGuide
                     }
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(Color(hex: "#1C1C1E"))
-                        .frame(width: 44, height: 44)
-                        .background(Color(hex: "#EFEFF0"))
-                        .clipShape(Circle())
                 }
-                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
             } else {
                 Color.clear
                     .frame(width: 44, height: 44)
@@ -144,28 +134,21 @@ struct SideBodyGuideView: View {
 
             Text("Body Type Scan (Side)")
                 .font(.system(size: 16, weight: .bold).width(.expanded))
-                .foregroundStyle(Color(hex: "#1C1C1E"))
+                .foregroundStyle(AppColors.espressoTitle)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
 
             Spacer()
 
             // Right: Close (X) Button
-            Button {
+            CircularIconButton(systemName: "xmark") {
                 if let onDismiss = onDismiss {
                     onDismiss()
                 } else {
                     dismiss()
                 }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color(hex: "#1C1C1E"))
-                    .frame(width: 44, height: 44)
-                    .background(Color(hex: "#EFEFF0"))
-                    .clipShape(Circle())
             }
-            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
         }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
         .padding(.vertical, 8)
@@ -175,19 +158,10 @@ struct SideBodyGuideView: View {
 
     private var bottomActionBar: some View {
         VStack(spacing: 12) {
-            Button {
+            PrimaryPillButton(title: "Take Photo") {
                 viewModel.currentStep = .sideCamera
                 viewModel.startCamera()
-            } label: {
-                Text("Take Photo")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(Color.black)
-                    .clipShape(Capsule())
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
         .padding(.top, 8)
@@ -199,11 +173,11 @@ struct SideBodyGuideView: View {
     private var illustrationCard: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white)
-                .shadow(color: .black.opacity(0.07), radius: 16, x: 0, y: 4)
+                .fill(AppColors.cardBackground)
+                .shadow(color: Color.black.opacity(0.07), radius: 16, x: 0, y: 4)
                 .overlay(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.black.opacity(0.04), lineWidth: 1)
+                        .stroke(AppColors.cardBorder, lineWidth: 1)
                 )
 
             Image("bodyside")

@@ -32,7 +32,7 @@ struct PhysicalMetricsInputView: View {
 
     var body: some View {
         ZStack {
-            Color.white
+            AppColors.cardBackground
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -103,17 +103,22 @@ struct PhysicalMetricsInputView: View {
             CircularIconButton(systemName: "xmark") {
                 dismiss()
             }
+            .accessibilityLabel("Close")
 
             Spacer()
 
             Text("Physical Metrics")
                 .font(AppTypography.cardHeadline)
-                .foregroundStyle(Color.black)
+                .foregroundStyle(AppColors.espressoTitle)
 
             Spacer()
 
             // Confirm (Checkmark) Button — Runs body analysis & advances to Analyze Result
-            Button {
+            CircularIconButton(
+                systemName: "checkmark",
+                isFilled: true,
+                isEnabled: isHeightValid && !viewModel.isAnalyzing
+            ) {
                 isHeightFocused = false
                 #if canImport(UIKit)
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -124,16 +129,7 @@ struct PhysicalMetricsInputView: View {
                         onComplete()
                     }
                 }
-            } label: {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: AppDimensions.circularIconSize, height: AppDimensions.circularIconSize)
-                    .background(isHeightValid && !viewModel.isAnalyzing ? Color.black : Color.black.opacity(0.35))
-                    .clipShape(Circle())
             }
-            .buttonStyle(.plain)
-            .disabled(!isHeightValid || viewModel.isAnalyzing)
             .accessibilityLabel("Confirm height and analyze")
         }
         .padding(.horizontal, AppDimensions.screenHorizontalPadding)
@@ -146,7 +142,7 @@ struct PhysicalMetricsInputView: View {
     private var instructionHeader: some View {
         Text("Enter your barefoot height so our vision engine can accurately scale and classify your body proportions.")
             .font(AppTypography.bodyRegular)
-            .foregroundStyle(Color(hex: "#1C1C1E"))
+            .foregroundStyle(AppColors.bodyText)
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -154,13 +150,13 @@ struct PhysicalMetricsInputView: View {
     private var barefootReminderNote: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "info.circle")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color(hex: "#8E8E93"))
+                .font(AppTypography.footnoteRegular)
+                .foregroundStyle(AppColors.secondaryText)
                 .padding(.top, 1)
 
             Text("Make sure the height you enter matches your barefoot height, and that your scanned photos were taken barefoot (without shoes) for accurate sizing.")
-                .font(.system(size: 12))
-                .foregroundStyle(Color(hex: "#6E6E73"))
+                .font(AppTypography.caption1Medium)
+                .foregroundStyle(AppColors.secondaryText)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -168,7 +164,7 @@ struct PhysicalMetricsInputView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#F5F5F7"))
+                .fill(AppColors.circularButtonBackground)
         )
     }
 
@@ -180,13 +176,13 @@ struct PhysicalMetricsInputView: View {
         return HStack {
             HStack(spacing: 10) {
                 Image(systemName: "ruler.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(hasError ? Color.red.opacity(0.85) : Color.black)
+                    .font(AppTypography.cardHeadline)
+                    .foregroundStyle(hasError ? AppColors.destructiveRed : AppColors.espressoTitle)
                     .frame(width: 24)
 
                 Text("Height")
                     .font(AppTypography.cardHeadline)
-                    .foregroundStyle(hasError ? Color.red.opacity(0.9) : Color.black)
+                    .foregroundStyle(hasError ? AppColors.destructiveRed : AppColors.espressoTitle)
             }
 
             Spacer()
@@ -194,7 +190,7 @@ struct PhysicalMetricsInputView: View {
             HStack(spacing: 8) {
                 TextField("170", text: $heightText)
                     .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.black)
+                    .foregroundStyle(AppColors.espressoTitle)
                     .multilineTextAlignment(.trailing)
                     .keyboardType(.decimalPad)
                     .focused($isHeightFocused)
@@ -210,17 +206,17 @@ struct PhysicalMetricsInputView: View {
 
                 Text("cm")
                     .font(AppTypography.caption.weight(.medium))
-                    .foregroundStyle(Color.black.opacity(0.65))
+                    .foregroundStyle(AppColors.secondaryText)
                     .frame(width: 28, alignment: .leading)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(hasError ? Color.red.opacity(0.05) : Color.black.opacity(0.035))
+            .background(hasError ? AppColors.destructiveRed.opacity(0.08) : Color.black.opacity(0.035))
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(
-                        hasError ? Color.red.opacity(0.7) : (isHeightFocused ? AppColors.espressoTitle.opacity(0.6) : Color.clear),
+                        hasError ? AppColors.destructiveRed.opacity(0.7) : (isHeightFocused ? AppColors.espressoTitle.opacity(0.6) : Color.clear),
                         lineWidth: 1.5
                     )
             )
@@ -232,7 +228,7 @@ struct PhysicalMetricsInputView: View {
             RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius)
                 .stroke(AppColors.subtleBorder, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.04), radius: 8, y: 3)
+        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
 
     // MARK: - Validation Banner
@@ -240,8 +236,8 @@ struct PhysicalMetricsInputView: View {
     private func validationBanner(_ message: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(Color.orange)
-                .font(.system(size: 16))
+                .foregroundStyle(AppColors.lightingWarning)
+                .font(AppTypography.cardHeadline)
 
             Text(message)
                 .font(AppTypography.caption)
@@ -251,7 +247,7 @@ struct PhysicalMetricsInputView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.orange.opacity(0.12))
+        .background(AppColors.lightingWarning.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
@@ -272,9 +268,9 @@ struct PhysicalMetricsInputView: View {
                     .foregroundStyle(.white)
             }
             .padding(28)
-            .background(Color(hex: "#2C1E18").opacity(0.92))
+            .background(AppColors.espressoTitle.opacity(0.92))
             .clipShape(RoundedRectangle(cornerRadius: AppDimensions.cardCornerRadius))
-            .shadow(color: .black.opacity(0.2), radius: 16)
+            .shadow(color: Color.black.opacity(0.2), radius: 16)
         }
     }
 

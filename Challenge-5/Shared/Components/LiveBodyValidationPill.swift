@@ -77,11 +77,11 @@ struct LiveBodyValidationPill: View {
     }
 
     private var indicatorColor: Color {
-        guard let result else { return Color.white.opacity(0.6) }
+        guard result != nil else { return Color.white.opacity(0.6) }
         if isReady {
-            return Color(hex: "#34C759")
+            return AppColors.lightingOptimal
         }
-        return Color.orange
+        return AppColors.lightingWarning
     }
 
     private var statusText: String {
@@ -113,7 +113,7 @@ struct LiveBodyValidationPill: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: isReady ? "checkmark.circle.fill" : "figure.stand")
-                .font(.system(size: 13, weight: .semibold))
+                .font(AppTypography.caption.weight(.semibold))
                 .foregroundStyle(indicatorColor)
 
             Text(statusText)
@@ -129,7 +129,7 @@ struct LiveBodyValidationPill: View {
         .overlay(
             Capsule()
                 .stroke(
-                    isReady ? Color(hex: "#34C759").opacity(0.65) : Color.white.opacity(0.15),
+                    isReady ? AppColors.lightingOptimal.opacity(0.65) : Color.white.opacity(0.15),
                     lineWidth: 1
                 )
         )

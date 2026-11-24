@@ -24,7 +24,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
         public let approximateSizeBytes: Int64
         public let downloadURLString: String
 
-        public init(filename: String, sizeBytes: Int64, url: String) {
+        nonisolated public init(filename: String, sizeBytes: Int64, url: String) {
             self.id = filename
             self.filename = filename
             self.approximateSizeBytes = sizeBytes
@@ -105,7 +105,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
     private var activeTask: URLSessionDownloadTask?
     private var downloadContinuation: CheckedContinuation<Void, Error>?
     private var runningDownloadTask: Task<Void, Error>?
-    private var progressListeners: [UUID: @MainActor (Double, String) -> Void] = [:]
+    private var progressListeners: [UUID: @MainActor @Sendable (Double, String) -> Void] = [:]
     private var currentBaseBytes: Int64 = 0
     private var totalBatchBytes: Int64 = 0
 
@@ -134,7 +134,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
     /// Automatically downloads any missing model files without user intervention.
     /// If a background download is already underway, safely joins it and streams live progress.
     public func ensureModelsDownloaded(
-        onProgress: ((_ progress: Double, _ status: String) -> Void)? = nil
+        onProgress: (@MainActor @Sendable (_ progress: Double, _ status: String) -> Void)? = nil
     ) async throws {
         // If already available locally or fully downloaded, return immediately
         if isAllModelsDownloaded {

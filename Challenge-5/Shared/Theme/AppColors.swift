@@ -49,4 +49,9 @@ public enum AppColors {
     // MARK: - Library & Tags
     public static let libraryCardPlaceholder = Color(hex: "#536493")
     public static let tagChipBackground = Color.white.opacity(0.85)
+    
+    // MARK: - Semantic Aliases
+    public static let cardBorder = subtleBorder
+    public static let secondaryText = mutedCaption
+    public static let neutralSeparator = Color(hex: "#E5E5EA")
 }

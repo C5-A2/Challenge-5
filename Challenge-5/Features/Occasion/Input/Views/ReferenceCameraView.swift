@@ -74,7 +74,7 @@ struct ReferenceCameraView: View {
                         .resizable()
                         .scaledToFill()
                 } else if let cameraService = viewModel.referenceCameraService {
-                    CameraPreviewView(session: cameraService.session)
+                    CameraPreviewRepresentable(session: cameraService.session, isFrontCamera: false)
                     CameraGridShape(divisions: ReferencePickerConstants.Camera.gridDivisions)
                         .stroke(AppColors.cardBackground.opacity(ReferencePickerConstants.Camera.gridLineOpacity),
                                 lineWidth: ReferencePickerConstants.Camera.gridLineWidth)

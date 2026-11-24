@@ -339,7 +339,7 @@ struct FaceCameraView: View {
         .clipShape(Capsule())
         .overlay(
             Capsule()
-                .stroke(isPassed ? Color(hex: "#34C759").opacity(0.55) : Color.white.opacity(0.18), lineWidth: 1)
+                .stroke(isPassed ? AppColors.lightingOptimal.opacity(0.55) : Color.white.opacity(0.18), lineWidth: 1)
         )
     }
 

@@ -103,9 +103,10 @@ public struct AsyncLookThumbnailView: View {
         
         isLoading = true
         
-        // Decode off main actor
+        // Decode and trim transparent padding off main actor
         let decoded = await Task.detached(priority: .userInitiated) { () -> UIImage? in
-            UIImage(data: imageData)
+            guard let image = UIImage(data: imageData) else { return nil }
+            return image.trimmingTransparentPixels()
         }.value
         
         if let decoded {
