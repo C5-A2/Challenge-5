@@ -13,7 +13,7 @@ extension UIImage {
     
     /// Returns a cropped version of the image trimming all surrounding transparent/near-transparent pixels.
     /// If no opaque pixels are found or cropping fails, returns self.
-    public func trimmingTransparentPixels(alphaThreshold: UInt8 = 10) -> UIImage {
+    nonisolated public func trimmingTransparentPixels(alphaThreshold: UInt8 = 10) -> UIImage {
         guard let cgImage = self.cgImage else { return self }
         
         let width = cgImage.width

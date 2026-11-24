@@ -139,20 +139,17 @@ final class CameraPreviewContainerView: UIView {
     func updateOrientationAndMirroring() {
         guard let connection = previewLayer.connection else { return }
 
-        // 1. Guarantee portrait video orientation
-        if connection.isVideoOrientationSupported {
-            connection.videoOrientation = .portrait
-        }
-
-        // 2. Apply hardware rotation coordinator angle on iOS 17+
+        // 1. Apply hardware rotation coordinator angle, or default to 90° portrait
         if let coordinator = rotationCoordinator {
             let angle = coordinator.videoRotationAngleForHorizonLevelPreview
             if connection.isVideoRotationAngleSupported(angle) {
                 connection.videoRotationAngle = angle
             }
+        } else if connection.isVideoRotationAngleSupported(90) {
+            connection.videoRotationAngle = 90
         }
 
-        // 3. Mirroring configuration
+        // 2. Mirroring configuration
         if connection.isVideoMirroringSupported {
             if connection.automaticallyAdjustsVideoMirroring {
                 connection.automaticallyAdjustsVideoMirroring = false
@@ -170,8 +167,8 @@ final class CameraPreviewContainerView: UIView {
             if connection.videoRotationAngle != angle {
                 connection.videoRotationAngle = angle
             }
-        } else if connection.isVideoOrientationSupported {
-            connection.videoOrientation = .portrait
+        } else if connection.isVideoRotationAngleSupported(90) {
+            connection.videoRotationAngle = 90
         }
 
         if connection.isVideoMirroringSupported {

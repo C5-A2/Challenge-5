@@ -217,7 +217,7 @@ private struct MeasurementDecimalTextField<Field: Hashable>: UIViewRepresentable
         let flexSpace = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
         let doneButton = UIBarButtonItem(
             title: "Done",
-            style: .done,
+            style: .prominent,
             target: context.coordinator,
             action: #selector(Coordinator.doneTapped)
         )

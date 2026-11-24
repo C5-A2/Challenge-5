@@ -77,7 +77,7 @@ struct LiveBodyValidationPill: View {
     }
 
     private var indicatorColor: Color {
-        guard let result else { return Color.white.opacity(0.6) }
+        guard result != nil else { return Color.white.opacity(0.6) }
         if isReady {
             return AppColors.lightingOptimal
         }
