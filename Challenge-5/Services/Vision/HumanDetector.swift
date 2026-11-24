@@ -27,7 +27,7 @@ public struct HumanDetectionResult: Sendable {
     public let message: String
     public let confidence: Float
 
-    public init(
+    nonisolated public init(
         isHumanPresent: Bool,
         isFullBody: Bool,
         orientation: BodyFacingOrientation,

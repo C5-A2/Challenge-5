@@ -169,8 +169,8 @@ public actor PCCEngine {
             @unknown default: return PCCEngineError.generationFailed(pcc.localizedDescription)
             }
         }
-        if let gen = error as? LanguageModelSession.GenerationError,
-           case .exceededContextWindowSize = gen {
+        if let gen = error as? LanguageModelError,
+           case .contextSizeExceeded = gen {
             return PCCEngineError.promptTooLong
         }
         return PCCEngineError.generationFailed(error.localizedDescription)

@@ -88,7 +88,7 @@ public final class SkinColorAnalyzer: SkinColorAnalyzerProtocol, @unchecked Send
 
     // MARK: - Initializer
 
-    public init() {}
+    nonisolated public init() {}
 
     // MARK: - Protocol Implementation
 
