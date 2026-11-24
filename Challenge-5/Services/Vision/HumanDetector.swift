@@ -63,7 +63,7 @@ public struct HumanDetector: Sendable {
                 isFullBody: false,
                 orientation: .uncertain,
                 isOrientationMatch: false,
-                message: "Gagal memproses orientasi gambar.",
+                message: "Failed to process image orientation.",
                 confidence: 0
             )
         }
@@ -98,7 +98,7 @@ public struct HumanDetector: Sendable {
                 isFullBody: false,
                 orientation: .uncertain,
                 isOrientationMatch: false,
-                message: "Gagal memproses frame kamera.",
+                message: "Failed to process camera frame.",
                 confidence: 0
             )
         }
@@ -146,7 +146,7 @@ public struct HumanDetector: Sendable {
                 isFullBody: false,
                 orientation: .uncertain,
                 isOrientationMatch: false,
-                message: "Tidak ada manusia yang terdeteksi. Pastikan ada orang di dalam foto.",
+                message: "No person detected. Please make sure someone is in the photo.",
                 confidence: 0
             )
         }
@@ -158,7 +158,7 @@ public struct HumanDetector: Sendable {
                 isFullBody: false,
                 orientation: .uncertain,
                 isOrientationMatch: false,
-                message: "Terdeteksi \(humanCount) orang di dalam foto. Pastikan hanya ada 1 orang.",
+                message: "Detected \(humanCount) people in the photo. Please make sure only 1 person is in frame.",
                 confidence: 0.8
             )
         }
@@ -169,7 +169,7 @@ public struct HumanDetector: Sendable {
                 isFullBody: false,
                 orientation: .uncertain,
                 isOrientationMatch: false,
-                message: "Kerangka tubuh tidak terdeteksi jelas. Pastikan seluruh tubuh terlihat dari kepala hingga kaki.",
+                message: "Body pose not clearly detected. Please ensure your full body is visible from head to toe.",
                 confidence: 0.1
             )
         }
@@ -203,7 +203,7 @@ public struct HumanDetector: Sendable {
                 isFullBody: false,
                 orientation: .uncertain,
                 isOrientationMatch: false,
-                message: "Pastikan seluruh tubuh terlihat dari kepala hingga kaki, bukan selfie atau setengah badan.",
+                message: "Please ensure your full body is visible from head to toe, not a selfie or half-body shot.",
                 confidence: 0.25
             )
         }
@@ -224,7 +224,7 @@ public struct HumanDetector: Sendable {
                     isFullBody: true,
                     orientation: orientation,
                     isOrientationMatch: true,
-                    message: "Tampak Depan terverifikasi (Full Body).",
+                    message: "Front view verified (Full Body).",
                     confidence: avgConfidence
                 )
             } else {
@@ -233,7 +233,7 @@ public struct HumanDetector: Sendable {
                     isFullBody: true,
                     orientation: orientation,
                     isOrientationMatch: false,
-                    message: "Foto ini terdeteksi sebagai Tampak Samping. Mohon berdiri menghadap lurus ke kamera.",
+                    message: "This photo was detected as a side view. Please stand facing straight toward the camera.",
                     confidence: avgConfidence
                 )
             }
@@ -246,7 +246,7 @@ public struct HumanDetector: Sendable {
                     isFullBody: true,
                     orientation: orientation,
                     isOrientationMatch: true,
-                    message: "Tampak Samping terverifikasi (Full Body).",
+                    message: "Side view verified (Full Body).",
                     confidence: avgConfidence
                 )
             } else {
@@ -255,7 +255,7 @@ public struct HumanDetector: Sendable {
                     isFullBody: true,
                     orientation: orientation,
                     isOrientationMatch: false,
-                    message: "Foto ini terdeteksi sebagai Tampak Depan. Mohon berputar 90° (tampak samping).",
+                    message: "This photo was detected as a front view. Please turn 90° to the side.",
                     confidence: avgConfidence
                 )
             }
@@ -266,7 +266,7 @@ public struct HumanDetector: Sendable {
                 isFullBody: true,
                 orientation: orientation,
                 isOrientationMatch: true,
-                message: "Sudut hadap: \(orientation.rawValue).",
+                message: "Facing angle: \(orientation.rawValue).",
                 confidence: avgConfidence
             )
         }

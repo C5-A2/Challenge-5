@@ -224,7 +224,7 @@ public final class BodyPoseAnalyzer: BodyPoseAnalyzerProtocol, Sendable {
             throw NSError(
                 domain: "BodyPoseAnalyzer",
                 code: 3,
-                userInfo: [NSLocalizedDescriptionKey: "Pastikan seluruh tubuh terlihat dari kepala hingga kaki, bukan selfie atau setengah badan."]
+                userInfo: [NSLocalizedDescriptionKey: "Please ensure your full body is visible from head to toe, not a selfie or half-body shot."]
             )
         }
 
