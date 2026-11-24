@@ -178,7 +178,7 @@ struct SideBodyReviewView: View {
             HStack(spacing: 10) {
                 ProgressView()
                     .scaleEffect(0.85)
-                Text("Memverifikasi pose & seluruh tubuh...")
+                Text("Verifying pose & full body...")
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.espressoTitle)
                 Spacer()
@@ -213,7 +213,7 @@ struct SideBodyReviewView: View {
                         .font(.system(size: 20))
                         .foregroundStyle(.orange)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Foto Tidak Sesuai")
+                        Text("Photo Does Not Match")
                             .font(AppTypography.cardHeadline)
                             .foregroundStyle(AppColors.espressoTitle)
                         Text(result.message)

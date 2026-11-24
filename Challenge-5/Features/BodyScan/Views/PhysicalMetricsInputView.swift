@@ -71,7 +71,7 @@ struct PhysicalMetricsInputView: View {
             syncInitialValues()
         }
         .alert(
-            "Gagal Memproses Pemindaian",
+            "Failed to Process Scan",
             isPresented: Binding<Bool>(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.errorMessage = nil } }

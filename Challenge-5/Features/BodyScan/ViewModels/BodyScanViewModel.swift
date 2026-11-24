@@ -303,14 +303,14 @@ public final class BodyScanViewModel {
         guard canProceedWithMetrics, frontImageData != nil, sideImageData != nil else { return }
 
         isAnalyzing = true
-        analysisProgressText = "Memverifikasi foto postur tubuh..."
+        analysisProgressText = "Verifying body posture photos..."
         errorMessage = nil
 
         #if canImport(UIKit)
         guard let frontImg = frontImage ?? (frontImageData != nil ? UIImage(data: frontImageData!) : nil),
               let sideImg = sideImage ?? (sideImageData != nil ? UIImage(data: sideImageData!) : nil) else {
             isAnalyzing = false
-            errorMessage = "Foto tampak depan dan samping harus tersedia."
+            errorMessage = "Both front and side photos are required."
             return
         }
 
@@ -318,7 +318,7 @@ public final class BodyScanViewModel {
         let frontCheck = await HumanDetector.detectHuman(image: frontImg, expectedType: .front)
         guard frontCheck.isHumanPresent && frontCheck.isFullBody && frontCheck.isOrientationMatch else {
             self.isAnalyzing = false
-            self.errorMessage = "Foto Depan Gagal: \(frontCheck.message)"
+            self.errorMessage = "Front Photo Failed: \(frontCheck.message)"
             return
         }
 
@@ -326,19 +326,19 @@ public final class BodyScanViewModel {
         let sideCheck = await HumanDetector.detectHuman(image: sideImg, expectedType: .side)
         guard sideCheck.isHumanPresent && sideCheck.isFullBody && sideCheck.isOrientationMatch else {
             self.isAnalyzing = false
-            self.errorMessage = "Foto Samping Gagal: \(sideCheck.message)"
+            self.errorMessage = "Side Photo Failed: \(sideCheck.message)"
             return
         }
 
         do {
-            analysisProgressText = "Mendeteksi landmark anatomis kerangka tubuh..."
+            analysisProgressText = "Detecting anatomical body landmarks..."
             let frontPose = try await BodyPoseAnalyzer.analyzePose(image: frontImg)
             let sidePose = try? await BodyPoseAnalyzer.analyzePose(image: sideImg)
 
             self.frontPoseResult = frontPose
             self.sidePoseResult = sidePose
 
-            analysisProgressText = "Mengekstrak siluet dan mengestimasi lingkar dimensi..."
+            analysisProgressText = "Extracting silhouette and estimating body dimensions..."
             let dimensions = await BodyDimensionCalculator.calculateDimensions(
                 frontImage: frontImg,
                 sideImage: sideImg,
@@ -449,7 +449,7 @@ public final class BodyScanViewModel {
         }
         #else
         self.isAnalyzing = false
-        self.errorMessage = "Platform tidak mendukung UIKit / Vision Framework."
+        self.errorMessage = "This platform does not support UIKit / Vision Framework."
         #endif
     }
 
@@ -551,7 +551,7 @@ public final class BodyScanViewModel {
             )
             return true
         } catch {
-            self.errorMessage = "Gagal menyimpan profil: \(error.localizedDescription)"
+            self.errorMessage = "Failed to save profile: \(error.localizedDescription)"
             return false
         }
     }

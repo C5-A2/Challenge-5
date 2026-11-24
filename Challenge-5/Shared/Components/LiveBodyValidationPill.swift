@@ -86,26 +86,26 @@ struct LiveBodyValidationPill: View {
 
     private var statusText: String {
         guard let result else {
-            return "Arahkan kamera ke seluruh tubuh"
+            return "Point camera at your full body"
         }
         if isReady {
             return expectedType == .side
-                ? "Full Body & Tampak Samping Sesuai"
-                : "Full Body & Tampak Depan Sesuai"
+                ? "Full Body & Side View Verified"
+                : "Full Body & Front View Verified"
         }
         if !result.isHumanPresent {
-            return "Belum ada orang di dalam frame"
+            return "No person detected in frame"
         }
         if !result.isFullBody {
-            if result.message.contains("orang") {
-                return "Pastikan hanya ada 1 orang"
+            if result.message.contains("people") {
+                return "Ensure only 1 person is in frame"
             }
-            return "Tampilkan seluruh badan (kepala–kaki)"
+            return "Show full body (head to toe)"
         }
         if !result.isOrientationMatch {
             return expectedType == .side
-                ? "Berputar 90° (tampak samping)"
-                : "Berdiri menghadap lurus ke kamera"
+                ? "Turn 90° to the side"
+                : "Stand facing straight ahead"
         }
         return result.message
     }
