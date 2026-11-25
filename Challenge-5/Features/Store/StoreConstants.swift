@@ -94,13 +94,30 @@ nonisolated enum StoreConstants {
         /// Not an official API. If it stops working, try "https://lens.google.com/v3/upload".
         static let lensUploadEndpoint = URL(string: "https://lens.google.com/upload")
         static let lensUploadFieldName = "encoded_image"
-        /// Indonesian results page: Google then favors local shops (Shopee, Tokopedia, Zalora)
-        /// over international ones (eBay, Amazon), which show up more with English.
-        static let lensLanguageCode = "id"
-        /// Country hint for shops in Indonesia (Google also uses the device location).
-        static let lensCountryCode = "id"
-        /// Sent with the upload and result pages, Indonesian first.
-        static let lensAcceptLanguage = "id-ID,id;q=0.9,en;q=0.8"
+
+        /// Language hint from the user's device (e.g., "id", "en") passed to `hl`.
+        /// Google Lens favors search results matching the user's language.
+        static var lensLanguageCode: String {
+            Locale.current.language.languageCode?.identifier.lowercased() ?? "id"
+        }
+
+        /// Country hint from the user's device region (e.g., "id", "us") passed to `gl`.
+        /// Google Lens then prioritizes local stores and marketplaces corresponding to the user's country.
+        static var lensCountryCode: String {
+            Locale.current.region?.identifier.lowercased() ?? "id"
+        }
+
+        /// Sent with the upload and result pages, prioritizing user's preferred languages.
+        static var lensAcceptLanguage: String {
+            let preferred = Locale.preferredLanguages
+            if !preferred.isEmpty {
+                return preferred.prefix(3).joined(separator: ", ")
+            }
+            let lang = lensLanguageCode
+            let country = lensCountryCode.uppercased()
+            return "\(lang)-\(country),\(lang);q=0.9,en;q=0.8"
+        }
+
         static let languageQueryName = "hl"
         static let countryQueryName = "gl"
         /// Result pages on these hosts get `hl` and `gl` added (`LensResultURLLocalizer`).

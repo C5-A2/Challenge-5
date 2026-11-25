@@ -75,8 +75,8 @@ struct LensWebView: UIViewRepresentable {
             isLoading = false
         }
 
-        /// Keeps Google result pages localized for Indonesia: a Google page opened
-        /// without `hl=id` / `gl=id` is reloaded with them. Only GET pages in the main frame,
+        /// Keeps Google result pages localized for the user's locale: a Google page opened
+        /// without `hl` / `gl` is reloaded with them. Only GET pages in the main frame,
         /// so the upload itself (POST) is never changed.
         func webView(
             _ webView: WKWebView,

@@ -257,7 +257,259 @@ enum OutfitAttributeMapper {
         return photo
     }
 
-    // MARK: - 4. Vision Background Removal (Transparent Cutout)
+    // MARK: - 4. Post-Playground Face & Jawline Restoration (Option A)
+
+    /// Restores the user's exact original face and jawline contour from `sourcePhotoData` onto the
+    /// Image Playground generated image (`generatedCGImage`) using Vision 2D facial landmarks
+    /// and a Procrustes uniform similarity transform.
+    ///
+    /// Preserves 100% of the source face's aspect ratio, jawline taper, cheek shading, and sharpness
+    /// while blending seamlessly into the generated hair, neck, and outfit.
+    static func restoreOriginalFace(
+        in generatedCGImage: CGImage,
+        fromSourcePhotoData sourcePhotoData: Data?
+    ) async -> CGImage {
+        guard let sourcePhotoData,
+              let rawSrcCI = CIImage(data: sourcePhotoData, options: [.applyOrientationProperty: true]) else {
+            return generatedCGImage
+        }
+
+        let context = CIContext(options: [.workingColorSpace: CGColorSpaceCreateDeviceRGB()])
+        // Normalize source CIImage origin to (0, 0) after orientation transform
+        let normalizedSrcCI = rawSrcCI.transformed(
+            by: CGAffineTransform(translationX: -rawSrcCI.extent.origin.x, y: -rawSrcCI.extent.origin.y)
+        )
+        guard let srcCG = context.createCGImage(normalizedSrcCI, from: normalizedSrcCI.extent) else {
+            return generatedCGImage
+        }
+
+        let dstCG = generatedCGImage
+        guard let srcFace = detectPrimaryFaceLandmarks(in: srcCG),
+              let dstFace = detectPrimaryFaceLandmarks(in: dstCG),
+              let srcLandmarks = srcFace.landmarks,
+              let dstLandmarks = dstFace.landmarks,
+              let srcContourRegion = srcLandmarks.faceContour,
+              let srcLeftBrowRegion = srcLandmarks.leftEyebrow,
+              let srcRightBrowRegion = srcLandmarks.rightEyebrow else {
+            return generatedCGImage
+        }
+
+        let srcSize = CGSize(width: srcCG.width, height: srcCG.height)
+        let dstSize = CGSize(width: dstCG.width, height: dstCG.height)
+
+        let srcAnchors = extractAlignmentAnchorPoints(from: srcLandmarks, imageSize: srcSize)
+        let dstAnchors = extractAlignmentAnchorPoints(from: dstLandmarks, imageSize: dstSize)
+        guard srcAnchors.count == dstAnchors.count, srcAnchors.count >= 20 else {
+            return generatedCGImage
+        }
+
+        // Compute 2D Procrustes similarity transform (uniform scale + rotation + translation)
+        let count = CGFloat(srcAnchors.count)
+        let srcMean = CGPoint(
+            x: srcAnchors.map(\.x).reduce(0, +) / count,
+            y: srcAnchors.map(\.y).reduce(0, +) / count
+        )
+        let dstMean = CGPoint(
+            x: dstAnchors.map(\.x).reduce(0, +) / count,
+            y: dstAnchors.map(\.y).reduce(0, +) / count
+        )
+
+        var numCos: CGFloat = 0
+        var numSin: CGFloat = 0
+        var denom: CGFloat = 0
+        for i in 0..<srcAnchors.count {
+            let sx = srcAnchors[i].x - srcMean.x
+            let sy = srcAnchors[i].y - srcMean.y
+            let dx = dstAnchors[i].x - dstMean.x
+            let dy = dstAnchors[i].y - dstMean.y
+            numCos += sx * dx + sy * dy
+            numSin += sx * dy - sy * dx
+            denom += sx * sx + sy * sy
+        }
+        guard denom > 1e-4 else { return generatedCGImage }
+
+        let a = numCos / denom
+        let b = numSin / denom
+        let uniformScale = hypot(a, b)
+        let rotationRadians = atan2(b, a)
+
+        // Guard against implausible face scale or rotation mismatches
+        guard uniformScale > 0.2, uniformScale < 5.0, abs(rotationRadians) < (.pi / 6) else {
+            return generatedCGImage
+        }
+
+        let transform = CGAffineTransform(translationX: -srcMean.x, y: -srcMean.y)
+            .concatenating(CGAffineTransform(a: a, b: b, c: -b, d: a, tx: 0, ty: 0))
+            .concatenating(CGAffineTransform(translationX: dstMean.x, y: dstMean.y))
+
+        let srcContour = srcContourRegion.pointsInImage(imageSize: srcSize).map { $0.applying(transform) }
+        let srcBrows = (
+            srcLeftBrowRegion.pointsInImage(imageSize: srcSize) +
+            srcRightBrowRegion.pointsInImage(imageSize: srcSize)
+        ).map { $0.applying(transform) }
+
+        guard srcContour.count >= 11,
+              let browMaxY = srcBrows.map(\.y).max(),
+              let firstContour = srcContour.first,
+              let lastContour = srcContour.last else {
+            return generatedCGImage
+        }
+
+        let chinPt = srcContour[srcContour.count / 2]
+        let faceCenter = CGPoint(
+            x: srcContour.map(\.x).reduce(0, +) / CGFloat(srcContour.count),
+            y: (browMaxY + chinPt.y) / 2
+        )
+        let faceWidth = hypot(lastContour.x - firstContour.x, lastContour.y - firstContour.y)
+        let faceHeight = max(1.0, browMaxY - chinPt.y)
+
+        // Build expanded contour polygon covering face + jawline edge while staying above collar
+        var polygon: [CGPoint] = []
+        let contourCount = srcContour.count
+        let halfIndex = CGFloat(contourCount / 2)
+        for (i, pt) in srcContour.enumerated() {
+            let t = abs(CGFloat(i) - halfIndex) / max(1.0, halfIndex)
+            let radialX = pt.x - faceCenter.x
+            let radialY = pt.y - faceCenter.y
+            let sideExpand = 0.03 + 0.13 * pow(t, 0.7)
+            let downExpand = (1.0 - t) * 0.03 * faceHeight
+            polygon.append(
+                CGPoint(
+                    x: pt.x + radialX * sideExpand,
+                    y: pt.y + radialY * 0.03 - downExpand
+                )
+            )
+        }
+
+        // Close polygon with a smooth forehead dome above the eyebrows
+        if let firstTemple = polygon.first, let lastTemple = polygon.last {
+            let foreheadTopY = browMaxY + faceHeight * 0.52
+            let midX = (firstTemple.x + lastTemple.x) / 2
+            let halfSpanX = abs(lastTemple.x - firstTemple.x) / 2
+            let dirX: CGFloat = lastTemple.x >= firstTemple.x ? 1.0 : -1.0
+            let baseTempleY = (firstTemple.y + lastTemple.y) / 2
+
+            for step in 1...7 {
+                let angle = CGFloat(step) / 8.0 * .pi
+                let x = midX + dirX * cos(angle) * halfSpanX * 1.02
+                let y = baseTempleY + sin(angle) * (foreheadTopY - baseTempleY)
+                polygon.append(CGPoint(x: x, y: y))
+            }
+        }
+
+        guard let rawMaskCG = rasterizePolygonMask(polygon: polygon, size: dstSize) else {
+            return generatedCGImage
+        }
+
+        let dstExtent = CGRect(origin: .zero, size: dstSize)
+        let featherRadius = max(3.0, faceWidth * 0.045)
+        var maskCI = CIImage(cgImage: rawMaskCG)
+            .clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: featherRadius])
+            .cropped(to: dstExtent)
+
+        // Clip mask to the source photo's foreground person mask so room background never leaks in
+        let srcCI = CIImage(cgImage: srcCG)
+        if let srcForegroundMask = generateForegroundMask(for: srcCI) {
+            let alignedForegroundMask = srcForegroundMask
+                .transformed(by: transform)
+                .cropped(to: dstExtent)
+            maskCI = maskCI.applyingFilter(
+                "CIMultiplyCompositing",
+                parameters: [kCIInputBackgroundImageKey: alignedForegroundMask]
+            )
+        }
+
+        let alignedSrcCI = srcCI.transformed(by: transform).cropped(to: dstExtent)
+        let dstCI = CIImage(cgImage: dstCG)
+
+        let blendedCI = alignedSrcCI.applyingFilter(
+            "CIBlendWithMask",
+            parameters: [
+                kCIInputBackgroundImageKey: dstCI,
+                kCIInputMaskImageKey: maskCI
+            ]
+        )
+
+        return context.createCGImage(blendedCI, from: dstExtent) ?? generatedCGImage
+    }
+
+    private static func detectPrimaryFaceLandmarks(in cgImage: CGImage) -> VNFaceObservation? {
+        let request = VNDetectFaceLandmarksRequest()
+        request.revision = VNDetectFaceLandmarksRequestRevision3
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+            try handler.perform([request])
+            return request.results?.max(by: { $0.boundingBox.width < $1.boundingBox.width })
+        } catch {
+            return nil
+        }
+    }
+
+    private static func extractAlignmentAnchorPoints(
+        from landmarks: VNFaceLandmarks2D,
+        imageSize: CGSize
+    ) -> [CGPoint] {
+        let regions: [VNFaceLandmarkRegion2D?] = [
+            landmarks.leftEye,
+            landmarks.rightEye,
+            landmarks.leftEyebrow,
+            landmarks.rightEyebrow,
+            landmarks.nose,
+            landmarks.noseCrest,
+            landmarks.outerLips,
+            landmarks.faceContour
+        ]
+        return regions.compactMap { $0?.pointsInImage(imageSize: imageSize) }.flatMap { $0 }
+    }
+
+    private static func rasterizePolygonMask(polygon: [CGPoint], size: CGSize) -> CGImage? {
+        guard let first = polygon.first, size.width > 0, size.height > 0 else { return nil }
+        let width = Int(size.width)
+        let height = Int(size.height)
+        let colorSpace = CGColorSpaceCreateDeviceGray()
+        guard let maskContext = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else {
+            return nil
+        }
+
+        maskContext.setFillColor(gray: 0, alpha: 1)
+        maskContext.fill(CGRect(origin: .zero, size: size))
+        maskContext.setFillColor(gray: 1, alpha: 1)
+        maskContext.beginPath()
+        maskContext.move(to: first)
+        for pt in polygon.dropFirst() {
+            maskContext.addLine(to: pt)
+        }
+        maskContext.closePath()
+        maskContext.fillPath()
+        return maskContext.makeImage()
+    }
+
+    private static func generateForegroundMask(for ciImage: CIImage) -> CIImage? {
+        let request = VNGenerateForegroundInstanceMaskRequest()
+        let handler = VNImageRequestHandler(ciImage: ciImage)
+        do {
+            try handler.perform([request])
+            guard let result = request.results?.first else { return nil }
+            let maskPixelBuffer = try result.generateScaledMaskForImage(
+                forInstances: result.allInstances,
+                from: handler
+            )
+            return CIImage(cvPixelBuffer: maskPixelBuffer)
+        } catch {
+            return nil
+        }
+    }
+
+    // MARK: - 5. Vision Background Removal (Transparent Cutout)
     
     /// Removes background from a UIImage using Apple Vision foreground instance mask,
     /// returning transparent PNG data without any background artifacts (C5-46).
