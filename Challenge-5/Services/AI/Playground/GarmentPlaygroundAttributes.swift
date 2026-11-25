@@ -161,17 +161,52 @@ extension OutfitPlaygroundPackage {
     // MARK: - Safety Seatbelt (Sanitizer for Image Playground)
     
     /// Words that trigger Apple Image Playground's sensitive content or safety filter.
+    /// Words here are completely stripped if no replacement exists.
     private static let blockedWords: Set<String> = [
-        "sheer", "translucent", "transparent", "mesh", "see-through", "fishnet",
-        "revealing", "sexy", "naked", "nude", "skin", "flesh", "cutout", "cut-out",
-        "slit", "plunging", "deep-v", "low-cut", "cleavage", "waist", "swallowtail",
+        "naked", "skin", "bare", "erotic", "unbuttoned", "swallowtail",
         // Words that make Image Playground draw letters on the fabric ("S-shaped stripes" became random text).
         "letter", "letters", "lettering", "logo", "logos", "slogan", "text", "typography", "monogram", "script", "s-shaped"
     ]
 
     /// Neutral garment-noun replacements for sensitive terms so the silhouette stays coherent.
     private static let tokenReplacements: [String: String] = [
+        // Intimate & lingerie apparel -> elegant outerwear equivalents
         "bikini": "top",
+        "corset": "bodice",
+        "bustier": "bodice",
+        "bralette": "top",
+        "bodysuit": "top",
+        "lingerie": "attire",
+        "underwire": "structured",
+        "boning": "seams",
+        "swimsuit": "outfit",
+        "swimwear": "outfit",
+
+        // Revealing cuts & features -> modest, stylish fashion cuts
+        "plunging": "v-neck",
+        "deep-v": "v-neck",
+        "low-cut": "open-neck",
+        "cleavage": "neckline",
+        "slit": "wrap",
+        "cutout": "accent",
+        "cut-out": "accent",
+        "bodycon": "fitted",
+        "micro": "short",
+        "sexy": "chic",
+        "revealing": "stylish",
+
+        // Transparent fabrics -> safe textured / layered fabrics
+        "sheer": "chiffon",
+        "translucent": "chiffon",
+        "transparent": "layered",
+        "mesh": "textured",
+        "fishnet": "patterned",
+        "see-through": "layered",
+
+        // Sensitive skin/color words -> neutral tone
+        "nude": "beige",
+        "flesh": "beige",
+
         // Indonesian fashion words Image Playground doesn't know, swapped for what they look like.
         "kutubaru": "kebaya",
         "sabrina": "off-shoulder",
@@ -182,7 +217,12 @@ extension OutfitPlaygroundPackage {
         "selendang": "shawl",
         "brokat": "brocade",
         "payet": "sequin",
-        "renda": "lace"
+        "renda": "lace",
+        "kemben": "bodice",
+        "stagen": "sash",
+        "angkin": "sash",
+        "obi": "sash",
+        "kain": "sarong"
     ]
 
     /// Dangling trailing words trimmed after filtered tokens are removed.
@@ -193,7 +233,11 @@ extension OutfitPlaygroundPackage {
     
     /// Sanitizes garment text, stripping guardrail-triggering words and ensuring proper outer sleeves.
     private static func sanitizePrompt(_ text: String, category: GarmentCategory, hasOuter: Bool) -> String {
-        let tokens = text.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+        let preprocessed = text
+            .replacingOccurrences(of: "deep-v", with: "v-neck", options: .caseInsensitive)
+            .replacingOccurrences(of: "cut-out", with: "accent", options: .caseInsensitive)
+            .replacingOccurrences(of: "see-through", with: "layered", options: .caseInsensitive)
+        let tokens = preprocessed.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
         var cleanTokens: [String] = []
         for token in tokens {
             let lower = token.lowercased()
@@ -357,13 +401,24 @@ extension OutfitPlaygroundPackage {
             if lower.contains("blouse") { return "blouse" }
             return "top"
         case .bottom:
-            if lower.contains("skirt") { return "skirt" }
+            if lower.contains("skirt") {
+                if lower.contains("mini") { return "mini skirt" }
+                if lower.contains("maxi") { return "maxi skirt" }
+                if lower.contains("midi") { return "midi skirt" }
+                return "skirt"
+            }
             if lower.contains("jeans") { return "jeans" }
             if lower.contains("shorts") { return "shorts" }
             return "trousers"
         case .dress:
             if lower.contains("jumpsuit") { return "jumpsuit" }
-            return "midi dress"
+            if lower.contains("mini") { return "mini dress" }
+            if lower.contains("maxi") { return "maxi dress" }
+            if lower.contains("gown") { return "gown" }
+            if lower.contains("cocktail") { return "cocktail dress" }
+            if lower.contains("wrap") { return "wrap dress" }
+            if lower.contains("shirt") { return "shirt dress" }
+            return "dress"
         }
     }
 
@@ -529,6 +584,7 @@ extension OutfitPlaygroundPackage {
         return shoes
             .components(separatedBy: CharacterSet.alphanumerics.inverted.subtracting(CharacterSet(charactersIn: "-")))
             .filter { !$0.isEmpty && !Self.blockedWords.contains($0.lowercased()) }
+            .map { Self.tokenReplacements[$0.lowercased()] ?? $0 }
             .joined(separator: " ")
     }
 

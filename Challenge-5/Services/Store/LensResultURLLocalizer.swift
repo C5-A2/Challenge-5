@@ -7,10 +7,10 @@
 
 import Foundation
 
-/// Keeps Google result pages localized for Indonesia (`hl=id`, `gl=id`).
+/// Keeps Google result pages localized for the user's device locale (`hl`, `gl`).
 ///
 /// Google Lens redirects the upload to a result page and does not always carry the
-/// country over, so results can fall back to international shops (eBay, Amazon). Only the page's
+/// country over, so results can fall back to international shops. Only the page's
 /// address is changed; its content is never read.
 nonisolated enum LensResultURLLocalizer {
 

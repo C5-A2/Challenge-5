@@ -295,6 +295,15 @@ struct OccasionOutputView: View {
         }
         return Image("mock_result_1")
     }
+
+    /// Raw photo data matching `activePlaygroundSourceImage` for post-Playground face & jawline restoration.
+    private var activePlaygroundSourcePhotoData: Data? {
+        let activeProfile = userProfiles.first ?? viewModel.profile
+        if let frontData = activeProfile?.frontBodyPhotoData {
+            return frontData
+        }
+        return UIImage(named: "mock_result_1")?.pngData()
+    }
     
     // MARK: - Studio Stage Background (Asset Spotlight)
     
@@ -614,7 +623,12 @@ struct OccasionOutputView: View {
     }
     
     private func handleGeneratedPlaygroundCGImage(_ cgImage: CGImage, for look: OutfitLook) async {
-        let uiImage = UIImage(cgImage: cgImage)
+        let sourcePhotoData = activePlaygroundSourcePhotoData
+        let restoredCGImage = await OutfitAttributeMapper.restoreOriginalFace(
+            in: cgImage,
+            fromSourcePhotoData: sourcePhotoData
+        )
+        let uiImage = UIImage(cgImage: restoredCGImage)
         let transparentPng = await OutfitAttributeMapper.removeBackground(from: uiImage) ?? uiImage.pngData()
         await MainActor.run {
             if let transparentPng {
