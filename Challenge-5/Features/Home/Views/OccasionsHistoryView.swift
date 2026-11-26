@@ -19,6 +19,7 @@ struct OccasionsHistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \OccasionItem.date, order: .reverse) private var allOccasions: [OccasionItem]
+    @Query private var userProfiles: [UserProfile]
     
     // MARK: - Local State
     
@@ -116,7 +117,10 @@ struct OccasionsHistoryView: View {
         ScrollView {
             LazyVStack(spacing: 16) {
                 ForEach(pastOccasions) { occasion in
-                    OccasionCardView(occasion: occasion) {
+                    OccasionCardView(
+                        occasion: occasion,
+                        userHeightCm: userProfiles.first?.measurements?.heightCm
+                    ) {
                         selectedOccasionForEdit = occasion
                     }
                     .swipeToDelete {

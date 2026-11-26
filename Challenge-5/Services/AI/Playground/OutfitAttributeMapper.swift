@@ -540,7 +540,8 @@ enum OutfitAttributeMapper {
             let context = CIContext(options: [.workingColorSpace: CGColorSpaceCreateDeviceRGB()])
             guard let outputCG = context.createCGImage(outputCIImage, from: outputCIImage.extent) else { return nil }
             let resultUI = UIImage(cgImage: outputCG)
-            return resultUI.pngData()
+            let trimmedUI = resultUI.trimmingTransparentPixels(padBottom: false)
+            return trimmedUI.pngData()
         } catch {
             return nil
         }

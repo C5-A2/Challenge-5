@@ -24,8 +24,17 @@ public struct OccasionCardView: View {
     public let tags: [String]
     public var backgroundImage: Image?
     public var outfitImagesData: [Data]
+    public var userHeightCm: Double
     public let isPlaceholder: Bool
     public let action: () -> Void
+    
+    // MARK: - Height Scaling
+    
+    /// Height scale ratio relative to standard 170.0 cm baseline.
+    private var heightScaleFactor: CGFloat {
+        let rawRatio = userHeightCm / 170.0
+        return CGFloat(min(max(rawRatio, 0.85), 1.15))
+    }
     
     // MARK: - Initializers
     
@@ -37,6 +46,7 @@ public struct OccasionCardView: View {
         tags: [String] = [],
         backgroundImage: Image? = nil,
         outfitImagesData: [Data] = [],
+        userHeightCm: Double? = nil,
         isPlaceholder: Bool = false,
         action: @escaping () -> Void
     ) {
@@ -47,12 +57,14 @@ public struct OccasionCardView: View {
         self.tags = tags
         self.backgroundImage = backgroundImage
         self.outfitImagesData = Array(outfitImagesData.suffix(Self.maxDisplayedOutfits))
+        self.userHeightCm = userHeightCm ?? 168.0
         self.isPlaceholder = isPlaceholder
         self.action = action
     }
     
     init(
         occasion: OccasionItem,
+        userHeightCm: Double? = nil,
         action: @escaping () -> Void
     ) {
         self.dayText = occasion.dayText
@@ -62,6 +74,7 @@ public struct OccasionCardView: View {
         // Chips are omitted for now; reserved for tags from recommended styling results in the future
         self.tags = []
         self.backgroundImage = nil
+        self.userHeightCm = userHeightCm ?? 168.0
         
         // Extract real generated outfit images sorted chronologically so newest replaces oldest when > 4
         let validLooks = occasion.generatedLooks.filter { look in
@@ -150,32 +163,26 @@ public struct OccasionCardView: View {
     /// Renders up to 5 generated outfit avatars lined up tightly and large inside the folder card.
     private func generatedOutfitsLineup(isBlurred: Bool) -> some View {
         let count = outfitImagesData.count
-        let itemWidth: CGFloat = {
-            switch count {
-            case 1: return 170
-            case 2: return 156
-            case 3: return 144
-            case 4: return 132
-            default: return 122
-            }
-        }()
         let spacing: CGFloat = {
             switch count {
             case 1: return 0
-            case 2: return -68
-            case 3: return -74
-            case 4: return -72
-            default: return -70
+            case 2: return 20
+            case 3: return 4
+            case 4: return -10
+            default: return -16
             }
         }()
         
+        let baseHeight: CGFloat = 186.0 * heightScaleFactor
+        
         return HStack(alignment: .top, spacing: spacing) {
             ForEach(Array(outfitImagesData.enumerated()), id: \.offset) { idx, data in
-                if let uiImage = UIImage(data: data) {
+                if let uiImage = UIImage.trimmedImage(from: data, padBottom: false) {
+                    let avatarHeight = baseHeight * heightScaleMultiplier(for: idx, total: count)
                     Image(uiImage: uiImage)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: itemWidth, height: 280, alignment: .top)
+                        .frame(height: avatarHeight)
                         .offset(y: verticalOffset(for: idx, total: count))
                         .zIndex(zIndex(for: idx, total: count))
                 }
@@ -186,19 +193,35 @@ public struct OccasionCardView: View {
         .opacity(isBlurred ? 0.72 : 1.0)
     }
     
-    private func verticalOffset(for index: Int, total: Int) -> CGFloat {
-        guard total > 1 else { return 14 }
+    private func heightScaleMultiplier(for index: Int, total: Int) -> CGFloat {
+        guard total > 1 else { return 1.0 }
         switch total {
         case 2:
-            return index == 0 ? 12 : 20
+            return index == 0 ? 1.0 : 0.96
         case 3:
-            return index == 1 ? 10 : 22
+            return index == 1 ? 1.0 : 0.95
         case 4:
-            return (index == 1 || index == 2) ? 10 : 24
+            return (index == 1 || index == 2) ? 1.0 : 0.94
+        default:
+            if index == 2 { return 1.0 }
+            if index == 1 || index == 3 { return 0.97 }
+            return 0.94
+        }
+    }
+    
+    private func verticalOffset(for index: Int, total: Int) -> CGFloat {
+        guard total > 1 else { return 12 }
+        switch total {
+        case 2:
+            return index == 0 ? 12 : 18
+        case 3:
+            return index == 1 ? 12 : 20
+        case 4:
+            return (index == 1 || index == 2) ? 12 : 20
         default:
             if index == 2 { return 10 }
-            if index == 1 || index == 3 { return 18 }
-            return 26
+            if index == 1 || index == 3 { return 16 }
+            return 22
         }
     }
     

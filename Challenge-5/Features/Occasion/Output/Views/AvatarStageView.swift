@@ -19,6 +19,13 @@ struct AvatarStageView: View {
     
     private let cardSpacing: CGFloat = 126
     
+    /// Height scale ratio relative to standard 170.0 cm visual baseline.
+    private var heightScaleFactor: CGFloat {
+        let heightCm = viewModel.userHeightCm
+        let rawRatio = heightCm / 170.0
+        return CGFloat(min(max(rawRatio, 0.85), 1.15))
+    }
+    
     init(
         viewModel: OccasionOutputViewModel,
         onPlaygroundTap: (() -> Void)? = nil,
@@ -82,12 +89,12 @@ struct AvatarStageView: View {
     
     
     private var carouselTrack: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             ForEach(0..<viewModel.totalCarouselCount, id: \.self) { index in
                 cardItem(for: index)
             }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
     
     @ViewBuilder
@@ -99,8 +106,16 @@ struct AvatarStageView: View {
             let centerFactor = max(0, 1.0 - abs(relativeIndex))
             let isCenter = centerFactor > 0.65
             
-            let width: CGFloat = 110 + centerFactor * (190 - 110)
-            let height: CGFloat = 245 + centerFactor * (455 - 245)
+            // Standard center avatar height (~245pt at 170cm, scaled by user's heightCm, e.g. ~235pt at 163cm)
+            let baseAvatarHeight = 245.0 * heightScaleFactor
+            // Perspective depth factor: side looks scale down realistically to ~68%
+            let perspectiveFactor = 0.68 + 0.32 * centerFactor
+            let currentAvatarHeight = baseAvatarHeight * perspectiveFactor
+            
+            // Ground anchoring: center avatar feet rest exactly on the podium surface ellipse (42pt above carousel bottom).
+            // Side avatars rest further back on the floor plane in perspective (58pt above carousel bottom).
+            let groundOffsetFromBottom = 42.0 + (1.0 - centerFactor) * 16.0
+            
             let opacity: CGFloat = abs(relativeIndex) <= 1.0
                 ? 1.0
                 : max(0, 1.0 - (abs(relativeIndex) - 1.0) * 1.5)
@@ -109,32 +124,45 @@ struct AvatarStageView: View {
             let brightness: Double = isCenter ? 0.0 : -0.15
             let xOffset = relativeIndex * cardSpacing
             
-            ZStack(alignment: .center) {
+            let cardWidth = max(110.0, currentAvatarHeight * 0.45)
+            
+            ZStack(alignment: .bottom) {
+                // Ground contact shadow so feet look firmly planted on the podium surface
+                if !viewModel.isLookLoading(at: index) {
+                    Ellipse()
+                        .fill(Color.black.opacity(isCenter ? 0.30 : 0.12))
+                        .frame(width: max(44, currentAvatarHeight * 0.28), height: isCenter ? 7.0 : 4.5)
+                        .blur(radius: isCenter ? 3.0 : 2.0)
+                        .padding(.bottom, groundOffsetFromBottom - 2)
+                }
+                
                 if viewModel.isLookLoading(at: index) {
-                    loadingRingCard(for: index, width: width, height: height, isCenter: isCenter)
+                    loadingRingCard(for: index, isCenter: isCenter)
+                        .padding(.bottom, groundOffsetFromBottom + 64)
                 } else if index < viewModel.looks.count,
                    let data = viewModel.looks[index].lookImageData,
                    !OccasionOutputViewModel.isPlaceholderData(data, lookIndex: viewModel.looks[index].lookIndex),
-                   let uiImage = UIImage(data: data) {
+                   let uiImage = UIImage.trimmedImage(from: data, padBottom: false) {
                     Image(uiImage: uiImage)
                         .resizable()
                         .scaledToFit()
                         .saturation(saturation)
                         .brightness(brightness)
-                        .frame(width: width, height: height)
+                        .frame(height: currentAvatarHeight)
                         .shadow(
                             color: Color.black.opacity(isCenter ? 0.08 : 0.02),
                             radius: isCenter ? 8 : 2,
                             y: isCenter ? 4 : 1
                         )
+                        .padding(.bottom, groundOffsetFromBottom)
                 } else {
-                    playgroundPlaceholderView(for: index, isCenter: isCenter, width: width, height: height)
+                    playgroundPlaceholderView(for: index, isCenter: isCenter, height: currentAvatarHeight)
                         .saturation(saturation)
                         .brightness(brightness)
-                        .frame(width: width, height: height)
+                        .padding(.bottom, groundOffsetFromBottom)
                 }
             }
-            .frame(width: width, height: height)
+            .frame(width: cardWidth, height: 330, alignment: .bottom)
             .offset(x: xOffset)
             .opacity(opacity)
             .zIndex(Double(centerFactor))
@@ -148,7 +176,7 @@ struct AvatarStageView: View {
     }
     
     @ViewBuilder
-    private func loadingRingCard(for index: Int, width: CGFloat, height: CGFloat, isCenter: Bool) -> some View {
+    private func loadingRingCard(for index: Int, isCenter: Bool) -> some View {
         VStack(spacing: 16) {
             ZStack {
                 Circle()
@@ -175,21 +203,20 @@ struct AvatarStageView: View {
                 .transition(.opacity)
             }
         }
-        .frame(width: width, height: height, alignment: .center)
+        .frame(alignment: .center)
     }
     
     // MARK: - Image Playground Placeholder View (Cardless)
     
     @ViewBuilder
-    private func playgroundPlaceholderView(for index: Int, isCenter: Bool, width: CGFloat, height: CGFloat) -> some View {
+    private func playgroundPlaceholderView(for index: Int, isCenter: Bool, height: CGFloat) -> some View {
         ZStack(alignment: .center) {
             // Icon Orang (Avatar Silhouette) - dibuat proporsional dan pas di atas podium
             Image(systemName: "figure.stand")
                 .resizable()
                 .scaledToFit()
                 .foregroundStyle(AppColors.espressoTitle.opacity(isCenter ? 0.16 : 0.06))
-                .frame(height: height * 0.54)
-                .offset(y: 4)
+                .frame(height: height * (isCenter ? 0.94 : 0.80))
             
             if isCenter {
                 VStack(spacing: 12) {
@@ -251,6 +278,7 @@ struct AvatarStageView: View {
                 .offset(y: 6)
             }
         }
+        .frame(height: height, alignment: .bottom)
     }
     
     

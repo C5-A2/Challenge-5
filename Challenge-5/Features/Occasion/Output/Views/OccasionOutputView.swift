@@ -220,6 +220,9 @@ struct OccasionOutputView: View {
         }
         .task {
             let activeProfile = userProfiles.first ?? viewModel.profile ?? UserProfile.mockSample
+            if viewModel.profile == nil {
+                viewModel.profile = activeProfile
+            }
             await viewModel.generateLooksIfNeeded(profile: activeProfile)
             updatePlaygroundPackage()
         }
