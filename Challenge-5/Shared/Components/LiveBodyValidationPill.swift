@@ -55,29 +55,29 @@ enum BodyAlignmentState: Equatable, Sendable {
     func statusText(expectedType: BodyFacingOrientation) -> String {
         switch self {
         case .deviceNotLevel:
-            return "Keep phone upright (too tilted)"
+            return "Keep Phone Upright"
         case .searching:
-            return "Align yourself with the silhouette"
+            return "Fit Body in Silhouette"
         case .noPerson:
-            return "No person detected in frame"
+            return "No Person Detected"
         case .multiplePeople:
-            return "Ensure only 1 person is in frame"
+            return "Only 1 Person in Frame"
         case .notFullBody:
-            return "Show full body (head to toe)"
+            return "Show Full Body"
         case .wrongOrientation:
             return expectedType == .side
-                ? "Turn 90° to the side"
-                : "Stand facing straight ahead"
+                ? "Turn 90° to the Side"
+                : "Face Straight Ahead"
         case .tooClose:
-            return "Step back so full body fits"
+            return "Step Back Slightly"
         case .tooFar:
-            return "Move closer to fit silhouette"
+            return "Move Closer"
         case .offCenter:
-            return "Center your body in the silhouette"
+            return "Center in Silhouette"
         case .aligned:
             return expectedType == .side
-                ? "Side Position Ready — Hold Still"
-                : "Front Position Ready — Hold Still"
+                ? "Side Pose Ready"
+                : "Front Pose Ready"
         }
     }
 }
@@ -192,7 +192,7 @@ struct LiveBodyValidationPill: View {
                 .font(AppTypography.caption.weight(.medium))
                 .foregroundStyle(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.85)
+                .minimumScaleFactor(0.75)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

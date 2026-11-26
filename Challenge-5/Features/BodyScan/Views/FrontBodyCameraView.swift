@@ -20,8 +20,12 @@ struct FrontBodyCameraView: View {
     @State private var motionManager = MotionLevelManager()
     @State private var poseMonitor = LiveBodyPoseMonitor()
     @State private var isCapturing: Bool = false
+    @State private var isValidatingPhoto: Bool = false
     @State private var countdownRemaining: Int = 3
     @State private var countdownTask: Task<Void, Never>? = nil
+    #if canImport(UIKit)
+    @State private var invalidCapture: BodyCaptureValidationFailure? = nil
+    #endif
 
     private var effectiveAlignmentState: BodyAlignmentState {
         BodyAlignmentState.resolve(
@@ -56,9 +60,35 @@ struct FrontBodyCameraView: View {
                 }
             }
 
-            // 5. Bottom Shutter & Controls
+            // 5. Post-capture verification indicator
+            if isValidatingPhoto {
+                ZStack {
+                    Color.black.opacity(0.35)
+                        .ignoresSafeArea()
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .tint(.white)
+                        Text("Verifying photo...")
+                            .font(AppTypography.caption.weight(.medium))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.75))
+                    .clipShape(Capsule())
+                }
+            }
+
+            // 6. Bottom Shutter & Controls
             bottomControlBar
         }
+        #if canImport(UIKit)
+        .sheet(item: $invalidCapture) { failure in
+            BodyCaptureInvalidModal(failure: failure) {
+                invalidCapture = nil
+            }
+        }
+        #endif
         .task {
             motionManager.startMonitoring()
             cameraService.onSampleBuffer = { [poseMonitor] buffer in
@@ -132,7 +162,7 @@ struct FrontBodyCameraView: View {
 
     private var topControlBar: some View {
         VStack(spacing: 10) {
-            HStack(alignment: .center) {
+            HStack(alignment: .center, spacing: 8) {
                 // Back Button to Guide
                 Button {
                     viewModel.currentStep = .frontGuide
@@ -145,24 +175,16 @@ struct FrontBodyCameraView: View {
                         .clipShape(Circle())
                 }
 
-                Spacer()
+                Spacer(minLength: 4)
 
-                // Motion Level Status Pill
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(motionManager.isLevel ? AppColors.lightingOptimal : AppColors.lightingWarning)
-                        .frame(width: 8, height: 8)
+                // Single Unified Status Pill (Device Upright + Full Body & Pose Alignment)
+                LiveBodyValidationPill(
+                    result: poseMonitor.latestResult,
+                    expectedType: .front,
+                    isDeviceLevel: motionManager.isLevel
+                )
 
-                    Text(motionManager.isLevel ? "Device Level" : "Keep Phone Upright")
-                        .font(AppTypography.caption)
-                        .foregroundStyle(.white)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.black.opacity(0.55))
-                .clipShape(Capsule())
-
-                Spacer()
+                Spacer(minLength: 4)
 
                 // Flash Toggle Button
                 Button {
@@ -181,15 +203,8 @@ struct FrontBodyCameraView: View {
 
             CameraTimerSelectorPill(
                 selectedSeconds: $viewModel.countdownSeconds,
-                isDisabled: isCapturing || viewModel.isCountingDown
+                isDisabled: isCapturing || isValidatingPhoto || viewModel.isCountingDown
             )
-
-            LiveBodyValidationPill(
-                result: poseMonitor.latestResult,
-                expectedType: .front,
-                isDeviceLevel: motionManager.isLevel
-            )
-            .padding(.horizontal, AppDimensions.screenHorizontalPadding)
 
             Spacer()
         }
@@ -223,7 +238,7 @@ struct FrontBodyCameraView: View {
                     .scaleEffect(isCapturing ? 0.92 : 1.0)
                     .animation(.easeInOut(duration: 0.15), value: isCapturing)
                 }
-                .disabled(isCapturing || viewModel.isCountingDown)
+                .disabled(isCapturing || isValidatingPhoto || viewModel.isCountingDown)
 
                 // Right: Switch Camera (Front / Rear)
                 Button {
@@ -248,7 +263,7 @@ struct FrontBodyCameraView: View {
     // MARK: - Capture Actions
 
     private func triggerCaptureFlow() {
-        guard !isCapturing, !viewModel.isCountingDown else { return }
+        guard !isCapturing, !isValidatingPhoto, !viewModel.isCountingDown else { return }
 
         let duration = max(1, viewModel.countdownSeconds)
         viewModel.isCountingDown = true
@@ -277,13 +292,31 @@ struct FrontBodyCameraView: View {
 
     private func executeCapture() {
         isCapturing = true
+        let wasDeviceLevel = motionManager.isLevel
         Task {
             do {
                 let photo = try await cameraService.capturePhoto()
-                viewModel.setFrontPhoto(photo)
                 isCapturing = false
+                #if canImport(UIKit)
+                isValidatingPhoto = true
+                let fixedPhoto = ImageOrientationHelper.fixOrientation(image: photo)
+                let failure = await BodyCaptureValidator.validate(
+                    photo: fixedPhoto,
+                    expectedType: .front,
+                    wasDeviceLevel: wasDeviceLevel
+                )
+                isValidatingPhoto = false
+                if let failure {
+                    invalidCapture = failure
+                } else {
+                    viewModel.setFrontPhoto(fixedPhoto)
+                }
+                #else
+                viewModel.setFrontPhoto(photo)
+                #endif
             } catch {
                 isCapturing = false
+                isValidatingPhoto = false
                 viewModel.errorMessage = error.localizedDescription
             }
         }

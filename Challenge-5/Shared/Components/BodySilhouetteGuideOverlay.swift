@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Full-body human silhouette guide overlay for Front & Side Body Scan camera screens.
 ///
@@ -36,10 +39,10 @@ struct BodySilhouetteGuideOverlay: View {
 
     var body: some View {
         GeometryReader { geo in
-            let topReserved: CGFloat = 152
+            let topReserved: CGFloat = 118
             let bottomReserved: CGFloat = 132
-            let availableHeight = max(220, geo.size.height - topReserved - bottomReserved)
-            let guideHeight = min(geo.size.height * 0.64, availableHeight)
+            let availableHeight = max(240, geo.size.height - topReserved - bottomReserved)
+            let guideHeight = min(geo.size.height * 0.67, availableHeight)
             let widthRatio: CGFloat = expectedType == .side ? 0.42 : 0.56
             let guideWidth = min(geo.size.width * 0.78, max(150, guideHeight * widthRatio))
             let centerPoint = CGPoint(
@@ -185,3 +188,133 @@ private struct BodyGuideCornerBracketsShape: Shape {
         return path
     }
 }
+
+#if canImport(UIKit)
+/// Validation failure details shown in the post-capture modal when a body scan photo does not meet requirements.
+struct BodyCaptureValidationFailure: Identifiable {
+    let id = UUID()
+    let photo: UIImage
+    let title: String
+    let message: String
+}
+
+/// Shared post-capture validator for Front & Side Body Scan photos.
+enum BodyCaptureValidator {
+    static func validate(
+        photo: UIImage,
+        expectedType: BodyFacingOrientation,
+        wasDeviceLevel: Bool
+    ) async -> BodyCaptureValidationFailure? {
+        #if targetEnvironment(simulator)
+        return nil
+        #else
+        if !wasDeviceLevel {
+            return BodyCaptureValidationFailure(
+                photo: photo,
+                title: "Phone Too Tilted",
+                message: "Your phone was tilted too much during capture. Please keep the phone upright and retake the photo."
+            )
+        }
+
+        let result = await HumanDetector.detectHuman(image: photo, expectedType: expectedType)
+
+        if !result.isHumanPresent || !result.isFullBody || !result.isOrientationMatch {
+            return BodyCaptureValidationFailure(
+                photo: photo,
+                title: "Photo Does Not Match",
+                message: result.message
+            )
+        }
+
+        switch result.framingStatus {
+        case .tooClose:
+            return BodyCaptureValidationFailure(
+                photo: photo,
+                title: "Too Close to Camera",
+                message: "Your full body is too close or your feet are cropped out. Please step back so your whole body from head to feet fits inside the silhouette."
+            )
+        case .tooFar:
+            return BodyCaptureValidationFailure(
+                photo: photo,
+                title: "Too Far from Camera",
+                message: "You appear too far from the camera for accurate measurement. Please move closer so your body fills the silhouette."
+            )
+        case .aligned, .offCenter:
+            return nil
+        }
+        #endif
+    }
+}
+
+/// Modal sheet displayed immediately after capture if the photo fails validation,
+/// showing the captured photo preview, failure reason, and a Retake Photo button.
+struct BodyCaptureInvalidModal: View {
+    let failure: BodyCaptureValidationFailure
+    let onRetake: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SheetDragHandle()
+                .padding(.bottom, 10)
+
+            VStack(spacing: 16) {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.lightingWarning)
+
+                    Text(failure.title)
+                        .font(AppTypography.title3SemiBold)
+                        .foregroundStyle(AppColors.espressoTitle)
+                }
+
+                Image(uiImage: failure.photo)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 260)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(AppColors.lightingWarning.opacity(0.45), lineWidth: 1.5)
+                    )
+                    .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
+
+                Text(failure.message)
+                    .font(AppTypography.subheadlineRegular)
+                    .foregroundStyle(AppColors.bodyText)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 8)
+            }
+            .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+            .padding(.top, 6)
+
+            Spacer(minLength: 16)
+
+            Button {
+                onRetake()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Retake Photo")
+                        .font(AppTypography.buttonLabel)
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(AppColors.primaryBlack)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, AppDimensions.screenHorizontalPadding)
+            .padding(.bottom, 24)
+        }
+        .background(AppColors.cardBackground.ignoresSafeArea())
+        .environment(\.colorScheme, .light)
+        .presentationDetents([.medium, .large])
+        .presentationCornerRadius(28)
+    }
+}
+#endif
