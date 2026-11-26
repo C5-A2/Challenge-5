@@ -18,6 +18,14 @@ public enum BodyFacingOrientation: String, Sendable, CaseIterable {
     case uncertain = "Uncertain"
 }
 
+/// Real-time framing alignment relative to the on-screen full-body silhouette guide.
+public enum BodyFramingStatus: String, Sendable {
+    case aligned
+    case tooClose
+    case tooFar
+    case offCenter
+}
+
 /// Verification result of human presence, full body framing, and facing angle orientation.
 public struct HumanDetectionResult: Sendable {
     public let isHumanPresent: Bool
@@ -26,6 +34,7 @@ public struct HumanDetectionResult: Sendable {
     public let isOrientationMatch: Bool
     public let message: String
     public let confidence: Float
+    public let framingStatus: BodyFramingStatus
 
     nonisolated public init(
         isHumanPresent: Bool,
@@ -33,7 +42,8 @@ public struct HumanDetectionResult: Sendable {
         orientation: BodyFacingOrientation,
         isOrientationMatch: Bool,
         message: String,
-        confidence: Float
+        confidence: Float,
+        framingStatus: BodyFramingStatus = .aligned
     ) {
         self.isHumanPresent = isHumanPresent
         self.isFullBody = isFullBody
@@ -41,6 +51,7 @@ public struct HumanDetectionResult: Sendable {
         self.isOrientationMatch = isOrientationMatch
         self.message = message
         self.confidence = confidence
+        self.framingStatus = framingStatus
     }
 }
 
@@ -210,6 +221,7 @@ public struct HumanDetector: Sendable {
 
         // 4. Klasifikasi Orientasi Sudut Hadap (Front vs Side)
         let orientation = classifyFacingOrientation(joints: joints)
+        let framingStatus = evaluateFraming(joints: joints)
 
         let confidences = joints.values.map { $0.confidence }
         let avgConfidence = confidences.isEmpty ? 0 : confidences.reduce(0, +) / Float(confidences.count)
@@ -225,7 +237,8 @@ public struct HumanDetector: Sendable {
                     orientation: orientation,
                     isOrientationMatch: true,
                     message: "Front view verified (Full Body).",
-                    confidence: avgConfidence
+                    confidence: avgConfidence,
+                    framingStatus: framingStatus
                 )
             } else {
                 return HumanDetectionResult(
@@ -234,7 +247,8 @@ public struct HumanDetector: Sendable {
                     orientation: orientation,
                     isOrientationMatch: false,
                     message: "This photo was detected as a side view. Please stand facing straight toward the camera.",
-                    confidence: avgConfidence
+                    confidence: avgConfidence,
+                    framingStatus: framingStatus
                 )
             }
 
@@ -247,7 +261,8 @@ public struct HumanDetector: Sendable {
                     orientation: orientation,
                     isOrientationMatch: true,
                     message: "Side view verified (Full Body).",
-                    confidence: avgConfidence
+                    confidence: avgConfidence,
+                    framingStatus: framingStatus
                 )
             } else {
                 return HumanDetectionResult(
@@ -256,7 +271,8 @@ public struct HumanDetector: Sendable {
                     orientation: orientation,
                     isOrientationMatch: false,
                     message: "This photo was detected as a front view. Please turn 90° to the side.",
-                    confidence: avgConfidence
+                    confidence: avgConfidence,
+                    framingStatus: framingStatus
                 )
             }
 
@@ -267,9 +283,75 @@ public struct HumanDetector: Sendable {
                 orientation: orientation,
                 isOrientationMatch: true,
                 message: "Facing angle: \(orientation.rawValue).",
-                confidence: avgConfidence
+                confidence: avgConfidence,
+                framingStatus: framingStatus
             )
         }
+    }
+
+    // MARK: - Spatial Framing Evaluator (Distance & Centering inside Silhouette)
+
+    nonisolated private static func evaluateFraming(
+        joints: [VNHumanBodyPoseObservation.JointName: VNRecognizedPoint]
+    ) -> BodyFramingStatus {
+        let la = joints[.leftAnkle]
+        let ra = joints[.rightAnkle]
+        let confidentAnkles: [VNRecognizedPoint] = [la, ra].compactMap { point in
+            guard let point, point.confidence > 0.15 else { return nil }
+            return point
+        }
+
+        // If ankles are not visible yet, user is likely standing too close (feet cropped out)
+        guard !confidentAnkles.isEmpty else {
+            return .tooClose
+        }
+
+        // Vision normalized coordinates: y = 0 (bottom) to y = 1 (top), x = 0 (left) to x = 1 (right)
+        let faceJointNames: [VNHumanBodyPoseObservation.JointName] = [
+            .nose, .leftEye, .rightEye, .leftEar, .rightEar
+        ]
+        let facePoints: [VNRecognizedPoint] = faceJointNames.compactMap { name in
+            guard let pt = joints[name], pt.confidence > 0.15 else { return nil }
+            return pt
+        }
+
+        let estimatedHeadTopY: Double
+        if let maxFaceY = facePoints.map({ Double($0.location.y) }).max() {
+            estimatedHeadTopY = maxFaceY + 0.06
+        } else if let neck = joints[.neck], neck.confidence > 0.15 {
+            estimatedHeadTopY = Double(neck.location.y) + 0.12
+        } else {
+            return .tooClose
+        }
+
+        let minAnkleY = confidentAnkles.map { Double($0.location.y) }.min() ?? 0.0
+        let estimatedFeetBottomY = max(0.0, minAnkleY - 0.03)
+        let bodySpan = estimatedHeadTopY - estimatedFeetBottomY
+
+        if estimatedHeadTopY > 0.97 || estimatedFeetBottomY < 0.02 || bodySpan > 0.88 {
+            return .tooClose
+        }
+
+        if bodySpan < 0.42 {
+            return .tooFar
+        }
+
+        let centerJointNames: [VNHumanBodyPoseObservation.JointName] = [
+            .leftShoulder, .rightShoulder, .leftHip, .rightHip, .root
+        ]
+        let centerJoints: [VNRecognizedPoint] = centerJointNames.compactMap { name in
+            guard let pt = joints[name], pt.confidence > 0.15 else { return nil }
+            return pt
+        }
+
+        if !centerJoints.isEmpty {
+            let avgX = centerJoints.map { Double($0.location.x) }.reduce(0, +) / Double(centerJoints.count)
+            if avgX < 0.30 || avgX > 0.70 {
+                return .offCenter
+            }
+        }
+
+        return .aligned
     }
 
     // MARK: - Facing Orientation Classifier (CobaBodyScan Section 3.3)

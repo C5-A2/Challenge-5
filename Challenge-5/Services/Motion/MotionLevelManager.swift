@@ -47,14 +47,16 @@ public final class MotionLevelManager {
             // In portrait upright orientation:
             // gravity.y is close to -1.0, gravity.z (tilt forward/back) is close to 0.0,
             // and gravity.x (tilt sideways) is close to 0.0.
-            let gz = motion.gravity.z
+            // Allow a slight tilt (~11.5° forward/back, ~8.6° sideways) while rejecting angled floor/low placements.
             let gx = motion.gravity.x
+            let gy = motion.gravity.y
+            let gz = motion.gravity.z
 
-            let isVertical = abs(gz) < 0.22 && abs(gx) < 0.18
+            let isVertical = gy < -0.94 && abs(gz) < 0.20 && abs(gx) < 0.15
 
             self.isLevel = isVertical
-            self.pitchDegrees = atan2(-motion.gravity.y, -motion.gravity.z) * 180 / .pi
-            self.rollDegrees = atan2(gx, -motion.gravity.y) * 180 / .pi
+            self.pitchDegrees = atan2(-gy, -gz) * 180 / .pi
+            self.rollDegrees = atan2(gx, -gy) * 180 / .pi
         }
     }
 

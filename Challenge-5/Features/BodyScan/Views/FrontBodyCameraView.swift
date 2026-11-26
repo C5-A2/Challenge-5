@@ -23,6 +23,13 @@ struct FrontBodyCameraView: View {
     @State private var countdownRemaining: Int = 3
     @State private var countdownTask: Task<Void, Never>? = nil
 
+    private var effectiveAlignmentState: BodyAlignmentState {
+        BodyAlignmentState.resolve(
+            from: poseMonitor.latestResult,
+            isDeviceLevel: motionManager.isLevel
+        )
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -33,10 +40,16 @@ struct FrontBodyCameraView: View {
             // 1. Live Camera Preview Layer
             cameraPreviewContent
 
-            // 2. Top Control Bar (Back, Level Status Pill, Flash)
+            // 2. Full-Body Human Silhouette & Alignment Guide Overlay
+            BodySilhouetteGuideOverlay(
+                expectedType: .front,
+                alignmentState: effectiveAlignmentState
+            )
+
+            // 3. Top Control Bar (Back, Level Status Pill, Flash)
             topControlBar
 
-            // 3. Countdown Overlay
+            // 4. Countdown Overlay
             if viewModel.isCountingDown {
                 CameraCountdownOverlay(remainingSeconds: countdownRemaining) {
                     cancelCountdown()
@@ -173,7 +186,8 @@ struct FrontBodyCameraView: View {
 
             LiveBodyValidationPill(
                 result: poseMonitor.latestResult,
-                expectedType: .front
+                expectedType: .front,
+                isDeviceLevel: motionManager.isLevel
             )
             .padding(.horizontal, AppDimensions.screenHorizontalPadding)
 
