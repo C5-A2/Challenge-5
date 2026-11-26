@@ -36,6 +36,8 @@ struct OccasionsHomeView: View {
     @State private var isShowingProfileSheet: Bool = false
     @State private var occasionToDelete: OccasionItem? = nil
     @State private var isPastOccasionsExpanded: Bool = false
+    @State private var pendingStartProfiling: Bool = false
+    @State private var pendingOccasionAfterProfiling: Bool = false
     
     // MARK: - Action Callbacks
     
@@ -71,6 +73,21 @@ struct OccasionsHomeView: View {
         occasions
             .filter { $0.isPast }
             .sorted(by: { $0.date > $1.date })
+    }
+
+    private var currentProfile: UserProfile? {
+        userProfiles.first
+    }
+
+    private var isProfileSetupCompleted: Bool {
+        currentProfile?.hasCompletedProfileSetup == true
+    }
+
+    private var nextProfilingPhase: ProfilingFlowHostView.Phase {
+        if currentProfile?.hasCompletedSkinScan == true && currentProfile?.hasCompletedBodyScan == false {
+            return .bodyScan
+        }
+        return .skinScan
     }
     
     // MARK: - Body
@@ -109,6 +126,47 @@ struct OccasionsHomeView: View {
                 .padding(.bottom, AppDimensions.tabBarHeight + 80)
             }
             .scrollIndicators(.hidden)
+            .sheet(isPresented: $viewModel.isShowingProfilePromptModal, onDismiss: {
+                if pendingStartProfiling {
+                    pendingStartProfiling = false
+                    viewModel.isShowingProfilingFlow = true
+                } else {
+                    pendingOccasionAfterProfiling = false
+                }
+            }) {
+                ProfilePromptModal(
+                    onStartProfiling: {
+                        pendingStartProfiling = true
+                        viewModel.isShowingProfilePromptModal = false
+                    },
+                    onDismiss: {
+                        pendingStartProfiling = false
+                        pendingOccasionAfterProfiling = false
+                        viewModel.isShowingProfilePromptModal = false
+                    }
+                )
+            }
+            .fullScreenCover(isPresented: $viewModel.isShowingProfilingFlow, onDismiss: {
+                let completedProfile = isProfileSetupCompleted
+                    || ((try? modelContext.fetch(UserProfile.primaryDescriptor).first?.hasCompletedProfileSetup) == true)
+                if pendingOccasionAfterProfiling && completedProfile {
+                    pendingOccasionAfterProfiling = false
+                    viewModel.isShowingNewOccasionSheet = true
+                } else {
+                    pendingOccasionAfterProfiling = false
+                }
+            }) {
+                ProfilingFlowHostView(
+                    initialPhase: nextProfilingPhase,
+                    onComplete: {
+                        viewModel.isShowingProfilingFlow = false
+                    },
+                    onDismiss: {
+                        pendingOccasionAfterProfiling = false
+                        viewModel.isShowingProfilingFlow = false
+                    }
+                )
+            }
             
             // Floating Action Button (+) above Tab Bar
             floatingAddButton
@@ -185,7 +243,7 @@ struct OccasionsHomeView: View {
     private var emptyStateView: some View {
         OccasionsEmptyStateView(
             onAddOccasion: {
-                viewModel.isShowingNewOccasionSheet = true
+                handleAddOccasionTap()
             }
         )
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -265,7 +323,7 @@ struct OccasionsHomeView: View {
             Spacer()
             
             Button {
-                viewModel.isShowingNewOccasionSheet = true
+                handleAddOccasionTap()
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 24, weight: .semibold))
@@ -323,6 +381,15 @@ struct OccasionsHomeView: View {
     }
     
     // MARK: - Actions
+
+    private func handleAddOccasionTap() {
+        if isProfileSetupCompleted {
+            viewModel.isShowingNewOccasionSheet = true
+        } else {
+            pendingOccasionAfterProfiling = true
+            viewModel.isShowingProfilePromptModal = true
+        }
+    }
 
     /// Deletes an occasion from SwiftData.
     private func deleteOccasion(_ occasion: OccasionItem) {

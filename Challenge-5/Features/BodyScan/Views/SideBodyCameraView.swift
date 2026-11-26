@@ -22,14 +22,6 @@ struct SideBodyCameraView: View {
     @State private var countdownRemaining: Int = 3
     @State private var countdownTask: Task<Void, Never>? = nil
 
-    private var canTriggerShutter: Bool {
-        #if targetEnvironment(simulator)
-        return true
-        #else
-        return poseMonitor.isReady
-        #endif
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -206,17 +198,17 @@ struct SideBodyCameraView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .stroke(canTriggerShutter ? Color.white : AppColors.lightingWarning.opacity(0.65), lineWidth: 4)
+                            .stroke(Color.white, lineWidth: 4)
                             .frame(width: 76, height: 76)
 
                         Circle()
-                            .fill(canTriggerShutter ? Color.white : Color.white.opacity(0.35))
+                            .fill(Color.white)
                             .frame(width: 62, height: 62)
                     }
                     .scaleEffect(isCapturing ? 0.92 : 1.0)
                     .animation(.easeInOut(duration: 0.15), value: isCapturing)
                 }
-                .disabled(!canTriggerShutter || isCapturing || viewModel.isCountingDown)
+                .disabled(isCapturing || viewModel.isCountingDown)
 
                 // Right: Switch Camera (Front / Rear)
                 Button {
@@ -241,7 +233,7 @@ struct SideBodyCameraView: View {
     // MARK: - Capture Actions
 
     private func triggerCaptureFlow() {
-        guard !isCapturing, !viewModel.isCountingDown, canTriggerShutter else { return }
+        guard !isCapturing, !viewModel.isCountingDown else { return }
 
         let duration = max(1, viewModel.countdownSeconds)
         viewModel.isCountingDown = true
@@ -258,7 +250,6 @@ struct SideBodyCameraView: View {
             if Task.isCancelled { return }
             viewModel.isCountingDown = false
             countdownTask = nil
-            guard canTriggerShutter else { return }
             executeCapture()
         }
     }
