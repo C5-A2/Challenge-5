@@ -463,7 +463,7 @@ struct OutfitPromptBuilder: Sendable {
     - When a garment features a cheongsam or cultural embroidery, write "playgroundPrompt" to highlight its visual contrast (e.g. "red color satin cheongsam dress with distinct contrasting gold floral embroidery") so the detail pops vividly instead of rendering as a faint tone-on-tone texture. Batik, tenun and other Indonesian textiles follow the DRESSCODE CHECKLIST.
     - "material": the base fabric only (e.g. Silk, Satin, Linen), never a pattern word.
     - Use a different cut or detail than the previous looks.
-    - "playgroundPrompt": 5-9 words, "[color] color [fabric] [key detail, texture or textile] [clothing noun]" so the image shows the detail (e.g. "white color satin feather-trimmed corset mini dress", "navy color batik pleated midi skirt"). Never use "sheer", "translucent", "revealing" or body-part words. Outer layers always say "long-sleeve".
+    - "playgroundPrompt": 5-9 words, "[color] color [fabric] [key detail, texture or textile] [clothing noun]" so the image shows the detail (e.g. "white color satin feather-trimmed bodice mini dress", "navy color batik pleated midi skirt"). Never use "sheer", "translucent", "revealing", "corset", "bustier" or body-part words. Outer layers always say "long-sleeve".
     """
 
     // MARK: - Occasion & Setting

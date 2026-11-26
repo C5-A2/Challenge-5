@@ -104,9 +104,18 @@ struct OutfitAttributeMapperInspectorView: View {
                 package: playgroundPackage,
                 sourceImage: cleanSourceImage ?? Image("mock_result_1"),
                 onGenerated: { resultCG in
-                    self.generatedCGImage = resultCG
-                    self.generatedImage = Image(decorative: resultCG, scale: 1.0, orientation: .up)
-                    self.statusMessage = "Image successfully generated from native Image Playground!"
+                    let sourceData = self.sourceImage?.pngData()
+                    Task {
+                        let restoredCG = await OutfitAttributeMapper.restoreOriginalFace(
+                            in: resultCG,
+                            fromSourcePhotoData: sourceData
+                        )
+                        await MainActor.run {
+                            self.generatedCGImage = restoredCG
+                            self.generatedImage = Image(decorative: restoredCG, scale: 1.0, orientation: .up)
+                            self.statusMessage = "Image successfully generated from native Image Playground!"
+                        }
+                    }
                 }
             )
         }
