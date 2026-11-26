@@ -21,7 +21,8 @@ struct ProfilingFlowHostView: View {
 
     // MARK: - State & Dependencies
 
-    @State private var phase: Phase = .skinScan
+    private let initialPhase: Phase
+    @State private var phase: Phase
     @State private var skinViewModel = SkinScanViewModel()
     @State private var bodyViewModel = BodyScanViewModel()
 
@@ -29,6 +30,17 @@ struct ProfilingFlowHostView: View {
     var onDismiss: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+
+    init(
+        initialPhase: Phase = .skinScan,
+        onComplete: @escaping () -> Void,
+        onDismiss: (() -> Void)? = nil
+    ) {
+        self.initialPhase = initialPhase
+        self._phase = State(initialValue: initialPhase)
+        self.onComplete = onComplete
+        self.onDismiss = onDismiss
+    }
 
     // MARK: - Body
 
@@ -80,8 +92,12 @@ struct ProfilingFlowHostView: View {
                 viewModel: bodyViewModel,
                 showsBackButton: true,
                 onBack: {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        phase = .skinScan
+                    if initialPhase == .bodyScan {
+                        closeFlow()
+                    } else {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            phase = .skinScan
+                        }
                     }
                 },
                 onDismiss: { closeFlow() }
