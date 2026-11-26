@@ -22,6 +22,11 @@ final class OccasionOutputViewModel {
     
     var profile: UserProfile? = nil
     
+    /// Effective user height in cm, falling back to 168.0 cm when not specified in profile.
+    var userHeightCm: Double {
+        profile?.measurements?.heightCm ?? 168.0
+    }
+    
     var occasion: OccasionItem
     
     var looks: [OutfitLook] = []

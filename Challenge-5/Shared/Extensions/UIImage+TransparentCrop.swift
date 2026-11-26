@@ -9,11 +9,31 @@
 import UIKit
 import CoreGraphics
 
+private let _transparentCropCache = NSCache<NSString, UIImage>()
+
 extension UIImage {
     
+    /// Cached access to a transparently trimmed image decoded from Data.
+    /// Fast O(1) retrieval after first crop computation.
+    nonisolated public static func trimmedImage(from data: Data, padBottom: Bool = false) -> UIImage? {
+        let key = "\(data.count)-\(data.prefix(32).hashValue)-\(padBottom)" as NSString
+        if let cached = _transparentCropCache.object(forKey: key) {
+            return cached
+        }
+        guard let original = UIImage(data: data) else { return nil }
+        let trimmed = original.trimmingTransparentPixels(padBottom: padBottom)
+        _transparentCropCache.setObject(trimmed, forKey: key)
+        return trimmed
+    }
+    
     /// Returns a cropped version of the image trimming all surrounding transparent/near-transparent pixels.
+    /// When `padBottom` is false (default for avatar ground-alignment), the bottom edge is exactly aligned
+    /// to the lowest non-transparent pixel (the soles of the feet), guaranteeing perfect stage anchoring.
     /// If no opaque pixels are found or cropping fails, returns self.
-    nonisolated public func trimmingTransparentPixels(alphaThreshold: UInt8 = 10) -> UIImage {
+    nonisolated public func trimmingTransparentPixels(
+        alphaThreshold: UInt8 = 10,
+        padBottom: Bool = false
+    ) -> UIImage {
         guard let cgImage = self.cgImage else { return self }
         
         let width = cgImage.width
@@ -68,17 +88,18 @@ extension UIImage {
             return self
         }
         
-        // Add small safety margin (e.g. 2% padding) so edges are not abruptly clipped
+        // Add small safety margin so lateral and top edges are not abruptly clipped
         let cropWidth = maxX - minX + 1
         let cropHeight = maxY - minY + 1
         
-        let padX = max(4, Int(Double(cropWidth) * 0.02))
-        let padY = max(4, Int(Double(cropHeight) * 0.02))
+        let padX = max(3, Int(Double(cropWidth) * 0.02))
+        let padYTop = max(3, Int(Double(cropHeight) * 0.02))
+        let padYBottom = padBottom ? padYTop : 0
         
         let finalMinX = max(0, minX - padX)
-        let finalMinY = max(0, minY - padY)
+        let finalMinY = max(0, minY - padYTop)
         let finalMaxX = min(width - 1, maxX + padX)
-        let finalMaxY = min(height - 1, maxY + padY)
+        let finalMaxY = min(height - 1, maxY + padYBottom)
         
         let cropRect = CGRect(
             x: finalMinX,

@@ -253,7 +253,10 @@ struct OccasionsHomeView: View {
     private var occasionsList: some View {
         LazyVStack(spacing: 16) {
             ForEach(activeOccasions) { occasion in
-                OccasionCardView(occasion: occasion) {
+                OccasionCardView(
+                    occasion: occasion,
+                    userHeightCm: currentProfile?.measurements?.heightCm
+                ) {
                     if let onSelectOccasion {
                         onSelectOccasion(occasion)
                     } else {
@@ -298,7 +301,10 @@ struct OccasionsHomeView: View {
             if isPastOccasionsExpanded {
                 LazyVStack(spacing: 16) {
                     ForEach(pastOccasions) { occasion in
-                        OccasionCardView(occasion: occasion) {
+                        OccasionCardView(
+                            occasion: occasion,
+                            userHeightCm: currentProfile?.measurements?.heightCm
+                        ) {
                             if let onSelectOccasion {
                                 onSelectOccasion(occasion)
                             } else {
