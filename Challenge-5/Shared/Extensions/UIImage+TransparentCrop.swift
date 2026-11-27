@@ -9,7 +9,7 @@
 import UIKit
 import CoreGraphics
 
-private let _transparentCropCache = NSCache<NSString, UIImage>()
+nonisolated(unsafe) private let _transparentCropCache = NSCache<NSString, UIImage>()
 
 extension UIImage {
     
