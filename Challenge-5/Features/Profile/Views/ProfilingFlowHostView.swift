@@ -15,6 +15,7 @@ struct ProfilingFlowHostView: View {
     // MARK: - Navigation Phase
 
     enum Phase {
+        case permission
         case skinScan
         case bodyScan
     }
@@ -47,6 +48,17 @@ struct ProfilingFlowHostView: View {
     var body: some View {
         Group {
             switch phase {
+            case .permission:
+                ProfilePromptModal(
+                    onStartProfiling: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            phase = .skinScan
+                        }
+                    },
+                    onDismiss: {
+                        closeFlow()
+                    }
+                )
             case .skinScan:
                 skinScanFlow
             case .bodyScan:
@@ -65,7 +77,15 @@ struct ProfilingFlowHostView: View {
             SkinScanGuideView(
                 viewModel: skinViewModel,
                 showsBackButton: true,
-                onBack: { closeFlow() },
+                onBack: {
+                    if initialPhase == .permission {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            phase = .permission
+                        }
+                    } else {
+                        closeFlow()
+                    }
+                },
                 onDismiss: { closeFlow() }
             )
         case .camera:

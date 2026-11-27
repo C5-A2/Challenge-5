@@ -36,7 +36,6 @@ struct OccasionsHomeView: View {
     @State private var isShowingProfileSheet: Bool = false
     @State private var occasionToDelete: OccasionItem? = nil
     @State private var isPastOccasionsExpanded: Bool = false
-    @State private var pendingStartProfiling: Bool = false
     @State private var pendingOccasionAfterProfiling: Bool = false
     
     // MARK: - Action Callbacks
@@ -87,7 +86,7 @@ struct OccasionsHomeView: View {
         if currentProfile?.hasCompletedSkinScan == true && currentProfile?.hasCompletedBodyScan == false {
             return .bodyScan
         }
-        return .skinScan
+        return .permission
     }
     
     // MARK: - Body
@@ -126,27 +125,7 @@ struct OccasionsHomeView: View {
                 .padding(.bottom, AppDimensions.tabBarHeight + 80)
             }
             .scrollIndicators(.hidden)
-            .sheet(isPresented: $viewModel.isShowingProfilePromptModal, onDismiss: {
-                if pendingStartProfiling {
-                    pendingStartProfiling = false
-                    viewModel.isShowingProfilingFlow = true
-                } else {
-                    pendingOccasionAfterProfiling = false
-                }
-            }) {
-                ProfilePromptModal(
-                    onStartProfiling: {
-                        pendingStartProfiling = true
-                        viewModel.isShowingProfilePromptModal = false
-                    },
-                    onDismiss: {
-                        pendingStartProfiling = false
-                        pendingOccasionAfterProfiling = false
-                        viewModel.isShowingProfilePromptModal = false
-                    }
-                )
-            }
-            .fullScreenCover(isPresented: $viewModel.isShowingProfilingFlow, onDismiss: {
+            .sheet(isPresented: $viewModel.isShowingProfilingFlow, onDismiss: {
                 let completedProfile = isProfileSetupCompleted
                     || ((try? modelContext.fetch(UserProfile.primaryDescriptor).first?.hasCompletedProfileSetup) == true)
                 if pendingOccasionAfterProfiling && completedProfile {
@@ -393,7 +372,7 @@ struct OccasionsHomeView: View {
             viewModel.isShowingNewOccasionSheet = true
         } else {
             pendingOccasionAfterProfiling = true
-            viewModel.isShowingProfilePromptModal = true
+            viewModel.isShowingProfilingFlow = true
         }
     }
 
